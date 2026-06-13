@@ -1,0 +1,8 @@
+# Evita hornear secretos y basura en la imagen.
+.env
+.env.*
+node_modules
+backups
+*.log
+*.bak-*
+migrations.bak-*

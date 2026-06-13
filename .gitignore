@@ -1,0 +1,35 @@
+# ── Secretos / entorno ───────────────────────────────────────────
+# Patrón sin slash → ignora .env en cualquier carpeta (raíz y backend/).
+# Las plantillas .env.example NO se ignoran (no coinciden con este patrón).
+.env
+
+# ── Dependencias / builds ────────────────────────────────────────
+node_modules/
+frontend/build/
+dist/
+
+# ── Datos y backups (no versionar) ───────────────────────────────
+db-data/
+backend/backups/
+*.log
+
+# ── Backups manuales (.bak) — reemplazados por git ───────────────
+*.bak-*
+**/*.bak-*
+
+# ── Binarios pesados embebidos (herramientas locales) ────────────
+docker-compose-bin
+docker-compose-v2
+
+# ── Archivado pre-git ────────────────────────────────────────────
+_archive_pre_git.tgz
+
+# ── Config local de Claude Code (no compartir) ───────────────────
+.claude/settings.local.json
+
+# ── Misc ─────────────────────────────────────────────────────────
+.DS_Store
+0
+
+# ── Huérfanos en raíz (versión muerta del front; el real está en frontend/) ──
+/App.jsx

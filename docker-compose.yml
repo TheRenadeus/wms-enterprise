@@ -1,0 +1,46 @@
+version: '3.8'
+services:
+  wms-db:
+    image: postgres:15-alpine
+    container_name: wms-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:-admin}
+      # La password se toma del .env de la raíz (no se hardcodea aquí).
+      POSTGRES_PASSWORD: ${DB_PASS:?Define DB_PASS en el .env de la raíz}
+      POSTGRES_DB: ${DB_NAME:-wms_db}
+    ports:
+      # Solo accesible desde localhost del host (no exponer Postgres a la red).
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - ./db-init:/docker-entrypoint-initdb.d
+      - wms-pgdata:/var/lib/postgresql/data
+  wms-api:
+    build: ./backend
+    container_name: wms-api
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - wms-db
+    environment:
+      NODE_ENV: production
+      DB_HOST: wms-db
+      DB_USER: ${DB_USER:-admin}
+      DB_PASS: ${DB_PASS:?Define DB_PASS en el .env de la raíz}
+      DB_NAME: ${DB_NAME:-wms_db}
+      # Crítico: sin esto el backend usaría el JWT secret dev por defecto (tokens forjables).
+      JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en el .env de la raíz}
+      ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-*}
+      LOAD_TEST: "${LOAD_TEST:-0}"
+  wms-frontend:
+    build: ./frontend
+    container_name: wms-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - wms-api
+
+volumes:
+  wms-pgdata:

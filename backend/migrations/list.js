@@ -1,0 +1,17 @@
+// Lista ordenada de migraciones. Añadir nuevas al final.
+module.exports = [
+  require('./001_initial'),
+  require('./002_reset_propio_data'),
+  require('./003_indexes_perf'),
+  require('./004_system_backups'),
+  require('./005_feedback'),
+  require('./006_manufacturers'),
+  require('./007_sku_versioning'),
+  require('./008_sku_substitutes'),
+  require('./009_locations_3d'),
+  require('./010_user_clients'),
+  require('./011_sku_versioning_redesign'),
+  require('./012_warehouse_field'),
+  require('./013_cycle_count_blind'),
+  require('./014_cycle_count_approval'),
+];
