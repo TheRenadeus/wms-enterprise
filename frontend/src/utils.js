@@ -3,6 +3,33 @@ import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 
 /**
+ * Parsea un archivo .xlsx/.csv en el navegador (client-side) con SheetJS.
+ * Devuelve { headers, rows } donde rows es un array de objetos por fila.
+ * Usa defval:'' para que las celdas vacías sean '' (no undefined) y raw:false
+ * para obtener valores formateados como string.
+ * @param {File} file
+ * @returns {Promise<{ headers: string[], rows: object[] }>}
+ */
+export function parseSpreadsheet(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) { reject(new Error('No se recibió ningún archivo')); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        if (!ws) { resolve({ headers: [], rows: [] }); return; }
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+        const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+        resolve({ headers, rows });
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/**
  * Exporta un array de objetos a un archivo .xlsx.
  * @param {object[]} rows      - Filas ya filtradas (lo que se ve en pantalla).
  * @param {Array}    columns   - [{ key, header, format? }] donde format = 'date'|'number'|'text'

@@ -6,7 +6,7 @@ import {
   Scan, Split, Tag, Warehouse, XCircle,
   Database, Download, Loader2, Upload, ShieldAlert, Lightbulb
 } from 'lucide-react';
-import { timeAgo, apiFetch } from './utils';
+import { timeAgo, apiFetch, parseSpreadsheet } from './utils';
 import { DEMO_GLOSA_OPTIONS, IMPORT_CONFIG, DEMO_HINTS, SANDBOX_SCENARIOS, SANDBOX_ROLES, SANDBOX_MISSIONS } from './constants';
 
 // GlobalStyles: noop tras migrar a Tailwind build local (P14).
@@ -791,9 +791,30 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
       });
       const d = await res.json();
       if (d.error) { setError(d.error); setStatus('idle'); return; }
+      // Validar cabeceras requeridas ANTES de permitir importar (PASO 2.3).
+      const headers = Array.isArray(d.headers) ? d.headers.map(h => String(h).trim().toLowerCase()) : [];
+      const required = (cfg.required || []).map(r => String(r).toLowerCase());
+      const missing = required.filter(r => !headers.includes(r));
+      if (missing.length > 0) {
+        setError(`El archivo no tiene las columnas requeridas: ${missing.join(', ')}`);
+        setStatus('idle');
+        return;
+      }
       setPreview(d);
       setStatus('preview');
     } catch (e) { setError('Error al leer el archivo'); setStatus('idle'); }
+  };
+
+  // Normaliza la respuesta del backend a una forma consistente { success, errors[] }.
+  // El backend devuelve { success, errors } en éxito pero { error } en fallo, así
+  // que sin esto el render reventaba al leer results.errors.length (errors undefined).
+  const normalizeResult = (d, fallbackMsg) => {
+    if (!d || typeof d !== 'object') return { success: 0, errors: [fallbackMsg || 'Respuesta inesperada del servidor.'] };
+    if (d.error) return { success: Number(d.success) || 0, errors: [d.error] };
+    return {
+      success: Number(d.success) || 0,
+      errors: Array.isArray(d.errors) ? d.errors : [],
+    };
   };
 
   const handleImport = async () => {
@@ -804,12 +825,26 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: fileDataRef.current, filename: filenameRef.current, username: currentUser?.username, ...extraParams })
       });
-      const d = await res.json();
-      setResults(d);
+      let d = null;
+      try { d = await res.json(); } catch { d = null; }
+      const normalized = (!res.ok || !d || d.error)
+        ? normalizeResult(d, `Error del servidor (HTTP ${res.status}).`)
+        : normalizeResult(d);
+      setResults(normalized);
       setStatus('results');
-      if (d.success > 0) onSuccess();
-    } catch (e) { setError('Error de red al importar'); setStatus('preview'); }
+      if (normalized.success > 0) onSuccess();
+    } catch (e) {
+      // No propagar la excepción al render: mostrar el fallo como resultado controlado.
+      setResults({ success: 0, errors: [e?.message || 'Error de red al importar.'] });
+      setStatus('results');
+    }
   };
+
+  // Derivaciones defensivas para el bloque de resultados: nunca leer .length/.map
+  // directamente sobre results.errors (puede llegar undefined en respuestas de error).
+  const safeSuccess = Number(results?.success) || 0;
+  const safeErrors = Array.isArray(results?.errors) ? results.errors : [];
+  const errText = (e) => (typeof e === 'string' ? e : (e?.message ?? JSON.stringify(e)));
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -904,16 +939,16 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
           {/* Resultados */}
           {status === 'results' && results && (
             <div className="space-y-4">
-              <div className={`rounded-2xl p-5 ${results.success > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
-                <p className="text-2xl font-black text-emerald-700">{results.success} <span className="text-sm font-bold text-emerald-600">filas importadas correctamente</span></p>
-                {results.errors.length > 0 && <p className="text-sm font-bold text-amber-600 mt-1">{results.errors.length} errores</p>}
+              <div className={`rounded-2xl p-5 ${safeSuccess > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
+                <p className="text-2xl font-black text-emerald-700">{safeSuccess} <span className="text-sm font-bold text-emerald-600">filas importadas correctamente</span></p>
+                {safeErrors.length > 0 && <p className="text-sm font-bold text-amber-600 mt-1">{safeErrors.length} errores</p>}
               </div>
-              {results.errors.length > 0 && (
+              {safeErrors.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-1">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Detalle de errores</p>
                     <button onClick={() => {
-                      const csv = 'Fila,Error\n' + results.errors.map((e,i) => `${i+1},"${e.replace(/"/g,'""')}"`).join('\n');
+                      const csv = 'Fila,Error\n' + safeErrors.map((e,i) => `${i+1},"${errText(e).replace(/"/g,'""')}"`).join('\n');
                       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
                       a.download = 'errores_importacion.csv'; a.click();
                     }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase flex items-center gap-1">
@@ -921,7 +956,7 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
                     </button>
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-1">
-                    {results.errors.map((e, i) => <p key={i} className="text-xs text-red-700 font-bold">{e}</p>)}
+                    {safeErrors.map((e, i) => <p key={i} className="text-xs text-red-700 font-bold">{errText(e)}</p>)}
                   </div>
                 </div>
               )}
@@ -1534,6 +1569,402 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ReceivePreviewModal — Ingreso masivo (recepción) con previsualización y
+// validación client-side ANTES de insertar. El parseo es client-side (SheetJS,
+// vía parseSpreadsheet) y solo las filas VÁLIDAS se envían a /api/receive_batch
+// (transaccional, todo-o-nada). Las filas con error nunca se insertan.
+// ─────────────────────────────────────────────────────────────────────────────
+// Formato de ubicación: 4 segmentos bodega-pasillo-columna-fila (ej. 1-a-01-1).
+const LOCATION_4SEG_RE = /^[A-Za-z0-9]+(-[A-Za-z0-9]+){3}$/;
+const SPECIAL_LOCATIONS = ['PISO-RECEPCION'];
+
+// ── Validadores reutilizables ────────────────────────────────────────────────
+const vReqText = (label) => (v) => (String(v ?? '').trim() ? null : `${label} vacío`);
+const vPosNum = (label) => (v) => {
+  const s = String(v ?? '').trim();
+  if (s === '') return `${label} vacía`;
+  const n = parseFloat(s);
+  if (isNaN(n)) return `${label} no numérica`;
+  if (n <= 0) return `${label} debe ser mayor a 0`;
+  return null;
+};
+const vLocation = (v) => {
+  const s = String(v ?? '').trim();
+  if (!s) return null; // opcional → vacío usa PISO-RECEPCION
+  if (SPECIAL_LOCATIONS.includes(s.toUpperCase())) return null;
+  return LOCATION_4SEG_RE.test(s) ? null : `Ubicación '${s}' con formato inválido (ej. 1-a-01-1)`;
+};
+const vSkuExists = (skuSet) => (v) => {
+  const s = String(v ?? '').trim();
+  if (!s) return 'SKU vacío';
+  if (skuSet && skuSet.size > 0 && !skuSet.has(s.toUpperCase())) return `SKU '${s}' no existe en el catálogo`;
+  return null;
+};
+
+// Interpreta el valor de una celda booleana (TRUE/FALSE/1/sí/x...) como marcado.
+const isTruthyCell = (v) => v === true || ['true','1','sí','si','x','yes','verdadero'].includes(String(v ?? '').trim().toLowerCase());
+
+// Normaliza los errores del backend a un array (strings u objetos {row,message}).
+const normBackendErrors = (d) => {
+  if (!d) return [];
+  if (d.error) return [{ row: '-', message: d.error }];
+  return Array.isArray(d.errors) ? d.errors : [];
+};
+
+// ── Esquemas por tipo de carga masiva ────────────────────────────────────────
+// columns: campos a mostrar/editar · required: obligatorios · duplicateCheck:
+// llama al dry-run /validate · validators(ctx): { campo: fn } · toBody: arma la
+// llamada de inserción · parseResult: traduce la respuesta a { ok, info[], errors[] }.
+const IMPORT_SCHEMAS = {
+  receive: {
+    title: 'Recepción masiva', template: 'receive',
+    columns: ['sku','qty','location_id','batch_number','expiry_date','serial_number','glosa'],
+    required: ['sku','qty'], duplicateCheck: true, docLabel: 'N° documento de recepción (opcional)',
+    hint: 'Ubicación: bodega-pasillo-columna-fila (ej. 1-a-01-1) o vacío (PISO-RECEPCION)',
+    validators: (ctx) => ({ sku: vSkuExists(ctx.skuSet), qty: vPosNum('Cantidad'), location_id: vLocation }),
+    toBody: (rows, ctx) => ({ endpoint: 'receive_batch', body: {
+      items: rows.map(r => ({
+        sku: String(r.sku).trim(), qty: parseFloat(r.qty),
+        batch: String(r.batch_number ?? '').trim() || null,
+        expDate: String(r.expiry_date ?? '').trim() || null,
+        serial: String(r.serial_number ?? '').trim() || null,
+        location_id: String(r.location_id ?? '').trim() || 'PISO-RECEPCION',
+      })),
+      docNum: ctx.docNum || `REC-IMP-${Date.now()}`, docType: 'REC',
+      glosa: 'Ingreso masivo por Excel', username: ctx.username,
+    }}),
+    parseResult: (d, n) => ({ ok: Number(d.imported) || n, info: [], errors: normBackendErrors(d) }),
+  },
+  dispatch: {
+    title: 'Despacho masivo', template: 'dispatch',
+    columns: ['sku','qty_to_pick','lpn_id'],
+    required: ['sku','qty_to_pick'], duplicateCheck: true, docLabel: 'N° documento de despacho (opcional)',
+    hint: 'LPN opcional: vacío = selección automática FEFO',
+    validators: (ctx) => ({ sku: vSkuExists(ctx.skuSet), qty_to_pick: vPosNum('Cantidad') }),
+    toBody: (rows, ctx) => ({ endpoint: 'import/dispatch', body: {
+      rows: rows.map(r => ({ sku: String(r.sku).trim(), qty_to_pick: r.qty_to_pick, lpn_id: String(r.lpn_id ?? '').trim() })),
+      doc_num: ctx.docNum || `DESP-IMP-${Date.now()}`, username: ctx.username,
+    }}),
+    parseResult: (d, n) => ({ ok: Number(d.success) || 0, info: [], errors: normBackendErrors(d) }),
+  },
+  skus: {
+    title: 'Importar productos (SKUs)', template: 'skus',
+    columns: ['sku','desc','client_id','category','uom','requires_lot','requires_serial','barcode','weight','abc_class'],
+    required: ['sku','desc'], duplicateCheck: false,
+    booleans: ['requires_lot','requires_serial'],
+    hint: 'Marca la casilla para activar control de lote / serie',
+    validators: () => ({ sku: vReqText('SKU'), desc: vReqText('Descripción') }),
+    toBody: (rows, ctx) => ({ endpoint: 'import/skus', body: { rows, username: ctx.username } }),
+    parseResult: (d, n) => {
+      const info = [];
+      if (d.inserted != null || d.updated != null) info.push(`${d.inserted || 0} nuevos · ${d.updated || 0} actualizados`);
+      if (Array.isArray(d.versioned) && d.versioned.length)
+        info.push(`${d.versioned.length} con nueva versión de control: ` + d.versioned.map(v => `${v.sku} (v${v.from}→v${v.to})`).join(', '));
+      return { ok: Number(d.success) || 0, info, errors: normBackendErrors(d) };
+    },
+  },
+  clients: {
+    title: 'Importar clientes', template: 'clients',
+    columns: ['id','name','contact','email'],
+    required: ['id','name'], duplicateCheck: false,
+    validators: () => ({ id: vReqText('ID'), name: vReqText('Nombre') }),
+    toBody: (rows) => ({ endpoint: 'import/clients', body: { rows } }),
+    parseResult: (d, n) => ({ ok: Number(d.success) || 0, info: [], errors: normBackendErrors(d) }),
+  },
+  inventory: {
+    title: 'Importar inventario', template: 'inventory',
+    columns: ['sku','qty','client_id','location_id','batch_number','expiry_date','serial_number','glosa'],
+    required: ['sku','qty'], duplicateCheck: false,
+    hint: 'Ubicación: bodega-pasillo-columna-fila (ej. 1-a-01-1) o vacío (PISO-RECEPCION)',
+    validators: (ctx) => ({ sku: vSkuExists(ctx.skuSet), qty: vPosNum('Cantidad'), location_id: vLocation }),
+    toBody: (rows, ctx) => ({ endpoint: 'import/inventory', body: { rows, username: ctx.username } }),
+    parseResult: (d, n) => ({ ok: Number(d.success) || 0, info: [], errors: normBackendErrors(d) }),
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BulkImportModal — Carga masiva unificada para los 5 flujos (recepción, despacho,
+// SKUs, clientes, inventario). Parseo client-side (SheetJS), validación por fila,
+// celdas EDITABLES con re-validación en vivo, detección de duplicados (dentro del
+// archivo + dry-run contra BD para recepción/despacho) y confirmación que envía
+// SOLO las filas válidas. Las filas con error nunca se insertan.
+// ─────────────────────────────────────────────────────────────────────────────
+const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {}, onClose, onSuccess }) => {
+  const schema = IMPORT_SCHEMAS[type] || IMPORT_SCHEMAS.receive;
+  const [status, setStatus] = useState('idle'); // idle | preview | importing | results
+  const [error, setError] = useState('');
+  const [rows, setRows] = useState([]);          // [{ data, localErrors[], dupErrors[], dupWarnings[] }]
+  const [docNum, setDocNum] = useState('');
+  const [docDuplicate, setDocDuplicate] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [results, setResults] = useState(null);  // { ok, info[], errors[] }
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const skuSet = useMemo(() => new Set((Array.isArray(skus) ? skus : []).map(s => String(s.sku ?? '').toUpperCase()).filter(Boolean)), [skus]);
+  const validators = useMemo(() => schema.validators({ skuSet }), [schema, skuSet]);
+
+  const validateData = (data) => {
+    const errs = [];
+    Object.entries(validators).forEach(([field, fn]) => { const e = fn(data[field]); if (e) errs.push(e); });
+    // Requeridos sin validador específico → chequeo genérico de no-vacío.
+    schema.required.forEach(f => { if (!validators[f] && String(data[f] ?? '').trim() === '') errs.push(`${f} vacío`); });
+    return errs;
+  };
+
+  const isRowValid = (r) => r.localErrors.length === 0 && r.dupErrors.length === 0;
+  const validRows = rows.filter(isRowValid);
+  const errorRows = rows.filter(r => !isRowValid(r));
+
+  const runDupCheck = async (currentRows, currentDoc) => {
+    if (!schema.duplicateCheck) return;
+    setChecking(true);
+    try {
+      const res = await apiFetch(`${host}/api/import/${type}/validate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: currentRows.map(r => r.data), doc_num: currentDoc || '' }),
+      });
+      const d = await res.json().catch(() => null);
+      if (d && Array.isArray(d.rows)) {
+        setRows(prev => prev.map((r, i) => ({ ...r, dupErrors: d.rows[i]?.errors ?? [], dupWarnings: d.rows[i]?.warnings ?? [] })));
+        setDocDuplicate(!!d.doc_duplicate);
+      }
+    } catch { /* el backend revalida en el insert; el dry-run es solo informativo */ }
+    finally { setChecking(false); }
+  };
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    setError(''); setStatus('idle');
+    try {
+      const { headers, rows: parsed } = await parseSpreadsheet(file);
+      const lower = headers.map(h => String(h).trim().toLowerCase());
+      const missing = schema.required.filter(h => !lower.includes(h.toLowerCase()));
+      if (missing.length) { setError(`El archivo no tiene las columnas requeridas: ${missing.join(', ')}.`); return; }
+      if (!parsed.length) { setError('El archivo no contiene filas de datos.'); return; }
+      const newRows = parsed.map(data => ({ data, localErrors: validateData(data), dupErrors: [], dupWarnings: [] }));
+      setRows(newRows);
+      setStatus('preview');
+      runDupCheck(newRows, docNum);
+    } catch (e) { setError('No se pudo leer el archivo: ' + (e?.message || 'formato no válido')); }
+  };
+
+  const updateCell = (idx, field, value) => {
+    setRows(prev => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const data = { ...r.data, [field]: value };
+      return { ...r, data, localErrors: validateData(data) };
+    }));
+  };
+
+  const handleConfirm = async () => {
+    const valids = rows.filter(isRowValid).map(r => r.data);
+    if (!valids.length) return;
+    setStatus('importing');
+    const { endpoint, body } = schema.toBody(valids, { docNum, username: currentUser?.username, ...extraParams });
+    try {
+      const res = await apiFetch(`${host}/api/${endpoint}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, ...extraParams }),
+      });
+      let d = null; try { d = await res.json(); } catch { d = null; }
+      if (!res.ok || !d || d.error) {
+        setResults({ ok: 0, info: [], errors: [{ row: '-', message: (d && d.error) || `Error del servidor (HTTP ${res.status}).` }] });
+        setStatus('results'); return;
+      }
+      const parsed = schema.parseResult(d, valids.length);
+      setResults(parsed);
+      setStatus('results');
+      if (parsed.ok > 0) onSuccess?.();
+    } catch (e) {
+      setResults({ ok: 0, info: [], errors: [{ row: '-', message: e?.message || 'Error de red.' }] });
+      setStatus('results');
+    }
+  };
+
+  const handleCancel = () => { setRows([]); setResults(null); setError(''); setDocNum(''); setDocDuplicate(false); setStatus('idle'); onClose?.(); };
+
+  const cols = schema.columns;
+  const boolFields = schema.booleans || [];
+  const rowMotivo = (r) => [...r.localErrors, ...r.dupErrors].join('; ');
+  const safeResultErrors = Array.isArray(results?.errors) ? results.errors : [];
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && handleCancel()}>
+      <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <div>
+            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center"><Upload className="w-5 h-5 mr-2 text-emerald-500"/>{schema.title} — Previsualización</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Edita, verifica y confirma · CSV o XLSX</p>
+          </div>
+          <button onClick={handleCancel} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={18} className="text-slate-400"/></button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Plantilla + columnas (solo en idle) */}
+          {status === 'idle' && (
+            <>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-black text-emerald-800">Plantilla de ejemplo</p>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">Descarga el Excel con las columnas correctas</p>
+                </div>
+                <a href={`${host}/api/templates/${schema.template}`} download className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-colors">
+                  <Download size={14}/> Descargar plantilla
+                </a>
+              </div>
+              <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Columnas</p>
+                <div className="flex flex-wrap gap-2">
+                  {schema.required.map(f => <span key={f} className="bg-red-100 text-red-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase">{f} *</span>)}
+                  {cols.filter(c => !schema.required.includes(c)).map(f => <span key={f} className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-lg uppercase">{f}</span>)}
+                </div>
+                <p className="text-[9px] text-slate-400">* Obligatorio{schema.hint ? ` · ${schema.hint}` : ''}</p>
+              </div>
+              <div
+                className={`border-2 border-dashed rounded-2xl p-10 text-center transition-colors cursor-pointer ${isDragOver ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-emerald-300 hover:bg-slate-50'}`}
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setIsDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+                onClick={() => document.getElementById('bulk-file-input').click()}
+              >
+                <Upload className="w-10 h-10 mx-auto mb-2 text-slate-300"/>
+                <p className="text-sm font-black text-slate-500">Arrastra tu archivo aquí</p>
+                <p className="text-[10px] text-slate-400 mt-1">o haz clic para seleccionar · CSV o XLSX</p>
+                <input id="bulk-file-input" type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ''; }}/>
+              </div>
+            </>
+          )}
+
+          {error && <p className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>}
+
+          {/* Previsualización editable */}
+          {status === 'preview' && (
+            <div className="space-y-4">
+              {schema.duplicateCheck && (
+                <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{schema.docLabel}</label>
+                    <input value={docNum} onChange={e => setDocNum(e.target.value)} onBlur={() => runDupCheck(rows, docNum)} placeholder="Déjalo vacío para autogenerar" className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500"/>
+                  </div>
+                  <button onClick={() => runDupCheck(rows, docNum)} disabled={checking} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 disabled:opacity-50">
+                    {checking ? <Loader2 size={12} className="animate-spin"/> : <ShieldAlert size={12}/>} Revalidar duplicados
+                  </button>
+                </div>
+              )}
+              {docDuplicate && <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">⚠️ El documento '{docNum}' ya fue procesado anteriormente.</p>}
+
+              {/* Resumen */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-slate-700">{rows.length}</p><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Filas</p></div>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-emerald-700">{validRows.length}</p><p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Válidas</p></div>
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-red-600">{errorRows.length}</p><p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Con error</p></div>
+              </div>
+              <p className="text-[10px] text-slate-400 font-bold">Puedes corregir cualquier celda directamente en la tabla; la validación se actualiza al instante.</p>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-96 overflow-y-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[9px]">#</th>
+                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[9px]">Estado</th>
+                      {cols.map(h => <th key={h} className="px-2 py-2 font-black text-slate-500 uppercase text-[9px] whitespace-nowrap">{h}{schema.required.includes(h) && <span className="text-red-500"> *</span>}</th>)}
+                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[9px]">Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {rows.map((r, i) => {
+                      const ok = isRowValid(r);
+                      return (
+                        <tr key={i} className={ok ? 'hover:bg-slate-50' : 'bg-red-50/50'}>
+                          <td className="px-2 py-1 text-slate-400 font-bold">{i + 2}</td>
+                          <td className="px-2 py-1">
+                            {ok
+                              ? <span className="inline-flex items-center gap-1 text-emerald-700 font-black text-[10px] uppercase"><CheckCircle2 size={12}/> OK</span>
+                              : <span className="inline-flex items-center gap-1 text-red-700 font-black text-[10px] uppercase"><XCircle size={12}/> Error</span>}
+                          </td>
+                          {cols.map(h => {
+                            // Campos booleanos (ej. requires_lot/serial) → casilla en vez de texto.
+                            if (boolFields.includes(h)) {
+                              return (
+                                <td key={h} className="px-1 py-1 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={isTruthyCell(r.data[h])}
+                                    onChange={(e) => updateCell(i, h, e.target.checked ? 'TRUE' : 'FALSE')}
+                                    className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                                  />
+                                </td>
+                              );
+                            }
+                            const fieldErr = r.localErrors.some(e => e.toLowerCase().includes(h.replace('_',' ')) || e.toLowerCase().startsWith(h));
+                            return (
+                              <td key={h} className="px-1 py-1">
+                                <input
+                                  value={String(r.data[h] ?? '')}
+                                  onChange={(e) => updateCell(i, h, e.target.value)}
+                                  className={`w-full min-w-[80px] border rounded-md px-2 py-1 text-[11px] font-bold outline-none focus:border-emerald-500 ${fieldErr ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
+                                />
+                              </td>
+                            );
+                          })}
+                          <td className="px-2 py-1 text-[10px] font-bold max-w-[200px]">
+                            {rowMotivo(r) && <span className="text-red-600">{rowMotivo(r)}</span>}
+                            {r.dupWarnings.length > 0 && <span className="text-amber-600 block">{r.dupWarnings.join('; ')}</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={handleCancel} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">Cancelar</button>
+                <button
+                  onClick={handleConfirm}
+                  disabled={validRows.length === 0}
+                  className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex justify-center items-center"
+                >
+                  <Database size={16} className="mr-2"/> Confirmar ({validRows.length} {validRows.length === 1 ? 'fila válida' : 'filas válidas'})
+                </button>
+              </div>
+              {validRows.length === 0 && <p className="text-[11px] text-red-500 font-bold text-center">No hay filas válidas. Corrige las celdas marcadas y reintenta.</p>}
+            </div>
+          )}
+
+          {/* Importando */}
+          {status === 'importing' && (
+            <div className="py-10 text-center"><Loader2 className="w-12 h-12 mx-auto mb-3 text-emerald-400 animate-spin"/><p className="text-sm font-black text-slate-600 uppercase">Procesando...</p></div>
+          )}
+
+          {/* Resultados */}
+          {status === 'results' && results && (
+            <div className="space-y-4">
+              <div className={`rounded-2xl p-5 ${results.ok > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
+                <p className="text-2xl font-black text-emerald-700">{Number(results.ok) || 0} <span className="text-sm font-bold text-emerald-600">filas procesadas correctamente</span></p>
+                {safeResultErrors.length > 0 && <p className="text-sm font-bold text-amber-600 mt-1">{safeResultErrors.length} con error</p>}
+              </div>
+              {Array.isArray(results.info) && results.info.length > 0 && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 space-y-1">
+                  {results.info.map((t, i) => <p key={i} className="text-xs text-indigo-700 font-bold">{t}</p>)}
+                </div>
+              )}
+              {safeResultErrors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-1 max-h-48 overflow-y-auto">
+                  {safeResultErrors.map((e, i) => <p key={i} className="text-xs text-red-700 font-bold">{typeof e === 'string' ? e : `Fila ${e?.row ?? '-'}: ${e?.message ?? JSON.stringify(e)}`}</p>)}
+                </div>
+              )}
+              <button onClick={handleCancel} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">Cerrar</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 export {
   GlobalStyles,
   SimpleDonut,
@@ -1541,6 +1972,7 @@ export {
   LocPicker,
   DigitalTwinView,
   ImportModal,
+  BulkImportModal,
   ConfirmModal,
   DemoHint,
   SandboxWelcome,

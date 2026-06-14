@@ -55,9 +55,23 @@ const daysAgo = (n) => new Date(now - n * 86400000).toISOString();
 const hoursAgo = (n) => new Date(now - n * 3600000).toISOString();
 
 const DEMO_INVENTORY = [
-  { id: 'LPN-DEMO-A001', sku: 'LAPTOP-15PRO', client_id: 'ACME', qty: 12, location_id: 'B1-RES-A01-01-01', status: 'DISPONIBLE', batch_number: null, serial_number: 'SN-LP-0001', expiry_date: null, created_at: daysAgo(15) },
+  // LAPTOP-15PRO es serializado (1 serie = 1 unidad): 12 unidades = 12 LPNs de qty 1,
+  // cada uno con su serie única. El primero mantiene el id LPN-DEMO-A001 (referenciado
+  // en auditoría y pick-tasks demo).
+  ...Array.from({ length: 12 }, (_, i) => ({
+    id: i === 0 ? 'LPN-DEMO-A001' : `LPN-DEMO-A001-${String(i + 1).padStart(2, '0')}`,
+    sku: 'LAPTOP-15PRO', client_id: 'ACME', qty: 1, location_id: 'B1-RES-A01-01-01',
+    status: 'DISPONIBLE', batch_number: null, serial_number: `SN-LP-${String(i + 1).padStart(4, '0')}`,
+    expiry_date: null, created_at: daysAgo(15),
+  })),
   { id: 'LPN-DEMO-A002', sku: 'MOUSE-WRLS', client_id: 'ACME', qty: 85, location_id: 'B1-RES-A01-01-02', status: 'DISPONIBLE', batch_number: null, serial_number: null, expiry_date: null, created_at: daysAgo(12) },
-  { id: 'LPN-DEMO-A003', sku: 'MONITOR-27', client_id: 'ACME', qty: 8, location_id: 'B1-RES-A01-02-01', status: 'DISPONIBLE', batch_number: null, serial_number: 'SN-MON-0001', expiry_date: null, created_at: daysAgo(10) },
+  // MONITOR-27 es serializado: 8 unidades = 8 LPNs de qty 1. El primero conserva LPN-DEMO-A003.
+  ...Array.from({ length: 8 }, (_, i) => ({
+    id: i === 0 ? 'LPN-DEMO-A003' : `LPN-DEMO-A003-${String(i + 1).padStart(2, '0')}`,
+    sku: 'MONITOR-27', client_id: 'ACME', qty: 1, location_id: 'B1-RES-A01-02-01',
+    status: 'DISPONIBLE', batch_number: null, serial_number: `SN-MON-${String(i + 1).padStart(4, '0')}`,
+    expiry_date: null, created_at: daysAgo(10),
+  })),
   { id: 'LPN-DEMO-A004', sku: 'TECLADO-MEC', client_id: 'ACME', qty: 42, location_id: 'B1-RES-A01-02-02', status: 'DISPONIBLE', batch_number: null, serial_number: null, expiry_date: null, created_at: daysAgo(8) },
   { id: 'LPN-DEMO-A005', sku: 'CABLE-USBC', client_id: 'ACME', qty: 230, location_id: 'B1-RES-A01-03-01', status: 'DISPONIBLE', batch_number: null, serial_number: null, expiry_date: null, created_at: daysAgo(5) },
   { id: 'LPN-DEMO-R001', sku: 'CAMISA-M', client_id: 'RETAIL-X', qty: 120, location_id: 'B1-RES-A02-01-01', status: 'DISPONIBLE', batch_number: 'LOT-2025-A', serial_number: null, expiry_date: null, created_at: daysAgo(20) },
@@ -104,7 +118,7 @@ const DEMO_AUDIT = [
 
 const DEMO_STATS = {
   total_units: 1905,
-  total_lpns: 14,
+  total_lpns: 32,
   total_skus: 13,
   total_locations: 12,
   occupied_locations: 10,
