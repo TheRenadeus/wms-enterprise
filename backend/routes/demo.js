@@ -24,11 +24,12 @@ const SANDBOX_SCENARIOS = {
 };
 
 const SANDBOX_ROLES = {
-  ADMIN:             { label: 'Administrador',    icon: '🏢', desc: 'Control total del sistema' },
-  EJECUTIVO_CUENTA:  { label: 'Jefe de Bodega',   icon: '📦', desc: 'Operaciones diarias de almacén' },
-  AUDITOR:           { label: 'Auditor',           icon: '🔎', desc: 'Vista de solo lectura para control' },
-  PICKER:            { label: 'Picker',            icon: '📱', desc: 'Tareas de picking en el piso' },
-  CLIENTE:           { label: 'Cliente 3PL',       icon: '🏪', desc: 'Portal de solo lectura para clientes' },
+  ADMIN:             { label: 'Administrador',      icon: '🏢', desc: 'Control total del sistema' },
+  JEFE_BODEGA:       { label: 'Jefe de Bodega',     icon: '📦', desc: 'Supervisión y operaciones de almacén' },
+  EJECUTIVO_CUENTA:  { label: 'Ejecutivo de Cuenta', icon: '📋', desc: 'Operario: recibe, despacha, reubica' },
+  AUDITOR:           { label: 'Auditor',            icon: '🔎', desc: 'Vista de solo lectura para control' },
+  PICKER:            { label: 'Picker',             icon: '📱', desc: 'Tareas de picking en el piso' },
+  CLIENTE:           { label: 'Cliente 3PL',        icon: '🏪', desc: 'Portal de solo lectura para clientes' },
 };
 
 router.get('/demo/sandbox-config', (req, res) => {

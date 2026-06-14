@@ -14,4 +14,6 @@ module.exports = [
   require('./012_warehouse_field'),
   require('./013_cycle_count_blind'),
   require('./014_cycle_count_approval'),
+  require('./015_role_model_v2'),
+  require('./016_sku_soft_delete'),
 ];

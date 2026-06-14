@@ -33,6 +33,7 @@ router.get('/skus', requireAuth, async (req, res) => {
     const conditions = scope.conditions.map(c => c.replace(/\bclient_id\b/g, 's.client_id'));
     const params = [...scope.params];
     let idx = scope.idx;
+    conditions.push('s.deleted_at IS NULL'); // excluir SKUs eliminados lógicamente
     if (client_id) { conditions.push(`s.client_id = $${idx++}`); params.push(client_id); }
     if (search)    { conditions.push(`(s.sku ILIKE $${idx} OR s."desc" ILIKE $${idx})`); params.push(`%${search}%`); idx++; }
     if (manufacturer_id === 'none') conditions.push(`s.manufacturer_id IS NULL`);
@@ -95,7 +96,8 @@ router.get('/bootstrap', requireAuth, async (req, res) => {
     const scope = scopedSkusWhere(req);
     const skusPromise = (async () => {
       if (scope.emptyAllowed) return [];
-      const where = scope.conditions.length ? `WHERE ${scope.conditions.join(' AND ')}` : '';
+      const conds = [...scope.conditions, 'deleted_at IS NULL']; // excluir SKUs eliminados lógicamente
+      const where = `WHERE ${conds.join(' AND ')}`;
       return (await pool.query(`SELECT * FROM master_skus ${where} ORDER BY sku ASC LIMIT 1000`, scope.params)).rows;
     })();
 

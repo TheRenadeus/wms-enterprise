@@ -15,7 +15,7 @@ import {
 } from './constants';
 import {
   GlobalStyles, SimpleDonut, DocTrayView, LocPicker,
-  DigitalTwinView, ImportModal, ConfirmModal, DemoHint,
+  DigitalTwinView, BulkImportModal, ConfirmModal, DemoHint,
   SandboxWelcome, SandboxLauncher, SandboxSwitcher
 } from './components';
 import VirtualizedScrollList from './VirtualizedScrollList';
@@ -267,7 +267,7 @@ export default function App() {
       // Picking (role-based — sin cambios)
       try {
         const isPicker = currentUser?.role === 'PICKER';
-        const isSup = ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+        const isSup = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
         const [rPT, rPQ, rPS] = await Promise.all([
           isSup ? apiFetch(`${host}/api/pick-tasks`).catch(()=>null) : Promise.resolve(null),
           (isPicker || isSup) ? apiFetch(`${host}/api/picker/queue`).catch(()=>null) : Promise.resolve(null),
@@ -278,7 +278,7 @@ export default function App() {
         if (rPS?.ok) setPickStats(await rPS.json());
       } catch(e) {}
       try {
-        const isSup = ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+        const isSup = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
         if (isSup) {
           const rDS = await apiFetch(`${host}/api/dispatch-schedules`).catch(()=>null);
           if (rDS?.ok) setDispatchSchedules(await rDS.json());
@@ -353,7 +353,7 @@ export default function App() {
       } catch(e) {}
       // Sistemas avanzados (solo supervisores+)
       try {
-        const isSup = ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+        const isSup = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
         if (isSup) {
           const [rSup, rAsn, rWave, rPack, rRet, rDocks, rAppts, rInv2] = await Promise.all([
             apiFetch(`${host}/api/suppliers`).catch(()=>null),
@@ -428,11 +428,18 @@ export default function App() {
     if (currentUser.role === 'PICKER') return ['picker-queue','digital-twin','relocate','inventory'].includes(tabId);
     // CLIENTE: portal de solo lectura — ve su inventario, documentos y facturación
     if (currentUser.role === 'CLIENTE') return ['dashboard','inventory','doc-history','returns','shipments','purchase-orders','master-skus'].includes(tabId);
-    // EJECUTIVO_CUENTA: operaciones de bodega + solicitud de ajuste (sin users, superadmin, audit)
+    // JEFE_BODEGA: operaciones + supervisión completa de bodega (sin users/superadmin/audit).
+    if (currentUser.role === 'JEFE_BODEGA') {
+      if (disabledModules.includes(tabId)) return false;
+      if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','purchase-orders','cycle-count','suppliers','waves','packing','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers'].includes(tabId);
+    }
+    // EJECUTIVO_CUENTA (operario de piso): operaciones de stock y SKUs; sin gestión 3PL
+    // (clientes, facturación, proveedores, docks) ni supervisión avanzada.
     if (currentUser.role === 'EJECUTIVO_CUENTA') {
       if (disabledModules.includes(tabId)) return false;
       if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
-      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','purchase-orders','cycle-count','suppliers','waves','packing','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history'].includes(tabId);
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','cycle-count','waves','packing','returns','occupation','lpn-history'].includes(tabId);
     }
     // DEMO role legado ve todo excepto superadmin y users
     if (currentUser.role === 'DEMO') return tabId !== 'users' && tabId !== 'superadmin';
@@ -449,10 +456,10 @@ export default function App() {
     if (currentUser.role === 'ADMIN') return true;
     if (currentUser.allowed_modules === 'ALL' || !currentUser.allowed_modules) {
        if (tabId === 'users') return false;
-       if (tabId === 'picking-monitor') return ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser.role);
+       if (tabId === 'picking-monitor') return ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser.role);
        if (tabId === 'audit') return ['AUDITOR','ADMIN','SUPERADMIN'].includes(currentUser.role);
        if (['clients', 'master-skus', 'conversions', 'warehouse', 'digital-twin', 'statuses', 'doc-types', 'occupation', 'rep-report', 'lpn-history', '3pl-billing'].includes(tabId)) {
-          return ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser.role);
+          return ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser.role);
        }
        return true;
     }
@@ -547,6 +554,10 @@ export default function App() {
   const [isSavingClient, setIsSavingClient] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
+  // PASO 4 — re-autenticación (step-up): antes de confirmar recepción/despacho se pide
+  // la contraseña del usuario. promptReauth abre el modal y resuelve con la clave (o null).
+  const [reauthPrompt, setReauthPrompt] = useState(null); // { resolve, label } | null
+  const promptReauth = (label) => new Promise((resolve) => setReauthPrompt({ resolve, label }));
 
   const [newDocNum, setNewDocNum] = useState('');
   const [newDocGlosa, setNewDocGlosa] = useState('');
@@ -578,7 +589,7 @@ export default function App() {
 
   const [showDispatchConfirm, setShowDispatchConfirm] = useState(false);
   const [shipQtys, setShipQtys] = useState({});
-  const [importModal, setImportModal] = useState(null); // null | { type, extraParams }
+  const [importModal, setImportModal] = useState(null); // null | { type, extraParams } → BulkImportModal
   const [confirmDialog, setConfirmDialog] = useState(null); // null | { title, message, confirmText, danger, onConfirm }
   const openConfirm = (opts) => setConfirmDialog(opts);
   const closeConfirm = () => setConfirmDialog(null);
@@ -815,9 +826,15 @@ export default function App() {
   const handleCommitAPI = async (endpoint, module) => {
     if (!activeDoc || activeDoc.items.length === 0) return;
     if (isCommitting) return; // evitar doble submit
+    // Step-up: recepción y despacho exigen re-clave del usuario.
+    let reauthPw = '';
+    if (module === 'receive' || module === 'dispatch') {
+      reauthPw = await promptReauth(module === 'receive' ? 'recepción' : 'despacho');
+      if (!reauthPw) return; // cancelado
+    }
     setIsCommitting(true);
     try {
-      const res = await apiFetch(`${host}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...activeDoc, username: currentUser.username }) });
+      const res = await apiFetch(`${host}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...activeDoc, username: currentUser.username, ...(reauthPw ? { reauth_password: reauthPw } : {}) }) });
       if (res.ok) {
         const moduleMsg = {
           receive: 'Mercancía recibida en bodega',
@@ -943,11 +960,13 @@ export default function App() {
     const itemsToShip = activeDoc.items.map((it, idx) => ({ ...it, qtyToPick: shipQtys[idx] || 0 })).filter(it => it.qtyToPick > 0);
     if (itemsToShip.length === 0) return showMsg('⚠️ Ingrese cantidad mayor a 0', true);
     if (isCommitting) return;
+    const reauthPw = await promptReauth('despacho');
+    if (!reauthPw) return; // cancelado
     const isValid = await validateRealTimeStock(itemsToShip);
     if (!isValid) { fetchData(); return; }
     setIsCommitting(true);
     try {
-      const res = await apiFetch(`${host}/api/dispatch_batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docNum: activeDoc.docNum, docType: activeDoc.docType, glosa: activeDoc.glosa, items: itemsToShip, username: currentUser.username, usePickConfirmations: usePickConf }) });
+      const res = await apiFetch(`${host}/api/dispatch_batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docNum: activeDoc.docNum, docType: activeDoc.docType, glosa: activeDoc.glosa, items: itemsToShip, username: currentUser.username, usePickConfirmations: usePickConf, reauth_password: reauthPw }) });
       if (res.ok) {
         // Guardar en historial de documentos con client_id del primer LPN
         try {
@@ -1884,16 +1903,33 @@ export default function App() {
   return (
     <>
       <GlobalStyles />
-      {/* MODAL DE IMPORTACIÓN */}
+      {/* MODAL DE CARGA MASIVA (editable + validación + duplicados) — los 5 flujos */}
       {importModal && (
-        <ImportModal
+        <BulkImportModal
           type={importModal.type}
           host={host}
           currentUser={currentUser}
+          skus={skus}
           extraParams={importModal.extraParams || {}}
           onClose={() => setImportModal(null)}
           onSuccess={() => { fetchData(); }}
         />
+      )}
+      {/* PASO 4 — Modal de re-autenticación (step-up) para recepción/despacho */}
+      {reauthPrompt && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ShieldAlert size={18} className="text-amber-500"/> Confirmar {reauthPrompt.label}</h3>
+            <p className="text-xs text-slate-500 mt-1">Por seguridad, reingresa tu contraseña para autorizar esta operación.</p>
+            <form onSubmit={(e) => { e.preventDefault(); const pw = e.target.elements.reauthpw.value; reauthPrompt.resolve(pw); setReauthPrompt(null); }}>
+              <input name="reauthpw" type="password" autoFocus autoComplete="current-password" className="w-full mt-4 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Tu contraseña"/>
+              <div className="flex gap-2 mt-4">
+                <button type="button" onClick={() => { reauthPrompt.resolve(null); setReauthPrompt(null); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest">Cancelar</button>
+                <button type="submit" className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl uppercase text-[10px] tracking-widest">Confirmar</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
       {confirmDialog && (
         <ConfirmModal
@@ -2787,7 +2823,8 @@ export default function App() {
                              <select value={userForm.role} onChange={e=>setUserForm({...userForm, role: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
                                <option value="CLIENTE">CLIENTE (Portal solo lectura)</option>
                                <option value="PICKER">PICKER (Bodega)</option>
-                               <option value="EJECUTIVO_CUENTA">EJECUTIVO DE CUENTA</option>
+                               <option value="EJECUTIVO_CUENTA">EJECUTIVO DE CUENTA (Operario)</option>
+                               {isAdmin && <option value="JEFE_BODEGA">JEFE DE BODEGA</option>}
                                <option value="AUDITOR">AUDITOR</option>
                                {isAdmin && <option value="ADMIN">ADMINISTRADOR</option>}
                              </select>
@@ -5408,7 +5445,7 @@ export default function App() {
               const massSelectedItems = filteredRelData.filter(i => massSelected.includes(i.id));
 
               const pendingRelocReqs = relocRequests.filter(r => r.status === 'PENDIENTE');
-              const isSupervisorPlus = ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+              const isSupervisorPlus = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
 
               return (
               <div className="space-y-4 animate-in fade-in max-w-7xl mx-auto">
@@ -7474,7 +7511,7 @@ export default function App() {
                   const isCompleted=activeCycleCount.status==='COMPLETED';
                   const isPendApproval=activeCycleCount.status==='PENDIENTE_APROBACION';
                   const showExpected=!isBlind||isCompleted||isPendApproval;
-                  const canApprove=['SUPERVISOR','EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+                  const canApprove=['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
                   const STATUS_BADGE={PENDING:'bg-slate-100 text-slate-600',EN_PROCESO:'bg-cyan-100 text-cyan-700',PENDIENTE_APROBACION:'bg-amber-100 text-amber-700',COMPLETED:'bg-emerald-100 text-emerald-700',RECHAZADO:'bg-red-100 text-red-700'};
                   return (
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -7589,7 +7626,7 @@ export default function App() {
                 })() : (
                   <>
                     {/* Bandeja de aprobación */}
-                    {['SUPERVISOR','EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && cycleCountData.some(c=>c.status==='PENDIENTE_APROBACION') && (
+                    {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && cycleCountData.some(c=>c.status==='PENDIENTE_APROBACION') && (
                       <div className="space-y-3">
                         <h3 className="text-xs font-black text-amber-700 uppercase flex items-center gap-2"><AlertTriangle size={14}/> Pendientes de aprobación</h3>
                         {cycleCountData.filter(c=>c.status==='PENDIENTE_APROBACION').map(cc=>(
@@ -7984,7 +8021,8 @@ export default function App() {
                                 }} className={`border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase outline-none ${u.role==='SUPERADMIN'?'bg-red-50 text-red-700 border-red-200':u.role==='ADMIN'?'bg-orange-50 text-orange-700 border-orange-200':u.role==='EJECUTIVO_CUENTA'?'bg-teal-50 text-teal-700 border-teal-200':u.role==='AUDITOR'?'bg-blue-50 text-blue-700 border-blue-200':u.role==='CLIENTE'?'bg-cyan-50 text-cyan-700 border-cyan-200':'bg-slate-100 text-slate-600 border-slate-200'}`}>
                                   <option value="CLIENTE">CLIENTE</option>
                                   <option value="PICKER">PICKER</option>
-                                  <option value="EJECUTIVO_CUENTA">EJECUTIVO_CUENTA</option>
+                                  <option value="JEFE_BODEGA">JEFE_BODEGA</option>
+                                  <option value="EJECUTIVO_CUENTA">EJECUTIVO_CUENTA (Operario)</option>
                                   <option value="AUDITOR">AUDITOR</option>
                                   <option value="ADMIN">ADMIN</option>
                                   {u.username !== 'admin' && <option value="SUPERADMIN">SUPERADMIN</option>}
@@ -8446,7 +8484,7 @@ export default function App() {
             ];
             const getStatusColor = (s) => DS_STATUS.find(x=>x.id===s)?.color || 'bg-slate-100 text-slate-600 border-slate-200';
             const todayStr = new Date().toISOString().slice(0,10);
-            const isSup = ['SUPERVISOR','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+            const isSup = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
 
             const filtered = dispatchSchedules.filter(d => {
               if (dsStatusFilter && d.status !== dsStatusFilter) return false;
@@ -10203,11 +10241,14 @@ export default function App() {
               <button
                 disabled={Object.keys(substituteModal.selection).length === 0}
                 onClick={async () => {
+                  // Despacho con sustitutos: también exige re-clave (step-up).
+                  const reauthPw = await promptReauth('despacho');
+                  if (!reauthPw) return;
                   // Construir nuevo set de items mezclando original + sustitutos
                   const subItems = Object.entries(substituteModal.selection).map(([_, sel]) => ({ sku: sel.sku, qty: sel.qty }));
                   const res = await apiFetch(`${host}/api/dispatch_batch`, {
                     method: 'POST', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ ...substituteModal.doc, username: currentUser.username, allow_substitutes: true, substitute_items: subItems })
+                    body: JSON.stringify({ ...substituteModal.doc, username: currentUser.username, allow_substitutes: true, substitute_items: subItems, reauth_password: reauthPw })
                   });
                   if (res.ok) {
                     showMsg('✅ Despacho con sustitutos procesado');

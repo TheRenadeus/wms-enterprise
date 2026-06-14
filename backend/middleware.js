@@ -1,5 +1,7 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
+const { pool } = require('./db');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'wms-dev-secret-cambiar-en-produccion';
 
@@ -11,38 +13,70 @@ const requireAuth = (req, res, next) => {
   catch (e) { return res.status(401).json({ error: 'Token inválido o expirado. Vuelva a iniciar sesión.' }); }
 };
 
-const requireAdmin = (req, res, next) => {
+// ── MODELO DE ROLES v2 — allowlist por gate (default DENEGAR) ─────────────────
+// Jerarquía: SUPERADMIN > ADMIN > JEFE_BODEGA > EJECUTIVO_CUENTA > PICKER > {AUDITOR, CLIENTE}
+// AUDITOR y CLIENTE son SOLO LECTURA: no figuran en ningún gate de escritura.
+const requireRole = (allow, label) => (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'No autorizado' });
-  if (!['ADMIN', 'SUPERADMIN'].includes(req.user.role)) return res.status(403).json({ error: 'Requiere rol ADMIN o superior.' });
+  if (!allow.includes(req.user.role))
+    return res.status(403).json({ error: `Acción no permitida para el rol ${req.user.role}. Requiere: ${label}.` });
   next();
 };
 
-const requireSuperAdmin = (req, res, next) => {
+const requireSuperAdmin = requireRole(['SUPERADMIN'], 'SUPERADMIN');
+const requireAdmin       = requireRole(['ADMIN', 'SUPERADMIN'], 'ADMIN+');
+const requireJefe        = requireRole(['JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'], 'JEFE_BODEGA+');
+const requireStockWrite  = requireRole(['EJECUTIVO_CUENTA', 'JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'], 'EJECUTIVO_CUENTA+');
+const requirePicking     = requireRole(['PICKER', 'EJECUTIVO_CUENTA', 'JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'], 'PICKER+');
+const requireReadOnly    = requireAuth; // cualquiera autenticado (lectura, sujeta a scope)
+
+// Aliases de transición: las rutas aún no re-cableadas siguen importando estos
+// nombres. Se eliminan en el PASO 2/3 cuando cada ruta apunte a su gate preciso.
+//   requireJefeOrAbove   → requireJefe     (aprobaciones, ASN, docks, billing)
+//   requireStaff         → requirePicking  (conteo cíclico)
+//   requirePickerOrAbove → requirePicking  (cola de picking, solicitudes)
+const requireJefeOrAbove = requireJefe;
+const requireStaff = requirePicking;
+const requirePickerOrAbove = requirePicking;
+
+// Rango numérico de roles (para reglas "solo sobre rango estrictamente inferior").
+const ROLE_RANK = { CLIENTE: 1, AUDITOR: 1, PICKER: 2, EJECUTIVO_CUENTA: 3, JEFE_BODEGA: 4, ADMIN: 5, SUPERADMIN: 6 };
+const rankOf = (role) => ROLE_RANK[role] || 0;
+
+// requireResetPassword: JEFE_BODEGA+ puede resetear SOLO la contraseña de usuarios
+// de rango ESTRICTAMENTE inferior (no toca rol ni scope). ADMIN/SUPERADMIN gestionan
+// usuarios por completo vía requireAdmin.
+const requireResetPassword = async (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'No autorizado' });
-  if (req.user.role !== 'SUPERADMIN') return res.status(403).json({ error: 'Requiere rol SUPERADMIN.' });
-  next();
+  if (!['JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'].includes(req.user.role))
+    return res.status(403).json({ error: 'Requiere rol JEFE_BODEGA o superior.' });
+  const target = req.params.username || req.body?.username;
+  if (!target) return res.status(400).json({ error: 'Falta el usuario objetivo.' });
+  try {
+    const t = await pool.query('SELECT role FROM users WHERE username=$1', [target]);
+    if (!t.rows.length) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    if (rankOf(t.rows[0].role) >= rankOf(req.user.role))
+      return res.status(403).json({ error: 'Solo puedes resetear contraseñas de usuarios de rango inferior al tuyo.' });
+    req.resetTargetRole = t.rows[0].role;
+    next();
+  } catch (e) { return res.status(500).json({ error: 'Error al verificar el usuario objetivo.' }); }
 };
 
-const requirePickerOrAbove = (req, res, next) => {
+// requireReauth (step-up): antes de una operación crítica (recepción/despacho) el
+// usuario reingresa SU contraseña, validada contra su hash bcrypt. No emite token
+// nuevo, solo confirma intención. Los usuarios demo se interceptan antes en
+// apiDemoBlock, así que nunca llegan a este middleware.
+const requireReauth = async (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'No autorizado' });
-  if (!['CLIENTE', 'PICKER', 'OPERARIO', 'SUPERVISOR', 'EJECUTIVO_CUENTA', 'AUDITOR', 'ADMIN', 'SUPERADMIN'].includes(req.user.role))
-    return res.status(403).json({ error: 'Requiere rol PICKER o superior.' });
-  next();
-};
-
-// Staff: todos los roles internos EXCEPTO CLIENTE. Usar en conteos cíclicos.
-const requireStaff = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ error: 'No autorizado' });
-  if (!['PICKER', 'OPERARIO', 'SUPERVISOR', 'EJECUTIVO_CUENTA', 'AUDITOR', 'ADMIN', 'SUPERADMIN'].includes(req.user.role))
-    return res.status(403).json({ error: 'Acceso restringido a personal interno.' });
-  next();
-};
-
-const requireJefeOrAbove = (req, res, next) => {
-  if (!req.user) return res.status(401).json({ error: 'No autorizado' });
-  if (!['SUPERVISOR', 'EJECUTIVO_CUENTA', 'ADMIN', 'SUPERADMIN'].includes(req.user.role))
-    return res.status(403).json({ error: 'Requiere rol EJECUTIVO DE CUENTA o superior.' });
-  next();
+  const pw = req.body?.reauth_password || req.headers['x-reauth-password'];
+  if (!pw) return res.status(401).json({ error: 'Re-autenticación requerida: ingresa tu contraseña para confirmar.', reauth: true });
+  try {
+    const u = await pool.query('SELECT password FROM users WHERE username=$1', [req.user.username]);
+    if (!u.rows.length) return res.status(401).json({ error: 'Usuario no encontrado.', reauth: true });
+    const ok = await bcrypt.compare(pw, u.rows[0].password || '');
+    if (!ok) return res.status(401).json({ error: 'Contraseña incorrecta. Operación cancelada.', reauth: true });
+    next();
+  } catch (e) { return res.status(500).json({ error: 'Error al re-autenticar.' }); }
 };
 
 // ── RATE LIMITERS ────────────────────────────────────────────────────────────
@@ -132,11 +166,15 @@ const apiDemoBlock = (req, res, next) => {
   });
 };
 
-// Bloqueo CLIENTE: solo lectura para el rol CLIENTE.
+// Roles de SOLO LECTURA (allowlist invertida explícita): CLIENTE y AUDITOR no
+// pueden ejecutar NINGUNA escritura, sea cual sea la ruta. Reemplaza el filtro
+// negativo `!== 'CLIENTE'` por una lista positiva de roles de solo lectura, y
+// cierra de raíz la brecha por la que AUDITOR podía modificar stock.
+const READ_ONLY_ROLES = ['CLIENTE', 'AUDITOR'];
 const apiClienteReadOnly = (req, res, next) => {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
-  if (!req.user || req.user.role !== 'CLIENTE') return next();
-  return res.status(403).json({ error: 'Acceso de solo lectura. Los usuarios CLIENTE no pueden realizar modificaciones.' });
+  if (!req.user || !READ_ONLY_ROLES.includes(req.user.role)) return next();
+  return res.status(403).json({ error: 'Acceso de solo lectura: tu rol no puede realizar modificaciones.' });
 };
 
 // ── Asignación de clientes por usuario (modo 3PL) ───────────────────────────
@@ -202,8 +240,16 @@ const checkClientAccess = (mode = 'write') => async (req, res, next) => {
 module.exports = {
   JWT_SECRET,
   requireAuth,
+  requireReadOnly,
   requireAdmin,
   requireSuperAdmin,
+  // Gates v2 (allowlist)
+  requireJefe,
+  requireStockWrite,
+  requirePicking,
+  requireResetPassword,
+  requireReauth,
+  // Aliases de transición (se retiran al re-cablear rutas)
   requirePickerOrAbove,
   requireStaff,
   requireJefeOrAbove,

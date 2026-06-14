@@ -4,7 +4,7 @@
 
 const express = require('express');
 const { pool, mapDbError } = require('../db');
-const { requireAuth, requireAdmin, requireStaff, requireJefeOrAbove, checkClientAccess } = require('../middleware');
+const { requireAuth, requireAdmin, requireStaff, requireJefeOrAbove, checkClientAccess , requireStockWrite, requireJefe } = require('../middleware');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
@@ -301,7 +301,7 @@ router.post('/cycle-count/:id/complete', requireStaff, async (req, res) => {
 });
 
 // ── ADJUSTMENT REQUESTS ──────────────────────────────────────────────────────
-router.post('/adjust-request', requireAuth, async (req, res) => {
+router.post('/adjust-request', requireStockWrite, async (req, res) => {
   if (['ADMIN','SUPERADMIN'].includes(req.user.role))
     return res.status(400).json({ error: 'Los administradores aplican ajustes directamente.' });
   const { items, docNum, glosa } = req.body;
@@ -317,7 +317,7 @@ router.post('/adjust-request', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.post('/adjust-requests', requireAuth, checkClientAccess('write'), async (req, res) => {
+router.post('/adjust-requests', requireStockWrite, checkClientAccess('write'), async (req, res) => {
   if (['ADMIN','SUPERADMIN'].includes(req.user.role))
     return res.status(400).json({ error: 'Los administradores aplican ajustes directamente.' });
   const { lpn_id, sku, type, qty, reason, username } = req.body || {};
@@ -350,7 +350,7 @@ router.get('/adjust-requests', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.post('/adjust-requests/:id/approve', requireAdmin, async (req, res) => {
+router.post('/adjust-requests/:id/approve', requireJefe, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -393,7 +393,7 @@ router.post('/adjust-requests/:id/approve', requireAdmin, async (req, res) => {
   finally { client.release(); }
 });
 
-router.post('/adjust-requests/:id/reject', requireAdmin, async (req, res) => {
+router.post('/adjust-requests/:id/reject', requireJefe, async (req, res) => {
   const { reject_reason } = req.body;
   try {
     const r = await pool.query(

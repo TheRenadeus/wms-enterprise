@@ -44,6 +44,10 @@ const {
   requireAuth,
   requireAdmin,
   requireSuperAdmin,
+  requireJefe,
+  requireStockWrite,
+  requirePicking,
+  requireReauth,
   requirePickerOrAbove,
   requireJefeOrAbove,
   checkClientAccess,
@@ -60,6 +64,7 @@ const {
 } = require('./middleware');
 
 const path = require('path');
+const fs = require('fs');
 const app = express();
 app.set('trust proxy', 1); // Necesario para rate-limit detrás de ngrok/nginx
 
@@ -145,10 +150,75 @@ const PORTAL_SECRET = process.env.PORTAL_SECRET || (JWT_SECRET + '-portal');
 // ── BOOTSTRAP: migraciones versionadas + arranque de alertas ─────────────────
 // El schema vive en backend/migrations/*.js. Añadir una migración nueva es
 // crear un archivo 00N_nombre.js y registrarlo en migrations/list.js.
+// Recuperación ante fallo total: si tras migrar la tabla `users` está vacía y
+// existe un backup en disco, se avisa (con el comando de restore) o, si
+// AUTO_RECOVER=1, se restaura automáticamente el backup más reciente. Esto cubre
+// el caso en que la BD se perdió/recreó y no se puede usar el restore por la UI.
+const checkDisasterRecovery = async () => {
+  try {
+    const u = await pool.query('SELECT COUNT(*)::int AS n FROM users');
+    if (u.rows[0].n > 0) return; // hay datos → nada que recuperar
+    const { BACKUPS_DIR, aplicarRestore } = backupsRouter;
+    if (!BACKUPS_DIR || !fs.existsSync(BACKUPS_DIR)) return;
+    const backups = fs.readdirSync(BACKUPS_DIR)
+      .filter(f => /^wms_backup_.*\.json$/.test(f))
+      .map(f => ({ f, m: fs.statSync(path.join(BACKUPS_DIR, f)).mtimeMs }))
+      .sort((a, b) => b.m - a.m);
+    if (!backups.length) return; // sin backups, nada que hacer
+    const latest = backups[0].f;
+
+    if (process.env.AUTO_RECOVER === '1') {
+      console.warn(`⚠️  [RECOVERY] users vacía y AUTO_RECOVER=1 → restaurando ${latest}...`);
+      const payload = JSON.parse(fs.readFileSync(path.join(BACKUPS_DIR, latest), 'utf8'));
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const { rowsInserted } = await aplicarRestore(client, payload.tables || {});
+        await client.query('COMMIT');
+        console.log(`✅ [RECOVERY] Restauración automática completa desde ${latest} (${rowsInserted} filas).`);
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error('❌ [RECOVERY] Falló la restauración automática:', e.message);
+      } finally { client.release(); }
+    } else {
+      console.warn('────────────────────────────────────────────────────────');
+      console.warn('⚠️  [RECOVERY] La tabla `users` está VACÍA — posible fallo total de datos.');
+      console.warn(`   Backup disponible: ${latest}`);
+      console.warn('   Restaurar:  cd backend && node recover.js --yes');
+      console.warn('   (o arranca con AUTO_RECOVER=1 para restaurar solo al iniciar)');
+      console.warn('────────────────────────────────────────────────────────');
+    }
+  } catch (e) { /* users puede no existir en el primerísimo arranque; ignorar */ }
+};
+
+// SUPERADMIN fijo: garantiza que la cuenta de superadmin definida en .env
+// (SUPERADMIN_USER/HASH) exista SIEMPRE. Se re-crea automáticamente tras un
+// formateo/wipe de la BD, así que el acceso de superadmin nunca se pierde.
+// Idempotente: si ya existe, no la toca (respeta cambios de contraseña hechos
+// luego desde la app — solo re-siembra cuando falta por completo).
+const ensureSuperadmin = async () => {
+  const user = process.env.SUPERADMIN_USER;
+  const hash = process.env.SUPERADMIN_HASH;
+  if (!user || !hash) return; // no configurado → nada que sembrar
+  try {
+    const exists = await pool.query('SELECT 1 FROM users WHERE username=$1', [user]);
+    if (exists.rows.length) return;
+    await pool.query(
+      `INSERT INTO users (username, password, role, status, full_name, allowed_clients, allowed_modules, client_scope)
+       VALUES ($1, $2, 'SUPERADMIN', 'ACTIVE', $3, $4, $5, 'all')`,
+      [user, hash, process.env.SUPERADMIN_FULLNAME || 'Administrador del Sistema',
+       process.env.SUPERADMIN_ALLOWED_CLIENTS || 'ALL', process.env.SUPERADMIN_ALLOWED_MODULES || 'ALL']
+    );
+    console.log(`🔐 [SUPERADMIN] Cuenta fija '${user}' re-creada (no existía tras formateo/arranque).`);
+  } catch (e) { console.error('[SUPERADMIN] No se pudo asegurar la cuenta fija:', e.message); }
+};
+
 const bootstrap = async (retries = 6, delay = 3000) => {
   try {
     await pool.query('SELECT 1');
     await runMigrations(pool, migrationList);
+    await checkDisasterRecovery();
+    await ensureSuperadmin();
     console.log('✅ Base de Datos V11.0 iniciada correctamente');
     setTimeout(generateAlerts, 5000);
     setInterval(generateAlerts, 60 * 60 * 1000);
@@ -202,7 +272,7 @@ app.get('/api/stats', requireAuth, async (req, res) => { try { const stock = awa
 //   → routes/kits.js
 // /api/login y /api/login-history → routes/auth.js
 
-app.post('/api/document_types', requireAdmin, validateBody(schemas.documentTypeCreate), async (req, res) => {
+app.post('/api/document_types', requireJefe, validateBody(schemas.documentTypeCreate), async (req, res) => {
   const { id, description, flow_type } = req.body;
   if (!id || !String(id).trim()) return res.status(400).json({ error: 'El ID del tipo de documento es requerido' });
   if (!description || !String(description).trim()) return res.status(400).json({ error: 'La descripción es requerida' });
@@ -213,7 +283,7 @@ app.post('/api/document_types', requireAdmin, validateBody(schemas.documentTypeC
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
-app.delete('/api/document_types/:id', requireAdmin, async (req, res) => {
+app.delete('/api/document_types/:id', requireJefe, async (req, res) => {
   try {
     const inUse = await pool.query('SELECT COUNT(*) as count FROM document_history WHERE doc_type=$1', [req.params.id]);
     if (parseInt(inUse.rows[0].count) > 0)
@@ -224,11 +294,11 @@ app.delete('/api/document_types/:id', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-app.post('/api/statuses', requireAdmin, validateBody(schemas.statusCreate), async (req, res) => {
+app.post('/api/statuses', requireJefe, validateBody(schemas.statusCreate), async (req, res) => {
   const { id, description, color, blocks_outbound } = req.body;
   try { await pool.query(`INSERT INTO statuses (id, description, color, blocks_outbound) VALUES ($1, $2, $3, $4) ON CONFLICT (id) DO UPDATE SET description=EXCLUDED.description, color=EXCLUDED.color, blocks_outbound=EXCLUDED.blocks_outbound`, [id.toUpperCase().replace(/\s/g, '_'), description, color || 'slate', blocks_outbound || false]); res.json({ success: true }); } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
-app.delete('/api/statuses/:id', requireAdmin, async (req, res) => {
+app.delete('/api/statuses/:id', requireJefe, async (req, res) => {
   try {
     const PROTECTED = ['DISPONIBLE','BLOQUEADO','CUARENTENA','DESPACHADO'];
     if (PROTECTED.includes(req.params.id)) return res.status(400).json({ error: `El estado '${req.params.id}' es un estado base del sistema y no puede eliminarse.` });
@@ -243,7 +313,7 @@ app.delete('/api/statuses/:id', requireAdmin, async (req, res) => {
 
 // /api/clients (POST/DELETE) → routes/clients.js
 
-app.post('/api/skus', requireAdmin, async (req, res) => {
+app.post('/api/skus', requireStockWrite, async (req, res) => {
   const { sku, desc, category, uom, weight, length, width, height, abc_class, requires_lot, requires_serial, client_id, barcode,
           manufacturer_id, manufacturer_code, manufacturer_sku, brand,
           allow_substitutes, substitute_scope, substitute_threshold } = req.body;
@@ -327,7 +397,7 @@ app.post('/api/skus', requireAdmin, async (req, res) => {
 // El código del SKU NUNCA cambia. Si hay cambio crítico (requires_lot/serial)
 // con stock activo → bump de current_version y snapshot en sku_version_history.
 // Los cambios no críticos siempre se aplican in-place sobre la misma fila.
-app.put('/api/skus/:sku', requireAdmin, async (req, res) => {
+app.put('/api/skus/:sku', requireStockWrite, async (req, res) => {
   const sku = String(req.params.sku).toUpperCase().trim();
   const { client_id, requires_lot, requires_serial, desc, category, uom, weight, length, width, height,
           abc_class, barcode, manufacturer_id, manufacturer_code, manufacturer_sku, brand,
@@ -459,15 +529,17 @@ app.get('/api/skus/:sku/versions', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
-app.delete('/api/skus/:id', requireAdmin, async (req, res) => {
+app.delete('/api/skus/:id', requireStockWrite, async (req, res) => {
   const { client_id } = req.query;
   if (!client_id) return res.status(400).json({ error: 'Se requiere client_id como query param para identificar el SKU.' });
   try {
     const check = await pool.query('SELECT COUNT(*) as count FROM inventory_lpns WHERE sku=$1 AND client_id=$2 AND qty>0', [req.params.id, client_id]);
     if (parseInt(check.rows[0].count) > 0) return res.status(400).json({ error: 'No se puede eliminar un SKU que tiene stock activo.' });
-    const result = await pool.query('DELETE FROM master_skus WHERE sku=$1 AND client_id=$2', [req.params.id, client_id]);
-    if (result.rowCount === 0) return res.status(404).json({ error: 'SKU no encontrado para ese cliente.' });
-    res.json({ success: true });
+    // Borrado LÓGICO (nunca físico): marca deleted_at. El código del SKU se conserva
+    // y el historial de versiones queda intacto. El borrado físico es solo SUPERADMIN.
+    const result = await pool.query('UPDATE master_skus SET deleted_at=NOW() WHERE sku=$1 AND client_id=$2 AND deleted_at IS NULL', [req.params.id, client_id]);
+    if (result.rowCount === 0) return res.status(404).json({ error: 'SKU no encontrado para ese cliente (o ya estaba eliminado).' });
+    res.json({ success: true, deleted: 'logical' });
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
@@ -491,7 +563,7 @@ const STATUS_TRANSITIONS = {
   'DESPACHADO':  [], // terminal — no se puede cambiar
 };
 
-app.post('/api/inventory/status', requireAuth, async (req, res) => {
+app.post('/api/inventory/status', requireStockWrite, async (req, res) => {
   const { id, new_status, glosa, username } = req.body;
   try {
     const check = await pool.query('SELECT * FROM inventory_lpns WHERE id = $1', [id]);
@@ -514,7 +586,7 @@ app.post('/api/inventory/status', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-app.post('/api/receive_batch', stockWriteLimiter, requireAuth, checkClientAccess('write'), async (req, res) => {
+app.post('/api/receive_batch', stockWriteLimiter, requireStockWrite, requireReauth, checkClientAccess('write'), async (req, res) => {
   const { items, docNum, glosa, docType, username } = req.body;
   if (!docNum) return res.status(400).json({ error: 'docNum es requerido para trazabilidad.' });
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem.' });
@@ -586,7 +658,10 @@ app.post('/api/receive_batch', stockWriteLimiter, requireAuth, checkClientAccess
     await client.query(`UPDATE pick_task_lines ptl SET status='COMPLETADA', updated_at=NOW() FROM pick_tasks pt WHERE ptl.task_id=pt.id AND pt.doc_num=$1 AND pt.module='receive' AND ptl.status='PENDIENTE'`, [docNum.toUpperCase()])
       .catch(e => console.error('[pick_task_lines] Error cerrando líneas en receive:', e.message));
     await client.query('COMMIT');
-    res.json({ success: true });
+    // Respuesta consistente { imported, errors }. Transaccional (todo-o-nada):
+    // si llegó aquí, todas las filas válidas se insertaron. `success` se mantiene
+    // por compatibilidad con el flujo de recepción manual (handleCommitAPI).
+    res.json({ success: true, imported: items.length, errors: [] });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error("Error Receive:", err.message);
@@ -594,7 +669,7 @@ app.post('/api/receive_batch', stockWriteLimiter, requireAuth, checkClientAccess
   } finally { client.release(); }
 });
 
-app.post('/api/dispatch_batch', stockWriteLimiter, requireAuth, checkClientAccess('write'), async (req, res) => {
+app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, requireReauth, checkClientAccess('write'), async (req, res) => {
   const { items, docNum, glosa, docType, username, usePickConfirmations, allow_substitutes: allowSubstFlag } = req.body;
   if (!docNum) return res.status(400).json({ error: 'docNum es requerido para trazabilidad.' });
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem.' });
@@ -731,7 +806,7 @@ app.post('/api/dispatch_batch', stockWriteLimiter, requireAuth, checkClientAcces
   } finally { client.release(); }
 });
 
-app.post('/api/relocate', requireAuth, checkClientAccess('write'), async (req, res) => {
+app.post('/api/relocate', requireStockWrite, checkClientAccess('write'), async (req, res) => {
   const { id, qty, glosa, username } = req.body;
   const new_location_id = req.body.new_location_id ? String(req.body.new_location_id).trim().toUpperCase() : null;
   if (!new_location_id) return res.status(400).json({ error: 'El destino de reubicación es requerido' });
@@ -774,7 +849,7 @@ app.post('/api/relocate', requireAuth, checkClientAccess('write'), async (req, r
   } catch (err) { await client.query('ROLLBACK'); res.status(400).json({ error: err.message }); } finally { client.release(); }
 });
 
-app.post('/api/adjust_batch', stockWriteLimiter, requireAuth, checkClientAccess('write'), async (req, res) => {
+app.post('/api/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('write'), async (req, res) => {
   if (!['ADMIN','SUPERADMIN'].includes(req.user.role))
     return res.status(403).json({ error: 'Solo administradores pueden aplicar ajustes directamente. Use /api/adjust-request para solicitar aprobación.' });
   const { items, docNum, glosa, username } = req.body;
@@ -960,6 +1035,15 @@ const parseFile = (data, filename) => {
   return XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
 };
 
+// Origen de filas para los imports: el panel editable envía `rows` (array JSON ya
+// corregido a mano); el flujo antiguo envía `data` (base64). Se acepta cualquiera
+// para no romper retrocompatibilidad.
+const getImportRows = (body) => {
+  if (body && Array.isArray(body.rows)) return body.rows;
+  if (body && typeof body.data === 'string') return parseFile(body.data, body.filename);
+  return null;
+};
+
 // Plantillas descargables con fila de descripciones
 const TEMPLATES = {
   skus: {
@@ -1047,12 +1131,80 @@ app.post('/api/import/:type/preview', requireAuth, (req, res) => {
   } catch (e) { res.status(400).json({ error: 'No se pudo parsear el archivo: ' + e.message }); }
 });
 
-app.post('/api/import/skus', requireAuth, async (req, res) => {
-  if (!validateImportBody(req.body, res)) return;
-  const { data, filename } = req.body;
-  const rows = parseFile(data, filename);
+// Dry-run de duplicados contra la BD (no inserta nada). Devuelve, por fila,
+// errores/advertencias de serie/lote repetido y a nivel documento si ya fue
+// procesado. Usado por el panel de previsualización antes de confirmar.
+//  - receive: serie ya en stock (error), serie repetida en archivo (error),
+//             lote ya con stock para el SKU (advertencia), documento procesado.
+//  - dispatch: LPN inexistente o sin stock (error), documento procesado.
+app.post('/api/import/:type/validate', requireAuth, async (req, res) => {
+  const type = req.params.type;
+  const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+  const docNum = req.body.doc_num ? String(req.body.doc_num).toUpperCase().trim() : null;
+  const out = { doc_duplicate: false, rows: rows.map((_, i) => ({ index: i, warnings: [], errors: [] })) };
+  try {
+    if (docNum) {
+      const dq = await pool.query('SELECT 1 FROM processed_docs WHERE doc_num=$1 LIMIT 1', [docNum]);
+      out.doc_duplicate = dq.rows.length > 0;
+    }
+
+    if (type === 'receive') {
+      const norm = (v) => String(v ?? '').trim();
+      const upper = (v) => norm(v).toUpperCase();
+      // Series existentes en stock (clave sku||serie).
+      const serials = [...new Set(rows.map(r => norm(r.serial_number)).filter(Boolean))];
+      const existingSerial = new Set();
+      if (serials.length) {
+        const sq = await pool.query('SELECT DISTINCT sku, serial_number FROM inventory_lpns WHERE serial_number = ANY($1) AND qty>0', [serials]);
+        sq.rows.forEach(r => existingSerial.add(`${String(r.sku).toUpperCase()}||${r.serial_number}`));
+      }
+      // Lotes existentes en stock (clave sku||lote).
+      const batches = [...new Set(rows.map(r => norm(r.batch_number)).filter(Boolean))];
+      const existingBatch = new Set();
+      if (batches.length) {
+        const skusForBatch = [...new Set(rows.map(r => upper(r.sku)).filter(Boolean))];
+        const bq = await pool.query('SELECT DISTINCT sku, batch_number FROM inventory_lpns WHERE batch_number = ANY($1) AND sku = ANY($2) AND qty>0', [batches, skusForBatch]);
+        bq.rows.forEach(r => existingBatch.add(`${String(r.sku).toUpperCase()}||${r.batch_number}`));
+      }
+      // Series repetidas dentro del mismo archivo.
+      const fileSerialCount = {};
+      rows.forEach(r => { const s = norm(r.serial_number); if (s) fileSerialCount[s] = (fileSerialCount[s] || 0) + 1; });
+
+      out.rows = rows.map((r, i) => {
+        const sku = upper(r.sku), serial = norm(r.serial_number), batch = norm(r.batch_number);
+        const errors = [], warnings = [];
+        if (serial && existingSerial.has(`${sku}||${serial}`)) errors.push(`Serie '${serial}' ya existe en stock para ${sku}`);
+        if (serial && fileSerialCount[serial] > 1) errors.push(`Serie '${serial}' repetida en el archivo`);
+        if (batch && existingBatch.has(`${sku}||${batch}`)) warnings.push(`Lote '${batch}' ya tiene stock para ${sku} (se sumará al existente)`);
+        return { index: i, warnings, errors };
+      });
+    } else if (type === 'dispatch') {
+      const lpnIds = [...new Set(rows.map(r => String(r.lpn_id ?? '').trim()).filter(Boolean))];
+      const withStock = new Set();
+      if (lpnIds.length) {
+        const lq = await pool.query('SELECT id FROM inventory_lpns WHERE id = ANY($1) AND qty>0', [lpnIds]);
+        lq.rows.forEach(r => withStock.add(String(r.id)));
+      }
+      out.rows = rows.map((r, i) => {
+        const lpn = String(r.lpn_id ?? '').trim();
+        const errors = [];
+        if (lpn && !withStock.has(lpn)) errors.push(`LPN '${lpn}' no existe o no tiene stock`);
+        return { index: i, warnings: [], errors };
+      });
+    }
+    res.json(out);
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+app.post('/api/import/skus', requireStockWrite, async (req, res) => {
+  const { username } = req.body;
+  const rows = getImportRows(req.body);
+  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
   if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
-  const results = { success: 0, errors: [] };
+  // success = total procesados; inserted = nuevos; updated = existentes modificados;
+  // versioned = SKUs cuyo control de lote/serie cambió con stock activo → bump de versión.
+  const results = { success: 0, inserted: 0, updated: 0, versioned: [], errors: [] };
+  const truthy = (v) => v === true || v === 'true' || v === 'TRUE' || v === '1' || v === 1;
   const seenKeys = new Set();
   const dbClient = await pool.connect();
   try {
@@ -1065,25 +1217,53 @@ app.post('/api/import/skus', requireAuth, async (req, res) => {
       const key = `${skuNorm}||${clientNorm}`;
       if (seenKeys.has(key)) { results.errors.push(`Fila ${i+2}: SKU '${skuNorm}' duplicado en este archivo — solo se procesará la primera aparición`); continue; }
       seenKeys.add(key);
-      await dbClient.query(`
-        INSERT INTO master_skus (sku, client_id, "desc", category, uom, weight, length, width, height, abc_class, requires_lot, requires_serial, barcode)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-        ON CONFLICT (sku, client_id) DO UPDATE SET
-          "desc"=EXCLUDED."desc", category=EXCLUDED.category, uom=EXCLUDED.uom,
-          weight=EXCLUDED.weight, length=EXCLUDED.length, width=EXCLUDED.width,
-          height=EXCLUDED.height, abc_class=EXCLUDED.abc_class,
-          requires_lot=EXCLUDED.requires_lot, requires_serial=EXCLUDED.requires_serial,
-          barcode=EXCLUDED.barcode
-      `, [
-        skuNorm, clientNorm, r.desc,
-        r.category || 'General', r.uom || 'UN',
+      const newLot = truthy(r.requires_lot);
+      const newSerial = truthy(r.requires_serial);
+      const baseParams = [
+        r.desc, r.category || 'General', r.uom || 'UN',
         parseFloat(r.weight) || 0, parseFloat(r.length) || 0,
         parseFloat(r.width) || 0, parseFloat(r.height) || 0,
-        r.abc_class || null,
-        r.requires_lot === true || r.requires_lot === 'true' || r.requires_lot === 'TRUE' || r.requires_lot === '1',
-        r.requires_serial === true || r.requires_serial === 'true' || r.requires_serial === 'TRUE' || r.requires_serial === '1',
-        r.barcode || null
-      ]);
+        r.abc_class || null, r.barcode || null,
+      ];
+
+      const exists = await dbClient.query(`SELECT requires_lot, requires_serial, current_version FROM master_skus WHERE sku=$1 AND client_id=$2 LIMIT 1`, [skuNorm, clientNorm]);
+
+      if (!exists.rows.length) {
+        // Nuevo SKU
+        await dbClient.query(`
+          INSERT INTO master_skus (sku, client_id, "desc", category, uom, weight, length, width, height, abc_class, requires_lot, requires_serial, barcode)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        `, [skuNorm, clientNorm, ...baseParams.slice(0, 8), newLot, newSerial, baseParams[8]]);
+        results.inserted++;
+      } else {
+        const cur = exists.rows[0];
+        // Actualizar siempre los campos no versionados.
+        await dbClient.query(`
+          UPDATE master_skus SET "desc"=$1, category=$2, uom=$3, weight=$4, length=$5, width=$6, height=$7, abc_class=$8, barcode=$9
+          WHERE sku=$10 AND client_id=$11
+        `, [...baseParams, skuNorm, clientNorm]);
+
+        const criticalChange = (newLot !== cur.requires_lot) || (newSerial !== cur.requires_serial);
+        if (criticalChange) {
+          const stockRow = await dbClient.query(`SELECT COALESCE(SUM(qty),0)::numeric AS total FROM inventory_lpns WHERE sku=$1 AND qty>0`, [skuNorm]);
+          const stock = parseFloat(stockRow.rows[0].total) || 0;
+          if (stock > 0) {
+            // Cambio crítico con stock → bump de versión de control + snapshot.
+            const vr = await dbClient.query(`SELECT * FROM create_sku_version($1, $2::jsonb, $3, $4)`,
+              [skuNorm, JSON.stringify({ requires_lot: newLot, requires_serial: newSerial }), 'Cambio de control de lote/serie por importación masiva', username || 'IMPORT']);
+            results.versioned.push({ sku: skuNorm, client_id: clientNorm, from: cur.current_version, to: vr.rows[0].new_version });
+          } else {
+            // Sin stock → actualizar in-place sin bump.
+            await dbClient.query(`UPDATE master_skus SET requires_lot=$1, requires_serial=$2 WHERE sku=$3 AND client_id=$4`, [newLot, newSerial, skuNorm, clientNorm]);
+            await dbClient.query(`
+              INSERT INTO sku_version_history (sku, version, requires_lot, requires_serial, changed_by, reason)
+              VALUES ($1,$2,$3,$4,$5,'Cambio sin stock — importación masiva')
+              ON CONFLICT (sku, version) DO UPDATE SET requires_lot=EXCLUDED.requires_lot, requires_serial=EXCLUDED.requires_serial, changed_at=NOW(), changed_by=EXCLUDED.changed_by, reason=EXCLUDED.reason
+            `, [skuNorm, cur.current_version, newLot, newSerial, username || 'IMPORT']);
+          }
+        }
+        results.updated++;
+      }
       results.success++;
     }
     await dbClient.query('COMMIT');
@@ -1094,10 +1274,9 @@ app.post('/api/import/skus', requireAuth, async (req, res) => {
   res.json(results);
 });
 
-app.post('/api/import/clients', requireAuth, async (req, res) => {
-  if (!validateImportBody(req.body, res)) return;
-  const { data, filename } = req.body;
-  const rows = parseFile(data, filename);
+app.post('/api/import/clients', requireJefe, async (req, res) => {
+  const rows = getImportRows(req.body);
+  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
   if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
   const results = { success: 0, errors: [] };
   const dbClient = await pool.connect();
@@ -1118,10 +1297,10 @@ app.post('/api/import/clients', requireAuth, async (req, res) => {
   res.json(results);
 });
 
-app.post('/api/import/inventory', requireAuth, async (req, res) => {
-  if (!validateImportBody(req.body, res)) return;
-  const { data, filename, username } = req.body;
-  const rows = parseFile(data, filename);
+app.post('/api/import/inventory', requireStockWrite, async (req, res) => {
+  const { username } = req.body;
+  const rows = getImportRows(req.body);
+  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
   if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
   const results = { success: 0, errors: [] };
   const client = await pool.connect();
@@ -1153,10 +1332,10 @@ app.post('/api/import/inventory', requireAuth, async (req, res) => {
   res.json(results);
 });
 
-app.post('/api/import/receive', stockWriteLimiter, requireAuth, checkClientAccess('write'), async (req, res) => {
-  const { data, filename, username, client_id, doc_num } = req.body;
-  if (!data) return res.status(400).json({ error: 'Sin datos' });
-  const rows = parseFile(data, filename);
+app.post('/api/import/receive', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), async (req, res) => {
+  const { username, client_id, doc_num } = req.body;
+  const rows = getImportRows(req.body);
+  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
   if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
   const results = { success: 0, errors: [] };
   const dbClient = await pool.connect();
@@ -1184,10 +1363,10 @@ app.post('/api/import/receive', stockWriteLimiter, requireAuth, checkClientAcces
   res.json(results);
 });
 
-app.post('/api/import/dispatch', stockWriteLimiter, requireAuth, checkClientAccess('write'), async (req, res) => {
-  const { data, filename, username, doc_num } = req.body;
-  if (!data) return res.status(400).json({ error: 'Sin datos' });
-  const rows = parseFile(data, filename);
+app.post('/api/import/dispatch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), async (req, res) => {
+  const { username, doc_num } = req.body;
+  const rows = getImportRows(req.body);
+  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
   if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
   const results = { success: 0, errors: [] };
   const dbClient = await pool.connect();
@@ -1198,14 +1377,17 @@ app.post('/api/import/dispatch', stockWriteLimiter, requireAuth, checkClientAcce
       if (!r.sku || !r.qty_to_pick || parseFloat(r.qty_to_pick) <= 0) { results.errors.push(`Fila ${i+2}: sku y qty_to_pick > 0 son obligatorios`); continue; }
       const qty = parseFloat(r.qty_to_pick);
       let remaining = qty;
+      // lpn_id opcional: celda vacía, espacios o "NaN" → null (selección FEFO automática).
+      const lpnRaw = r.lpn_id == null ? '' : String(r.lpn_id).trim();
+      const lpnId = (lpnRaw === '' || lpnRaw.toLowerCase() === 'nan') ? null : lpnRaw;
       // Obtener IDs elegibles (con JOIN para filtro de estado, sin FOR UPDATE)
       const eligibleIds = (await dbClient.query(
         `SELECT i.id FROM inventory_lpns i
          LEFT JOIN statuses st ON i.status = st.id
          WHERE i.sku=$1 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
-         ${r.lpn_id ? 'AND i.id=$2' : ''}
+         ${lpnId ? 'AND i.id=$2' : ''}
          ORDER BY i.created_at ASC`,
-        r.lpn_id ? [r.sku, r.lpn_id] : [r.sku]
+        lpnId ? [r.sku, lpnId] : [r.sku]
       )).rows.map(row => row.id);
       // Bloquear solo inventory_lpns (sin JOIN) para evitar error PG con outer join + FOR UPDATE
       const lpns = eligibleIds.length === 0 ? [] : (await dbClient.query(
@@ -1533,7 +1715,7 @@ app.get('/api/billing/summary', requireJefeOrAbove, async (req, res) => {
 });
 
 // Guardar tarifas personalizadas por cliente
-app.post('/api/client-tariffs', requireAdmin, async (req, res) => {
+app.post('/api/client-tariffs', requireJefe, async (req, res) => {
   const { client_id, tariff_type, unit_price, currency, description } = req.body;
   if (!client_id || !tariff_type) return res.status(400).json({ error: 'client_id y tariff_type son requeridos.' });
   try {
@@ -1548,7 +1730,7 @@ app.post('/api/client-tariffs', requireAdmin, async (req, res) => {
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
-app.delete('/api/client-tariffs/:id', requireAdmin, async (req, res) => {
+app.delete('/api/client-tariffs/:id', requireJefe, async (req, res) => {
   try {
     await pool.query(`DELETE FROM client_tariffs WHERE id = $1`, [req.params.id]);
     res.json({ success: true });
@@ -2033,7 +2215,7 @@ app.get('/api/portal/reports/:client_id', requirePortalAuth, async (req, res) =>
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
-app.put('/api/clients/:id/portal', requireAdmin, async (req, res) => {
+app.put('/api/clients/:id/portal', requireJefe, async (req, res) => {
   const { portal_enabled, portal_password, portal_email } = req.body;
   try {
     // Verificar que el cliente existe
@@ -2163,7 +2345,7 @@ app.post('/api/shipments', requireAuth, checkClientAccess('write'), async (req, 
     res.json({ success: true, id });
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
-app.put('/api/shipments/:id/status', requireAuth, async (req, res) => {
+app.put('/api/shipments/:id/status', requireStockWrite, async (req, res) => {
   const { status } = req.body;
   const VALID = ['PENDING','ASSIGNED','IN_TRANSIT','DELIVERED','RETURNED'];
   if (!VALID.includes(status)) return res.status(400).json({ error: 'Estado inválido' });
@@ -2204,11 +2386,11 @@ const requireApiKey = async (req, res, next) => {
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 };
 
-app.get('/api/keys', requireAdmin, async (req, res) => {
+app.get('/api/keys', requireJefe, async (req, res) => {
   try { res.json((await pool.query('SELECT id,key_prefix,name,client_id,permissions,active,last_used,created_by,created_at FROM api_keys ORDER BY created_at DESC')).rows); }
   catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
-app.post('/api/keys', requireAdmin, async (req, res) => {
+app.post('/api/keys', requireJefe, async (req, res) => {
   const { name, client_id, permissions, created_by } = req.body;
   if (!name) return res.status(400).json({ error: 'Nombre requerido' });
   const { raw, hash, prefix } = generateApiKey();
@@ -2218,7 +2400,7 @@ app.post('/api/keys', requireAdmin, async (req, res) => {
     res.json({ success: true, key: raw, prefix });
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
-app.delete('/api/keys/:id', requireAdmin, async (req, res) => {
+app.delete('/api/keys/:id', requireJefe, async (req, res) => {
   try { await pool.query('UPDATE api_keys SET active=FALSE WHERE id=$1', [req.params.id]); res.json({ success: true }); }
   catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
@@ -2343,7 +2525,8 @@ app.get('/api/relocate-requests', requirePickerOrAbove, async (req, res) => {
 });
 
 // ── Supervisor aprueba → ejecuta la reubicación real ─────────────────────
-app.post('/api/relocate-requests/:id/approve', requireJefeOrAbove, async (req, res) => {
+// PASO 5.5: la reubicación es la excepción — aprueba EJECUTIVO_CUENTA+ (no requiere JEFE).
+app.post('/api/relocate-requests/:id/approve', requireStockWrite, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -2413,7 +2596,7 @@ app.post('/api/relocate-requests/:id/approve', requireJefeOrAbove, async (req, r
 });
 
 // ── Supervisor rechaza ────────────────────────────────────────────────────
-app.post('/api/relocate-requests/:id/reject', requireJefeOrAbove, async (req, res) => {
+app.post('/api/relocate-requests/:id/reject', requireStockWrite, async (req, res) => {
   const { reason } = req.body;
   if (!reason) return res.status(400).json({ error: 'reason es requerida para rechazar.' });
   try {
@@ -2455,7 +2638,7 @@ app.get('/api/invoices', requireJefeOrAbove, async (req, res) => {
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }
 });
 // Generar factura automática desde actividad del período
-app.post('/api/invoices/generate', requireAdmin, async (req, res) => {
+app.post('/api/invoices/generate', requireJefe, async (req, res) => {
   const { client_id, period_start, period_end, tax_rate, manual_lines } = req.body;
   if (!client_id || !period_start || !period_end) return res.status(400).json({ error: 'cliente, período inicio y fin son requeridos.' });
   const client = await pool.connect();
@@ -2496,19 +2679,19 @@ app.post('/api/invoices/generate', requireAdmin, async (req, res) => {
   } catch(e){ await client.query('ROLLBACK'); res.status(500).json({ error: mapDbError(e) }); }
   finally { client.release(); }
 });
-app.post('/api/invoices/:id/issue', requireAdmin, async (req, res) => {
+app.post('/api/invoices/:id/issue', requireJefe, async (req, res) => {
   try {
     await pool.query(`UPDATE invoices SET status='EMITIDA', issued_at=NOW() WHERE id=$1 AND status='BORRADOR'`, [req.params.id]);
     res.json({ success: true });
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }
 });
-app.post('/api/invoices/:id/pay', requireAdmin, async (req, res) => {
+app.post('/api/invoices/:id/pay', requireJefe, async (req, res) => {
   try {
     await pool.query(`UPDATE invoices SET status='PAGADA', paid_at=NOW() WHERE id=$1 AND status='EMITIDA'`, [req.params.id]);
     res.json({ success: true });
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }
 });
-app.delete('/api/invoices/:id', requireAdmin, async (req, res) => {
+app.delete('/api/invoices/:id', requireJefe, async (req, res) => {
   try { await pool.query(`DELETE FROM invoices WHERE id=$1 AND status='BORRADOR'`, [req.params.id]); res.json({ success: true }); }
   catch(e){ res.status(500).json({ error: mapDbError(e) }); }
 });
@@ -2688,8 +2871,8 @@ async function executeVoid(client, docHistoryId, reason, executedBy) {
 }
 
 // Anulación directa (ADMIN / SUPERADMIN)
-app.post('/api/document-history/:id/void', requireAuth, async (req, res) => {
-  if (!['ADMIN','SUPERADMIN'].includes(req.user.role)) return res.status(403).json({ error: 'Solo administradores pueden anular documentos directamente.' });
+app.post('/api/document-history/:id/void', requireJefe, async (req, res) => {
+  // Anulación directa de despacho/recepción: JEFE_BODEGA+ (gate requireJefe).
   const { reason } = req.body;
   if (!reason || !reason.trim()) return res.status(400).json({ error: 'Debe indicar el motivo de la anulación.' });
   const client = await pool.connect();
@@ -2705,8 +2888,9 @@ app.post('/api/document-history/:id/void', requireAuth, async (req, res) => {
 });
 
 // Solicitar anulación (usuarios no-admin)
-app.post('/api/document-history/:id/void-request', requireAuth, async (req, res) => {
-  if (['ADMIN','SUPERADMIN'].includes(req.user.role)) return res.status(400).json({ error: 'Los administradores pueden anular directamente.' });
+app.post('/api/document-history/:id/void-request', requireStockWrite, async (req, res) => {
+  // EJECUTIVO_CUENTA solicita; JEFE_BODEGA+ anula directamente (no necesita solicitar).
+  if (['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(req.user.role)) return res.status(400).json({ error: 'Tu rol puede anular directamente; no necesitas solicitarlo.' });
   const { reason } = req.body;
   if (!reason || !reason.trim()) return res.status(400).json({ error: 'Debe indicar el motivo de la anulación.' });
   try {
@@ -2728,8 +2912,7 @@ app.post('/api/document-history/:id/void-request', requireAuth, async (req, res)
 });
 
 // Listar solicitudes de anulación (ADMIN/SUPERADMIN)
-app.get('/api/anulation-requests', requireAuth, async (req, res) => {
-  if (!['ADMIN','SUPERADMIN'].includes(req.user.role)) return res.status(403).json({ error: 'Solo administradores.' });
+app.get('/api/anulation-requests', requireJefe, async (req, res) => {
   try {
     const { status } = req.query;
     const where = status ? `WHERE ar.status=$1` : '';
@@ -2745,8 +2928,7 @@ app.get('/api/anulation-requests', requireAuth, async (req, res) => {
 });
 
 // Aprobar solicitud de anulación (ADMIN/SUPERADMIN)
-app.post('/api/anulation-requests/:id/approve', requireAuth, async (req, res) => {
-  if (!['ADMIN','SUPERADMIN'].includes(req.user.role)) return res.status(403).json({ error: 'Solo administradores.' });
+app.post('/api/anulation-requests/:id/approve', requireJefe, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -2768,8 +2950,7 @@ app.post('/api/anulation-requests/:id/approve', requireAuth, async (req, res) =>
 });
 
 // Rechazar solicitud de anulación (ADMIN/SUPERADMIN)
-app.post('/api/anulation-requests/:id/reject', requireAuth, async (req, res) => {
-  if (!['ADMIN','SUPERADMIN'].includes(req.user.role)) return res.status(403).json({ error: 'Solo administradores.' });
+app.post('/api/anulation-requests/:id/reject', requireJefe, async (req, res) => {
   const { reject_reason } = req.body;
   try {
     const r = await pool.query(

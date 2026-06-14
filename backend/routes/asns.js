@@ -5,7 +5,7 @@
 const express = require('express');
 
 const { pool, mapDbError } = require('../db');
-const { requireAuth, requireJefeOrAbove, checkClientAccess } = require('../middleware');
+const { requireAuth, requireJefe, requireJefeOrAbove, requireStockWrite, checkClientAccess } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId, logStorageEvent } = require('../helpers');
 
@@ -89,7 +89,7 @@ router.post('/asns', requireJefeOrAbove, checkClientAccess('write'), async (req,
   finally { client.release(); }
 });
 
-router.post('/asns/:id/receive', requireJefeOrAbove, validateBody(schemas.asnReceive), async (req, res) => {
+router.post('/asns/:id/receive', requireStockWrite, validateBody(schemas.asnReceive), async (req, res) => {
   const rawLines = req.body.received || req.body.lines || [];
   const received = rawLines.map(r => ({
     asn_line_id: r.asn_line_id || r.line_id,

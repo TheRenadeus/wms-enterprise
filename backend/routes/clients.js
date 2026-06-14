@@ -4,7 +4,7 @@
 
 const express = require('express');
 const { pool, mapDbError } = require('../db');
-const { requireAuth, requireAdmin } = require('../middleware');
+const { requireAuth, requireJefe } = require('../middleware');
 
 const router = express.Router();
 
@@ -25,7 +25,7 @@ router.get('/clients', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.post('/clients', requireAdmin, async (req, res) => {
+router.post('/clients', requireJefe, async (req, res) => {
   const { id, name, contact, email } = req.body;
   if (!id || !name) return res.status(400).json({ error: 'ID y nombre del cliente son requeridos' });
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Formato de email inválido' });
@@ -43,7 +43,7 @@ router.post('/clients', requireAdmin, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.delete('/clients/:id', requireAdmin, async (req, res) => {
+router.delete('/clients/:id', requireJefe, async (req, res) => {
   try {
     const skuCheck = await pool.query('SELECT COUNT(*) as count FROM master_skus WHERE client_id=$1', [req.params.id]);
     if (parseInt(skuCheck.rows[0].count) > 0)

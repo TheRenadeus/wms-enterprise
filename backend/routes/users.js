@@ -6,9 +6,26 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 
 const { pool, mapDbError } = require('../db');
-const { requireAuth, requireAdmin } = require('../middleware');
+const { requireAuth, requireAdmin, requireResetPassword } = require('../middleware');
 
 const router = express.Router();
+
+// PASO 2: JEFE_BODEGA+ puede resetear SOLO la contraseña de usuarios de rango
+// inferior (no toca rol ni scope). El gate requireResetPassword valida el rango.
+router.post('/users/:username/reset-password', requireResetPassword, async (req, res) => {
+  const { password } = req.body || {};
+  if (!password || String(password).length < 4) return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 4 caracteres.' });
+  try {
+    const hashed = await bcrypt.hash(String(password), 12);
+    const r = await pool.query('UPDATE users SET password=$1 WHERE username=$2 RETURNING username', [hashed, req.params.username]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Usuario no encontrado.' });
+    await pool.query(
+      `INSERT INTO audit_log (type, sku, qty, glosa, username) VALUES ('SYSTEM','N/A',0,$1,$2)`,
+      [`Reset de contraseña de '${req.params.username}' (rol ${req.resetTargetRole})`, req.user.username]
+    ).catch(() => {});
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
 
 router.get('/users', requireAuth, async (req, res) => {
   try {

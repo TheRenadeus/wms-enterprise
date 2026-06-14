@@ -5,7 +5,7 @@
 
 const express = require('express');
 const { pool, mapDbError } = require('../db');
-const { requireAdmin, requireSuperAdmin } = require('../middleware');
+const { requireSuperAdmin, requireJefe } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 
 const router = express.Router();
@@ -34,7 +34,7 @@ function buildLocId(warehouse, aisle, row_num, level) {
   return `${warehouse}-${aisle}-${String(row_num).padStart(2, '0')}-${level}`;
 }
 
-router.post('/locations', requireAdmin, async (req, res) => {
+router.post('/locations', requireJefe, async (req, res) => {
   const b = req.body || {};
 
   // Validar campos estructurales del nuevo formato de 4 segmentos
@@ -92,7 +92,7 @@ router.post('/locations', requireAdmin, async (req, res) => {
 
 // PUT /locations/:id — actualizar campos (incluye 3D).
 // Busca el ID tal como llega (case-sensitive) para soportar pasillos en minúscula.
-router.put('/locations/:id', requireAdmin, async (req, res) => {
+router.put('/locations/:id', requireJefe, async (req, res) => {
   const b = req.body || {};
   const locId = String(req.params.id);  // sin toUpperCase
   try {
@@ -153,7 +153,7 @@ router.put('/locations/:id', requireAdmin, async (req, res) => {
 });
 
 // GET /locations/audit-3d — detecta ubicaciones sin posición 3D, duplicados y huérfanos.
-router.get('/locations/audit-3d', requireAdmin, async (req, res) => {
+router.get('/locations/audit-3d', requireJefe, async (req, res) => {
   try {
     const [counts, dupes, withoutCoords, orphans] = await Promise.all([
       pool.query(`
@@ -282,7 +282,7 @@ router.post('/locations/migrate-3d', requireSuperAdmin, async (req, res) => {
 });
 
 // Inserción masiva — evita N peticiones desde el frontend (REN-05)
-router.post('/locations/bulk', requireAdmin, async (req, res) => {
+router.post('/locations/bulk', requireJefe, async (req, res) => {
   const { locations, overwrite } = req.body;
   if (!Array.isArray(locations) || locations.length === 0) return res.status(400).json({ error: 'Enviar array locations.' });
   if (locations.length > 5000) return res.status(400).json({ error: 'Máximo 5.000 ubicaciones por operación.' });
@@ -349,7 +349,7 @@ router.post('/locations/bulk', requireAdmin, async (req, res) => {
 });
 
 // Update masivo de zona/tipo
-router.put('/locations/bulk', requireAdmin, async (req, res) => {
+router.put('/locations/bulk', requireJefe, async (req, res) => {
   const { location_ids, zone_code, loc_type } = req.body;
   if (!Array.isArray(location_ids) || location_ids.length === 0) return res.status(400).json({ error: 'Enviar array location_ids.' });
   try {
@@ -364,7 +364,7 @@ router.put('/locations/bulk', requireAdmin, async (req, res) => {
 });
 
 // Delete masivo por IDs (no toca PISO-RECEPCION ni ubicaciones con stock)
-router.post('/locations/bulk-delete', requireAdmin, async (req, res) => {
+router.post('/locations/bulk-delete', requireJefe, async (req, res) => {
   const { location_ids } = req.body;
   if (!Array.isArray(location_ids) || location_ids.length === 0) return res.status(400).json({ error: 'Enviar array location_ids.' });
   try {
@@ -377,7 +377,7 @@ router.post('/locations/bulk-delete', requireAdmin, async (req, res) => {
 });
 
 // Delete masivo de TODAS las vacías (REN-09)
-router.delete('/locations/bulk', requireAdmin, async (req, res) => {
+router.delete('/locations/bulk', requireJefe, async (req, res) => {
   try {
     const result = await pool.query(
       `DELETE FROM locations_master WHERE location_id != 'PISO-RECEPCION'
@@ -388,7 +388,7 @@ router.delete('/locations/bulk', requireAdmin, async (req, res) => {
   } catch(err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.delete('/locations/:id', requireAdmin, async (req, res) => {
+router.delete('/locations/:id', requireJefe, async (req, res) => {
   try {
     if (req.params.id === 'PISO-RECEPCION') return res.status(400).json({ error: "'PISO-RECEPCION' es la ubicación base del sistema y no puede eliminarse." });
     const check = await pool.query('SELECT COUNT(*) as count FROM inventory_lpns WHERE location_id=$1 AND qty>0', [req.params.id]);
@@ -402,7 +402,7 @@ router.delete('/locations/:id', requireAdmin, async (req, res) => {
 // POST /locations/move-orphans-to-reception
 // Mueve todos los LPNs en ubicaciones huérfanas (no existen en locations_master)
 // a PISO-RECEPCION. Requiere admin.
-router.post('/locations/move-orphans-to-reception', requireAdmin, async (req, res) => {
+router.post('/locations/move-orphans-to-reception', requireJefe, async (req, res) => {
   try {
     const result = await pool.query(`
       UPDATE inventory_lpns
