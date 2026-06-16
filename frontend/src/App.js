@@ -2344,7 +2344,28 @@ export default function App() {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
+              {/* ── Selector de CLIENTE ACTIVO global (Fase 2) ── */}
+              {is3PLMode && activeClientOptions.length > 0 && (
+                <div
+                  className={`flex items-center gap-1.5 rounded-xl border pl-2.5 pr-1.5 py-1 transition-colors ${activeClientMode === 'all' ? 'bg-amber-50 border-amber-300' : 'bg-indigo-50 border-indigo-200'}`}
+                  title="Cliente activo — filtra todos los módulos operativos"
+                >
+                  <Building2 size={15} className={activeClientMode === 'all' ? 'text-amber-600 shrink-0' : 'text-indigo-600 shrink-0'}/>
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 hidden lg:inline">Trabajando con</span>
+                  <select
+                    value={activeClientId || ''}
+                    onChange={e => setActiveClient(e.target.value)}
+                    className={`bg-transparent text-xs font-black uppercase outline-none cursor-pointer max-w-[150px] ${activeClientMode === 'all' ? 'text-amber-700' : 'text-indigo-700'}`}
+                  >
+                    {canSeeAllClients && <option value="ALL">🌐 Todos los clientes</option>}
+                    {activeClientOptions.map(c => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
+                  </select>
+                  {activeClientMode === 'all' && (
+                    <span className="text-[8px] font-black uppercase bg-amber-400 text-white px-1.5 py-0.5 rounded hidden sm:inline">Solo lectura</span>
+                  )}
+                </div>
+              )}
               <button onClick={() => setDarkMode(p => !p)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-500 dark:text-slate-400" title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
                 {darkMode ? <Sun size={18}/> : <Moon size={18}/>}
               </button>
