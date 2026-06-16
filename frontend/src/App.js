@@ -7,7 +7,7 @@ import {
   ClipboardList, UserCheck, AlertTriangle, SkipForward, CheckCheck, ListTodo, CalendarClock, Clock, Send,
   HardHat, Wrench, Timer, Moon, Sun, BookOpen
 } from 'lucide-react';
-import { useAutoSaveState, apiFetch, setDemoMode, timeAgo, exportToExcel, descargarArchivoAutenticado } from './utils';
+import { useAutoSaveState, apiFetch, setDemoMode, timeAgo, exportToExcel } from './utils';
 import { useConfirm } from './useConfirm';
 import {
   initialSkuForm, MODULES_3PL_ONLY, APP_MODULES, colorMap, statusLabel,
@@ -21,7 +21,6 @@ import {
 import VirtualizedScrollList from './VirtualizedScrollList';
 import GuidedTour from './tutorial/GuidedTour';
 import { useTutorial } from './tutorial/tutorialState';
-import { ClienteActivoContext } from './clienteActivo';
 
 // P15: tabs piloto cargadas lazy. Cada una es un chunk separado en el bundle.
 // El JSX inline de estas tabs en App.js fue reemplazado por <LazyXTab {...props}/>.
@@ -433,7 +432,7 @@ export default function App() {
     if (currentUser.role === 'JEFE_BODEGA') {
       if (disabledModules.includes(tabId)) return false;
       if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
-      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','purchase-orders','cycle-count','suppliers','waves','packing','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers','warehouse','digital-twin','conversions'].includes(tabId);
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','purchase-orders','cycle-count','suppliers','waves','packing','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers'].includes(tabId);
     }
     // EJECUTIVO_CUENTA (operario de piso): operaciones de stock y SKUs; sin gestión 3PL
     // (clientes, facturación, proveedores, docks) ni supervisión avanzada.
@@ -563,6 +562,8 @@ export default function App() {
   const [newDocNum, setNewDocNum] = useState('');
   const [newDocGlosa, setNewDocGlosa] = useState('');
   const [newDocType, setNewDocType] = useState('');
+  // Cliente del movimiento: se elige al CREAR el documento (recepción/despacho/ajuste).
+  const [newDocClient, setNewDocClient] = useState('');
   const [newDocDate, setNewDocDate] = useState('');
   const [newDocRef, setNewDocRef] = useState('');
   const [newDocEnteredAt, setNewDocEnteredAt] = useState(() => new Date().toISOString().slice(0,16));
@@ -619,8 +620,6 @@ export default function App() {
   const [invClientFilter, setInvClientFilter] = useState('');
   const [invSkuFilter, setInvSkuFilter] = useState('');
   const [invLocFilter, setInvLocFilter] = useState('');
-  const [invLoteFilter, setInvLoteFilter] = useState('');   // filtro dedicado por lote (batch_number)
-  const [invSerieFilter, setInvSerieFilter] = useState(''); // filtro dedicado por serie (serial_number)
   const [invView, setInvView] = useState('lpn'); // 'lpn' | 'consolidado'
   const [invDateFrom, setInvDateFrom] = useState('');
   const [showHistory, setShowHistory] = useState(false);
@@ -814,10 +813,14 @@ export default function App() {
   const handleCreateDoc = (e, module) => {
     e.preventDefault(); if (!newDocNum) return showMsg("Ingrese un número de documento", true);
     if (module !== 'adjust' && !newDocType) return showMsg("Seleccione un Tipo de Documento", true);
+    // En 3PL/HYBRID el cliente del movimiento es obligatorio y se elige aquí.
+    if (is3PLMode && !newDocClient) return showMsg("Seleccione el cliente del movimiento", true);
+    if (newDocClient && !canOperateClient(newDocClient)) return showMsg("No tiene permiso para operar con ese cliente", true);
+    const docClient = is3PLMode ? newDocClient : (systemConfig.own_client_id || 'PROPIO');
     const id = `${module.toUpperCase()}-${Date.now()}`;
-    const newDoc = { id, docNum: newDocNum, docType: newDocType, glosa: newDocGlosa, docDate: newDocDate, docRef: newDocRef, docEnteredAt: newDocEnteredAt || new Date().toISOString().slice(0,16), items: [], createdAt: new Date().toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) };
+    const newDoc = { id, docNum: newDocNum, docType: newDocType, client: docClient, glosa: newDocGlosa, docDate: newDocDate, docRef: newDocRef, docEnteredAt: newDocEnteredAt || new Date().toISOString().slice(0,16), items: [], createdAt: new Date().toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) };
     setWorkspaces(prev => ({ ...prev, [module]: [newDoc, ...prev[module]] }));
-    setNewDocNum(''); setNewDocType(''); setNewDocGlosa(''); setNewDocDate(''); setNewDocRef(''); setNewDocEnteredAt(new Date().toISOString().slice(0,16)); setActiveDocId(id);
+    setNewDocNum(''); setNewDocType(''); setNewDocClient(''); setNewDocGlosa(''); setNewDocDate(''); setNewDocRef(''); setNewDocEnteredAt(new Date().toISOString().slice(0,16)); setActiveDocId(id);
     showMsg('📄 Documento iniciado y autoguardado.');
   };
 
@@ -829,7 +832,6 @@ export default function App() {
   const handleCommitAPI = async (endpoint, module) => {
     if (!activeDoc || activeDoc.items.length === 0) return;
     if (isCommitting) return; // evitar doble submit
-    if (isWriteBlocked) { showMsg('⛔ Selecciona un cliente específico para confirmar esta operación', true); return; }
     // Step-up: recepción y despacho exigen re-clave del usuario.
     let reauthPw = '';
     if (module === 'receive' || module === 'dispatch') {
@@ -838,7 +840,7 @@ export default function App() {
     }
     setIsCommitting(true);
     try {
-      const res = await apiFetch(`${host}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...activeDoc, username: currentUser.username, ...(reauthPw ? { reauth_password: reauthPw } : {}) }) });
+      const res = await apiFetch(`${host}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...activeDoc, client_id: activeDoc.client, username: currentUser.username, ...(reauthPw ? { reauth_password: reauthPw } : {}) }) });
       if (res.ok) {
         const moduleMsg = {
           receive: 'Mercancía recibida en bodega',
@@ -893,7 +895,6 @@ export default function App() {
 
   const openDispatchConfirm = () => {
     if (!activeDoc || activeDoc.items.length === 0) return;
-    if (isWriteBlocked) { showMsg('⛔ Selecciona un cliente específico para despachar', true); return; }
     const initialQtys = {};
     activeDoc.items.forEach((it, idx) => { initialQtys[idx] = it.qtyToPick; });
     setShipQtys(initialQtys);
@@ -971,7 +972,7 @@ export default function App() {
     if (!isValid) { fetchData(); return; }
     setIsCommitting(true);
     try {
-      const res = await apiFetch(`${host}/api/dispatch_batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docNum: activeDoc.docNum, docType: activeDoc.docType, glosa: activeDoc.glosa, items: itemsToShip, username: currentUser.username, usePickConfirmations: usePickConf, reauth_password: reauthPw }) });
+      const res = await apiFetch(`${host}/api/dispatch_batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docNum: activeDoc.docNum, docType: activeDoc.docType, client_id: activeDoc.client, glosa: activeDoc.glosa, items: itemsToShip, username: currentUser.username, usePickConfirmations: usePickConf, reauth_password: reauthPw }) });
       if (res.ok) {
         // Guardar en historial de documentos con client_id del primer LPN
         try {
@@ -1127,10 +1128,6 @@ export default function App() {
     setIsSavingSku(true);
     const payload = { ...skuForm, requires_lot: skuForm.traceability === 'LOT', requires_serial: skuForm.traceability === 'SERIAL', username: currentUser?.username };
     if ((!is3PLMode || isHybridMode) && !payload.client_id) payload.client_id = systemConfig.own_client_id || 'PROPIO';
-    // Cliente activo: en creación 3PL en modo single, el dueño se fija al cliente activo.
-    if (is3PLMode && !isEditingSku && activeClientMode === 'single' && activeClientId) payload.client_id = activeClientId;
-    // En 3PL no se permite crear SKU sin cliente específico (modo "Todos" exige elegir uno).
-    if (is3PLMode && !isEditingSku && !payload.client_id) { setIsSavingSku(false); showMsg('⛔ Selecciona un cliente específico para el nuevo SKU', true); return; }
     try {
       // En edición → PUT (puede versionar). En creación → POST.
       const url = isEditingSku ? `${host}/api/skus/${encodeURIComponent(skuForm.sku)}` : `${host}/api/skus`;
@@ -1203,7 +1200,6 @@ export default function App() {
   const handleSaveAlert = async (e) => { e.preventDefault(); try { const res = await apiFetch(`${host}/api/skus/alerts`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(alertForm)}); if(res.ok){showMsg('✅ Límites de stock guardados');setAlertForm({sku:'',client_id:'',stock_min:'',stock_max:''});fetchData();}else{const err=await res.json();showMsg(`⛔ ${err.error}`,true);}}catch(e){showMsg('⛔ Error de red',true);}};
 
   const handleRelocate = async (id, currentLoc, maxQty) => {
-    if (isWriteBlocked) { showMsg('⛔ Selecciona un cliente específico para reubicar', true); return; }
     const newLoc = destinations[id];
     const moveQty = relocateQtys[id] ? parseFloat(relocateQtys[id]) : parseFloat(maxQty);
     if (!newLoc || newLoc === currentLoc) return;
@@ -1258,12 +1254,6 @@ export default function App() {
   };
   const handleEditUser = (u) => { const isAllCl = u.allowed_clients === 'ALL'; const isAllMod = u.allowed_modules === 'ALL' || !u.allowed_modules; setUserForm({ username: u.username, full_name: u.full_name, password: '', role: u.role, status: u.status || 'ACTIVE', allowed_clients: isAllCl ? 'ALL' : 'RESTRICTED', clientSelection: isAllCl ? [] : JSON.parse(u.allowed_clients || '[]'), allowed_modules_type: isAllMod ? 'ROLE' : 'CUSTOM', moduleSelection: isAllMod ? [] : JSON.parse(u.allowed_modules || '[]'), client_scope: u.client_scope || 'all', assigned_clients: Array.isArray(u.assigned_clients) ? u.assigned_clients : [] }); setIsEditingUser(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const handleDeleteUser = async (id) => { if(!(await confirm({ message: `¿Eliminar al usuario ${id}?`, danger: true }))) return; try { const res = await apiFetch(`${host}/api/users/${id}`, { method: 'DELETE' }); if (res.ok) { showMsg('✅ Usuario eliminado'); fetchData(); } else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); } } catch(e) { showMsg('⛔ Error de red', true); } };
-  // Cupo de licencia: usuarios ACTIVOS (no suspendidos) vs license_max_users.
-  // SUPERADMIN queda EXCLUIDO del cupo (cuenta técnica).
-  const activeUserCount = (Array.isArray(users) ? users : []).filter(u => (u.status || 'ACTIVE') !== 'SUSPENDED' && u.role !== 'SUPERADMIN').length;
-  const licenseMaxUsers = parseInt(systemConfig.license_max_users, 10);
-  const licenseHasLimit = Number.isFinite(licenseMaxUsers) && licenseMaxUsers > 0;
-  const licenseUserFull = licenseHasLimit && activeUserCount >= licenseMaxUsers;
 
   const addKitComponent = () => {
     if (!kitComponentLine.sku || !kitComponentLine.qty || parseFloat(kitComponentLine.qty) <= 0) return;
@@ -1278,8 +1268,6 @@ export default function App() {
     try {
       const kitPayload = { ...kitForm };
       if ((!is3PLMode || isHybridMode) && !kitPayload.client_id) kitPayload.client_id = systemConfig.own_client_id || 'PROPIO';
-      if (is3PLMode && activeClientMode === 'single' && activeClientId) kitPayload.client_id = activeClientId;
-      if (is3PLMode && !kitPayload.client_id) return showMsg('⛔ Selecciona un cliente específico para crear el kit', true);
       const res = await apiFetch(`${host}/api/kits`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(kitPayload) });
       if (res.ok) { showMsg('✅ Kit guardado'); setKitForm({ kit_sku: '', client_id: '', description: '', components: [] }); setKitComponentLine({ sku: '', qty: '' }); fetchData(); }
       else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
@@ -1308,8 +1296,7 @@ export default function App() {
   // ── Modo 3PL: scope de operaciones por usuario ──────────────────────────────
   // currentUser.client_scope: 'all' | 'assigned' | 'none'
   // currentUser.assigned_clients: array de { id, name } o IDs.
-  // ADMIN/SUPERADMIN/JEFE_BODEGA ven y operan sobre cualquier cliente (regla de negocio "cliente activo").
-  const opsClientScope = ['ADMIN','SUPERADMIN','JEFE_BODEGA'].includes(currentUser?.role) ? 'all' : (currentUser?.client_scope || 'all');
+  const opsClientScope = ['ADMIN','SUPERADMIN'].includes(currentUser?.role) ? 'all' : (currentUser?.client_scope || 'all');
   const opsAssignedIds = Array.isArray(currentUser?.assigned_clients)
     ? currentUser.assigned_clients.map(c => typeof c === 'string' ? c : c.id)
     : [];
@@ -1325,56 +1312,6 @@ export default function App() {
     if (opsClientScope === 'none') return false;
     return opsAssignedIds.includes(cid);
   };
-
-  // ── CLIENTE ACTIVO GLOBAL (Fase 1) ──────────────────────────────────────────
-  // Un único client_id activo para toda la app, persistido en sessionStorage.
-  //   activeClientId: id del cliente | 'ALL' (modo Todos) | null (sin elegir)
-  // Solo ADMIN / SUPERADMIN / JEFE_BODEGA pueden usar el modo "Todos".
-  const ACTIVE_CLIENT_KEY = 'wms_active_client_v1';
-  const canSeeAllClients = ['ADMIN','SUPERADMIN','JEFE_BODEGA'].includes(currentUser?.role) || opsClientScope === 'all';
-  const [activeClientId, setActiveClientIdState] = useState(null);
-  const activeClientMode = activeClientId === 'ALL' ? 'all' : 'single';
-  // Objeto del cliente específico activo (null en modo Todos o sin elegir).
-  const activeClient = (activeClientId && activeClientId !== 'ALL')
-    ? (clients.find(c => c.id === activeClientId) || null)
-    : null;
-  // Clientes elegibles en el selector: respeta el scope del usuario (assigned/all).
-  const activeClientOptions = opsClients;
-  const setActiveClient = useCallback((id) => {
-    setActiveClientIdState(id);
-    try { sessionStorage.setItem(ACTIVE_CLIENT_KEY, JSON.stringify({ id })); } catch {}
-  }, []);
-  // Rehidratación + validación contra el scope del usuario. Si el guardado no es
-  // válido para este usuario, cae al default: 'ALL' si puede ver todo, si no su 1er cliente.
-  useEffect(() => {
-    if (!currentUser) return;
-    const validIds = opsClients.map(c => c.id);
-    let saved = null;
-    try { saved = JSON.parse(sessionStorage.getItem(ACTIVE_CLIENT_KEY) || 'null'); } catch {}
-    let next = saved?.id ?? null;
-    if (next === 'ALL') {
-      if (!canSeeAllClients) next = null;            // EJECUTIVO no puede modo "Todos"
-    } else if (next != null) {
-      if (!validIds.includes(next)) next = null;     // cliente fuera de su scope
-    }
-    if (next == null) next = canSeeAllClients ? 'ALL' : (validIds[0] || null);
-    setActiveClientIdState(next);
-    try { sessionStorage.setItem(ACTIVE_CLIENT_KEY, JSON.stringify({ id: next })); } catch {}
-  }, [currentUser?.username, clients.length]);
-  // Valor expuesto al árbol vía contexto (lo consumen los tabs hijos en fases siguientes).
-  const clienteActivoValue = {
-    activeClientId, activeClientMode, activeClient,
-    setActiveClient, options: activeClientOptions, canSeeAll: canSeeAllClients,
-  };
-  // Sincroniza los formularios de creación (OC, devolución, kit, conteo) con el
-  // cliente activo en modo single, para que el client_id quede pre-asignado y visible.
-  useEffect(() => {
-    if (!is3PLMode || activeClientMode !== 'single' || !activeClientId) return;
-    setNewPO(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
-    setNewReturn(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
-    setKitForm(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
-    setCcFilter(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
-  }, [activeClientId, activeClientMode, is3PLMode]);
   // Banner informativo para módulos operativos.
   const opsScopeBanner = (() => {
     if (opsClientScope === 'all') return null;
@@ -1400,60 +1337,19 @@ export default function App() {
       </div>
     );
   })();
-  // Scope COMPLETO del usuario (todos sus clientes permitidos), sin aplicar el cliente activo.
-  const permittedSkusAll = isAllClients ? safeSkus : safeSkus.filter(s => userClientsArray.includes(s.client_id) || !s.client_id || s.client_id === 'GENERAL');
-  const permittedInventoryAll = isAllClients ? safeData : safeData.filter(i => userClientsArray.includes(i.client_id) || !i.client_id || i.client_id === 'GENERAL');
+  const permittedSkus = isAllClients ? safeSkus : safeSkus.filter(s => userClientsArray.includes(s.client_id) || !s.client_id || s.client_id === 'GENERAL');
+  const permittedInventory = isAllClients ? safeData : safeData.filter(i => userClientsArray.includes(i.client_id) || !i.client_id || i.client_id === 'GENERAL');
 
-  // ── CLIENTE ACTIVO (Fase 3): helpers de filtrado/escritura ──────────────────
-  // En modo 'single' acota al cliente activo; en modo 'Todos' (all) no acota.
-  const activeClientMatch = (cid) => (activeClientMode === 'all' || !activeClientId) ? true : (cid || '') === activeClientId;
-  // En modo 'Todos' las escrituras quedan bloqueadas (listados consolidados de solo lectura).
-  const isWriteBlocked = activeClientMode === 'all';
-  // KPIs/agregados del backend (globales) solo en modo "Todos"; en single se derivan del inventario filtrado.
-  const useGlobalStats = isAllClients && activeClientMode === 'all';
-  // Filtro tolerante para DOCUMENTOS (OC, devoluciones, conteos, kits, facturas):
-  // los registros sin cliente específico ('' o GENERAL) se ven siempre.
-  const filterDocByActiveClient = (arr) => Array.isArray(arr) ? arr.filter(x => {
-    if (activeClientMode === 'all' || !activeClientId) return true;
-    const cid = x?.client_id;
-    if (!cid || cid === 'GENERAL') return true;
-    return cid === activeClientId;
-  }) : [];
-
-  // Catálogos ya filtrados por el cliente activo (cubren SKUs, inventario y todos
-  // los módulos operativos que derivan de estos arrays).
-  const permittedSkus = permittedSkusAll.filter(s => activeClientMatch(s.client_id));
-  const permittedInventory = permittedInventoryAll.filter(i => activeClientMatch(i.client_id));
-  const opsSkus = permittedSkus; // alias: el filtrado por cliente ya está aplicado en el origen
-  // Listados de documentos acotados al cliente activo (Tier B).
-  const viewPurchaseOrders = filterDocByActiveClient(purchaseOrders);
-  const viewReturns = filterDocByActiveClient(returns);
-  const viewKits = filterDocByActiveClient(kits);
-  const viewInvoices = filterDocByActiveClient(invoices);
-  const viewCycleCounts = filterDocByActiveClient(cycleCountData);
-
-  // Banner de contexto para módulos operativos (solo 3PL/HYBRID): muestra el cliente
-  // activo o, en modo "Todos", avisa que la escritura está bloqueada.
-  const opsClientBar = (() => {
-    if (!is3PLMode) return null;
-    if (isWriteBlocked) return (
-      <div className="max-w-4xl mx-auto bg-amber-50 border border-amber-300 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[11px] font-bold text-amber-800">
-        <ShieldAlert size={14} className="shrink-0"/>
-        <span>Modo <b>Todos los clientes</b> (solo lectura). Selecciona un cliente específico en la cabecera para crear o confirmar operaciones.</span>
-      </div>
-    );
-    if (activeClient) return (
-      <div className="max-w-4xl mx-auto bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[11px] font-bold text-indigo-700">
-        <Building2 size={14} className="shrink-0"/>
-        <span>Operando sobre el cliente: <b>{activeClient.name || activeClient.id}</b> <span className="font-mono opacity-70">({activeClient.id})</span></span>
-      </div>
-    );
-    return null;
-  })();
+  // Catálogo de SKUs e inventario acotados al CLIENTE del documento activo
+  // (el cliente se elige al crear el movimiento). Si el doc no tiene cliente
+  // (modo PROPIO o sin elegir), no se acota.
+  const docClient = activeDoc?.client || null;
+  const docSkus = docClient ? permittedSkus.filter(s => (s.client_id || '') === docClient) : permittedSkus;
+  const docInventory = docClient ? permittedInventory.filter(i => (i.client_id || '') === docClient) : permittedInventory;
 
   const selSku = permittedSkus.find(s => s.sku === lineItem.sku) || {};
-  
-  const stockForDisp = permittedInventory.filter(i => {
+
+  const stockForDisp = docInventory.filter(i => {
     if (i.sku !== lineItem.sku) return false;
     if (!i.status || i.status === 'DISPONIBLE') return true;
     const st = statuses.find(s => s.id === i.status);
@@ -1480,13 +1376,17 @@ export default function App() {
       const res = await apiFetch(`${host}/api/skus/barcode/${encodeURIComponent(barcode.trim())}`);
       const data = await res.json();
       if (data.found) {
-        setLineItem(prev => ({ ...prev, sku: data.sku.sku }));
-        showMsg(`✅ SKU encontrado: ${data.sku.sku} — ${data.sku.desc}`);
+        if (docClient && (data.sku.client_id || '') !== docClient) {
+          showMsg(`⛔ El SKU ${data.sku.sku} no pertenece al cliente del documento`, true);
+        } else {
+          setLineItem(prev => ({ ...prev, sku: data.sku.sku }));
+          showMsg(`✅ SKU encontrado: ${data.sku.sku} — ${data.sku.desc}`);
+        }
       } else {
-        // Buscar por SKU directo si no hay barcode
-        const bySku = permittedSkus.find(s => s.sku === barcode.trim().toUpperCase());
+        // Buscar por SKU directo si no hay barcode (acotado al cliente del documento)
+        const bySku = docSkus.find(s => s.sku === barcode.trim().toUpperCase());
         if (bySku) { setLineItem(prev => ({ ...prev, sku: bySku.sku })); showMsg(`✅ SKU: ${bySku.sku}`); }
-        else showMsg(`⚠️ Código "${barcode}" no encontrado`, true);
+        else showMsg(`⚠️ Código "${barcode}" no encontrado para este cliente`, true);
       }
     } catch(e) { showMsg('⛔ Error al buscar código', true); }
     finally { setIsScanning(false); setBarcodeInput(''); }
@@ -1495,7 +1395,7 @@ export default function App() {
 
   const addDispatchLineManual = async () => {
     const newItems = Object.entries(lineItem.selectedLpns).filter(([_, qty]) => qty > 0).map(([lpnId, qty]) => {
-        const lpn = permittedInventory.find(i => i.id === lpnId);
+        const lpn = docInventory.find(i => i.id === lpnId);
         return { sku: lpn.sku, desc: lpn.desc, lpnId, location: lpn.location_id, qtyToPick: qty, serial: lpn.serial_number };
     });
     if (newItems.length === 0) return;
@@ -1580,18 +1480,13 @@ export default function App() {
 
   const filteredInventory = useMemo(() => permittedInventory.filter(i => {
     const term = invSearchTerm.toLowerCase();
-    const matchesSearch = !term || i.id.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term) || (i.location_id || '').toLowerCase().includes(term) || (i.batch_number || '').toLowerCase().includes(term) || (i.serial_number || '').toLowerCase().includes(term);
+    const matchesSearch = !term || i.id.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term) || (i.location_id || '').toLowerCase().includes(term);
     const matchesStatus = invStatusFilter ? (i.status || 'DISPONIBLE') === invStatusFilter : true;
     const matchesClient = invClientFilter ? (i.client_id || '') === invClientFilter : true;
     const matchesSku = invSkuFilter ? i.sku === invSkuFilter : true;
     const matchesLoc = invLocFilter ? (i.location_id || '').toLowerCase().includes(invLocFilter.toLowerCase()) : true;
-    // Filtros dedicados de lote/serie: match parcial, case-insensitive, tolerante a null.
-    const lote = invLoteFilter.trim().toLowerCase();
-    const matchesLote = lote ? (i.batch_number || '').toLowerCase().includes(lote) : true;
-    const serie = invSerieFilter.trim().toLowerCase();
-    const matchesSerie = serie ? (i.serial_number || '').toLowerCase().includes(serie) : true;
-    return matchesSearch && matchesStatus && matchesClient && matchesSku && matchesLoc && matchesLote && matchesSerie;
-  }), [permittedInventory, invSearchTerm, invStatusFilter, invClientFilter, invSkuFilter, invLocFilter, invLoteFilter, invSerieFilter]);
+    return matchesSearch && matchesStatus && matchesClient && matchesSku && matchesLoc;
+  }), [permittedInventory, invSearchTerm, invStatusFilter, invClientFilter, invSkuFilter, invLocFilter]);
 
   const filteredAudit = useMemo(() => auditLogs.filter(log => {
     const matchesType = auditTypeFilter ? log.type === auditTypeFilter : true;
@@ -2023,7 +1918,7 @@ export default function App() {
 
   // VISTA PRINCIPAL
   return (
-    <ClienteActivoContext.Provider value={clienteActivoValue}>
+    <>
       <GlobalStyles />
       {/* MODAL DE CARGA MASIVA (editable + validación + duplicados) — los 5 flujos */}
       {importModal && (
@@ -2305,30 +2200,6 @@ export default function App() {
 
         {/* ÁREA DE TRABAJO */}
         <main className="flex-1 flex flex-col min-w-0">
-          {/* BANNER DE LICENCIA: visible solo de JEFE_BODEGA hacia arriba.
-              Umbral de aviso (license_warn_days) y mensaje (license_warn_message)
-              los configura el SUPERADMIN en Configuración. */}
-          {(() => {
-            if (!['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role)) return null;
-            const exp = systemConfig.license_expiry;
-            if (!exp) return null;
-            const d = Math.ceil((new Date(exp + 'T23:59:59') - new Date()) / 86400000);
-            if (isNaN(d)) return null;
-            const wd = parseInt(systemConfig.license_warn_days, 10);
-            const threshold = Number.isFinite(wd) && wd >= 0 ? wd : 15;
-            const customMsg = (systemConfig.license_warn_message || '').trim();
-            if (d < 0) return (
-              <div className="bg-red-600 text-white flex items-center justify-center gap-2 px-4 py-2 shrink-0 z-20 text-[11px] font-black uppercase tracking-widest text-center">
-                <ShieldAlert size={14} className="shrink-0"/> {customMsg ? `${customMsg} · ` : ''}Licencia VENCIDA hace {Math.abs(d)} día(s) ({exp}) — sistema en solo lectura.{isSuperAdmin ? ' Renueva la fecha en Configuración.' : ''}
-              </div>
-            );
-            if (d <= threshold) return (
-              <div className="bg-amber-500 text-white flex items-center justify-center gap-2 px-4 py-2 shrink-0 z-20 text-[11px] font-black uppercase tracking-widest text-center">
-                <AlertTriangle size={14} className="shrink-0"/> {customMsg ? `${customMsg} · ` : ''}La licencia vence en {d} día(s) ({exp}).{isSuperAdmin ? ' Renueva en Configuración.' : ''}
-              </div>
-            );
-            return null;
-          })()}
           {/* BANNER PORTAL CLIENTE */}
           {currentUser?.role === 'CLIENTE' && (
             <div className="bg-gradient-to-r from-cyan-600 to-teal-600 text-white flex items-center px-4 md:px-8 py-2 shrink-0 z-20">
@@ -2390,28 +2261,7 @@ export default function App() {
                 </button>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              {/* ── Selector de CLIENTE ACTIVO global (Fase 2) ── */}
-              {is3PLMode && activeClientOptions.length > 0 && (
-                <div
-                  className={`flex items-center gap-1.5 rounded-xl border pl-2.5 pr-1.5 py-1 transition-colors ${activeClientMode === 'all' ? 'bg-amber-50 border-amber-300' : 'bg-indigo-50 border-indigo-200'}`}
-                  title="Cliente activo — filtra todos los módulos operativos"
-                >
-                  <Building2 size={15} className={activeClientMode === 'all' ? 'text-amber-600 shrink-0' : 'text-indigo-600 shrink-0'}/>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 hidden lg:inline">Trabajando con</span>
-                  <select
-                    value={activeClientId || ''}
-                    onChange={e => setActiveClient(e.target.value)}
-                    className={`bg-transparent text-xs font-black uppercase outline-none cursor-pointer max-w-[150px] ${activeClientMode === 'all' ? 'text-amber-700' : 'text-indigo-700'}`}
-                  >
-                    {canSeeAllClients && <option value="ALL">🌐 Todos los clientes</option>}
-                    {activeClientOptions.map(c => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
-                  </select>
-                  {activeClientMode === 'all' && (
-                    <span className="text-[8px] font-black uppercase bg-amber-400 text-white px-1.5 py-0.5 rounded hidden sm:inline">Solo lectura</span>
-                  )}
-                </div>
-              )}
+            <div className="flex items-center gap-1">
               <button onClick={() => setDarkMode(p => !p)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-500 dark:text-slate-400" title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
                 {darkMode ? <Sun size={18}/> : <Moon size={18}/>}
               </button>
@@ -2469,7 +2319,7 @@ export default function App() {
                     <div className="relative z-10">
                       <div className="p-3 bg-white/20 rounded-xl w-fit mb-4 backdrop-blur-md group-hover:bg-white/30 transition-colors"><Package className="text-white"/></div>
                       <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-100">Unidades Totales</h3>
-                      <p className="text-4xl font-black mt-1">{useGlobalStats ? Number(stats?.units || 0).toLocaleString() : permittedInventory.reduce((sum, i) => sum + parseFloat(i.qty), 0).toLocaleString()}</p>
+                      <p className="text-4xl font-black mt-1">{isAllClients ? Number(stats?.units || 0).toLocaleString() : permittedInventory.reduce((sum, i) => sum + parseFloat(i.qty), 0).toLocaleString()}</p>
                     </div>
                     <Box className="absolute -bottom-6 -right-4 w-40 h-40 text-white opacity-10 group-hover:scale-110 transition-transform duration-500" />
                   </div>
@@ -2477,13 +2327,13 @@ export default function App() {
                   <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-all hover:shadow-md cursor-default">
                     <div className="p-3 bg-emerald-50 rounded-xl w-fit mb-4 group-hover:bg-emerald-100 transition-colors"><Box className="text-emerald-600"/></div>
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">LPNs Activos</h3>
-                    <p className="text-4xl font-black text-slate-800 mt-1">{useGlobalStats ? Number(stats?.lpns || 0).toLocaleString() : permittedInventory.length.toLocaleString()}</p>
+                    <p className="text-4xl font-black text-slate-800 mt-1">{isAllClients ? Number(stats?.lpns || 0).toLocaleString() : permittedInventory.length.toLocaleString()}</p>
                   </div>
 
                   <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-purple-300 transition-all hover:shadow-md cursor-default">
                     <div className="p-3 bg-purple-50 rounded-xl w-fit mb-4 group-hover:bg-purple-100 transition-colors"><FileText className="text-purple-600"/></div>
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Catálogo SKUs</h3>
-                    <p className="text-4xl font-black text-slate-800 mt-1">{useGlobalStats ? Number(stats?.skus || 0).toLocaleString() : permittedSkus.length.toLocaleString()}</p>
+                    <p className="text-4xl font-black text-slate-800 mt-1">{isAllClients ? Number(stats?.skus || 0).toLocaleString() : permittedSkus.length.toLocaleString()}</p>
                   </div>
 
                   {is3PLMode && (
@@ -3107,16 +2957,9 @@ export default function App() {
                         )}
                       </div>
 
-                      {/* Cupo de licencia: usuarios activos / máximo */}
-                      {licenseHasLimit && (
-                        <div className={`mt-4 flex items-center justify-between rounded-xl px-3 py-2 text-[10px] font-black uppercase ${licenseUserFull ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-slate-50 text-slate-500 border border-slate-200'}`}>
-                          <span>Usuarios activos: {activeUserCount} / {licenseMaxUsers}</span>
-                          {licenseUserFull && !isEditingUser && <span>⛔ Límite alcanzado</span>}
-                        </div>
-                      )}
                       <div className="flex gap-4 mt-4">
-                        <button type="submit" disabled={isSavingUser || (!isEditingUser && licenseUserFull)} title={(!isEditingUser && licenseUserFull) ? `Límite de licencia alcanzado (${activeUserCount}/${licenseMaxUsers}). Suspende o elimina un usuario, o amplía la licencia.` : ''} className={`flex-[2] text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs tracking-widest transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex justify-center items-center ${isEditingUser ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
-                          {isSavingUser ? <><Loader2 size={14} className="mr-2 animate-spin"/> Guardando...</> : (isEditingUser ? 'Actualizar Usuario' : (licenseUserFull ? 'Límite de licencia alcanzado' : 'Crear Usuario'))}
+                        <button type="submit" disabled={isSavingUser} className={`flex-[2] text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center ${isEditingUser ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
+                          {isSavingUser ? <><Loader2 size={14} className="mr-2 animate-spin"/> Guardando...</> : (isEditingUser ? 'Actualizar Usuario' : 'Crear Usuario')}
                         </button>
                         {isEditingUser && (
                           <button type="button" onClick={() => {setUserForm({ username: '', full_name: '', password: '', role: 'EJECUTIVO_CUENTA', status: 'ACTIVE', allowed_clients: 'ALL', clientSelection: [], allowed_modules_type: 'ROLE', moduleSelection: [] }); setIsEditingUser(false);}} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-4 rounded-2xl shadow-sm uppercase text-xs tracking-widest transition-colors">
@@ -3363,10 +3206,10 @@ export default function App() {
                   {/* Panel derecho: lista de kits */}
                   <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
                     <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kits Definidos ({viewKits.length})</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kits Definidos ({kits.length})</p>
                     </div>
                     <div className="space-y-4">
-                      {viewKits.map(k => (
+                      {kits.map(k => (
                         <div key={`${k.kit_sku}-${k.client_id}`} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:bg-white transition-colors shadow-sm">
                           <div className="flex justify-between items-start mb-3">
                             <div>
@@ -3390,7 +3233,7 @@ export default function App() {
                           </div>
                         </div>
                       ))}
-                      {viewKits.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay kits definidos</p></div>}
+                      {kits.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay kits definidos</p></div>}
                     </div>
                   </div>
                 </div>
@@ -3406,7 +3249,7 @@ export default function App() {
                         <label className="text-[10px] font-black text-slate-400 uppercase">Kit (SKU) *</label>
                         <select value={kitBuildForm.kit_sku} onChange={e=>{ setKitBuildForm({...kitBuildForm,kit_sku:e.target.value}); setKitAvailability(null); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
                           <option value="">-- Seleccionar --</option>
-                          {viewKits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
+                          {kits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
                         </select>
                       </div>
                       <div className="space-y-1">
@@ -3470,7 +3313,7 @@ export default function App() {
                           onChange={e=>{ setKitDispatchForm({...kitDispatchForm, kit_sku:e.target.value}); setKitDispatchAvail(null); }}
                           className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 bg-white">
                           <option value="">-- Seleccionar --</option>
-                          {viewKits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
+                          {kits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
                         </select>
                       </div>
                       <div className="space-y-1">
@@ -3844,14 +3687,14 @@ export default function App() {
                           <BarChart3 size={10}/> Saldo
                         </button>
                       </div>}
-                      <button onClick={async () => { try { await descargarArchivoAutenticado(host, '/api/export/inventory', `inventario-fisico_${new Date().toISOString().slice(0,10)}.xlsx`); } catch (e) { showMsg(`⛔ ${e.message}`, true); } }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> <span className="hidden sm:inline">Exportar</span></button>
+                      <button onClick={() => window.open(`${host}/api/export/inventory`, '_blank')} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> <span className="hidden sm:inline">Exportar</span></button>
                       <button onClick={() => setImportModal({ type: 'inventory' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Upload size={12}/> <span className="hidden sm:inline">Importar</span></button>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-200 transition-all flex-1">
                       <Search size={14} className="text-slate-400 mr-2 shrink-0" />
-                      <input type="text" placeholder="Buscar producto, código, ubicación, lote o serie..." value={invSearchTerm} onChange={(e) => { setInvSearchTerm(e.target.value); setInvPage(0); }} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700" />
+                      <input type="text" placeholder="Buscar producto, código o ubicación..." value={invSearchTerm} onChange={(e) => { setInvSearchTerm(e.target.value); setInvPage(0); }} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700" />
                     </div>
                     <select value={invStatusFilter} onChange={(e) => { setInvStatusFilter(e.target.value); setInvPage(0); }} className="bg-white border border-slate-200 rounded-xl px-2 sm:px-3 py-2 text-[10px] sm:text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-200 shadow-sm text-slate-700 uppercase">
                       <option value="">Todos</option>
@@ -4015,8 +3858,8 @@ export default function App() {
                         {is3PLMode && <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">Cliente</th>}
                         <th className="px-5 pt-4 pb-1 text-right text-[10px] font-black text-slate-400 uppercase">Cantidad</th>
                         <th className="px-5 pt-4 pb-1 text-center text-[10px] font-black text-slate-400 uppercase">
-                          {(invSearchTerm||invStatusFilter||invClientFilter||invSkuFilter||invLocFilter||invLoteFilter||invSerieFilter) && (
-                            <button onClick={() => { setInvSearchTerm(''); setInvStatusFilter(''); setInvClientFilter(''); setInvSkuFilter(''); setInvLocFilter(''); setInvLoteFilter(''); setInvSerieFilter(''); }} className="bg-red-100 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase flex items-center gap-1 ml-auto"><X size={8}/> Limpiar</button>
+                          {(invSearchTerm||invStatusFilter||invClientFilter||invSkuFilter||invLocFilter) && (
+                            <button onClick={() => { setInvSearchTerm(''); setInvStatusFilter(''); setInvClientFilter(''); setInvSkuFilter(''); setInvLocFilter(''); }} className="bg-red-100 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase flex items-center gap-1 ml-auto"><X size={8}/> Limpiar</button>
                           )}
                         </th>
                       </tr>
@@ -4035,14 +3878,10 @@ export default function App() {
                           </div>
                         </td>
                         <td className="px-3 pb-3 pt-1">
-                          <div className="flex flex-col gap-1.5">
-                            <select value={invSkuFilter} onChange={e=>setInvSkuFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
-                              <option value="">Todos los SKUs</option>
-                              {[...new Set(permittedInventory.map(i=>i.sku))].sort().map(sku=><option key={sku} value={sku}>{sku}</option>)}
-                            </select>
-                            <input type="text" placeholder="🔖 Buscar lote..." value={invLoteFilter} onChange={e=>{setInvLoteFilter(e.target.value); setInvPage(0);}} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 placeholder-slate-300"/>
-                            <input type="text" placeholder="🔢 Buscar serie..." value={invSerieFilter} onChange={e=>{setInvSerieFilter(e.target.value); setInvPage(0);}} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 placeholder-slate-300"/>
-                          </div>
+                          <select value={invSkuFilter} onChange={e=>setInvSkuFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
+                            <option value="">Todos los SKUs</option>
+                            {[...new Set(permittedInventory.map(i=>i.sku))].sort().map(sku=><option key={sku} value={sku}>{sku}</option>)}
+                          </select>
                         </td>
                         {is3PLMode && (
                           <td className="px-3 pb-3 pt-1">
@@ -4081,12 +3920,12 @@ export default function App() {
                           <td className="p-4">
                             <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono text-[10px] font-bold text-slate-700 block w-max mb-1">{i.location_id || 'PISO-RECEPCION'}</span>
                             <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${getStatusBadge(i.status)}`}>{statusLabel(i.status || 'DISPONIBLE')}</span>
+                            {i.batch_number && <p className="text-[8px] font-black text-amber-700 uppercase mt-1">LT: {i.batch_number}</p>}
+                            {i.serial_number && <p className="text-[8px] font-black text-indigo-700 uppercase mt-0.5">SN: {i.serial_number}</p>}
                           </td>
                           <td className="p-4">
                             <p className="text-xs font-black text-slate-800 uppercase">{i.sku}</p>
                             <p className="text-[9px] text-slate-400 truncate max-w-[150px]">{i.desc}</p>
-                            {i.batch_number && <p className="text-[8px] font-black text-amber-700 uppercase mt-1">LT: {i.batch_number}</p>}
-                            {i.serial_number && <p className="text-[8px] font-black text-indigo-700 uppercase mt-0.5">SN: {i.serial_number}</p>}
                             {!is3PLMode && i.glosa && <p className="text-[9px] text-slate-400 italic mt-1 max-w-[150px] truncate">"{i.glosa}"</p>}
                           </td>
                           {is3PLMode && (
@@ -4730,19 +4569,10 @@ export default function App() {
                           <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Código de Barras (UPC/EAN)</label><input type="text" value={skuForm.barcode || ''} onChange={e=>setSkuForm({...skuForm, barcode: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500" placeholder="Opcional"/></div>
                           {is3PLMode && (
                             <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Cliente / Dueño *</label>
-                              {isEditingSku ? (
-                                <select value={skuForm.client_id || ''} disabled className="w-full border-2 rounded-xl px-4 py-3 text-sm font-bold bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300">
-                                  <option value="">-- Cliente --</option>
-                                  {clients.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
-                                </select>
-                              ) : (activeClientMode === 'single' && activeClient) ? (
-                                <div className="w-full border-2 border-indigo-200 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-black text-indigo-700 flex items-center gap-2"><Building2 size={14} className="shrink-0"/> {activeClient.name || activeClient.id} <span className="font-mono opacity-70 text-xs">({activeClient.id})</span></div>
-                              ) : (
-                                <select value={skuForm.client_id || ''} onChange={e=>setSkuForm({...skuForm, client_id: e.target.value})} required className="w-full border-2 border-amber-300 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-amber-500 bg-amber-50">
-                                  <option value="">-- Selecciona un cliente --</option>
-                                  {activeClientOptions.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
-                                </select>
-                              )}
+                              <select value={skuForm.client_id || ''} onChange={e=>setSkuForm({...skuForm, client_id: e.target.value})} required disabled={isEditingSku} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 ${isEditingSku ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300' : 'bg-white'}`}>
+                                <option value="">-- Seleccione Cliente --</option>
+                                {clients.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
+                              </select>
                             </div>
                           )}
                         </div>
@@ -5050,7 +4880,6 @@ export default function App() {
             {activeTab === 'receive' && !activeDocId && (
               <div className="space-y-4">
                 {opsScopeBanner}
-                {opsClientBar}
                 <div className="max-w-4xl mx-auto flex justify-end">
                   <button onClick={() => setImportModal({ type: 'receive' })} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm transition-colors"><Upload size={14}/> Importar desde Excel</button>
                 </div>
@@ -5059,18 +4888,19 @@ export default function App() {
                   workspaces={workspaces} newDocNum={newDocNum} setNewDocNum={setNewDocNum} newDocType={newDocType} setNewDocType={setNewDocType} newDocGlosa={newDocGlosa} setNewDocGlosa={setNewDocGlosa}
                   newDocDate={newDocDate} setNewDocDate={setNewDocDate} newDocRef={newDocRef} setNewDocRef={setNewDocRef} newDocEnteredAt={newDocEnteredAt} setNewDocEnteredAt={setNewDocEnteredAt}
                   documentTypes={documentTypes} handleCreateDoc={handleCreateDoc} removeDoc={removeDoc} setActiveDocId={setActiveDocId} currentUser={currentUser}
+                  is3PLMode={is3PLMode} opsClients={opsClients} newDocClient={newDocClient} setNewDocClient={setNewDocClient}
                 />
               </div>
             )}
             {activeTab === 'receive' && activeDocId && activeDoc && (
               <div className="max-w-4xl mx-auto flex flex-col space-y-4 animate-in slide-in-from-right">
-                {opsClientBar}
                 <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
                   <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-emerald-50">
                     <div className="flex items-center gap-4">
                       <button onClick={() => setActiveDocId(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition-colors"><ArrowLeft size={16} className="text-emerald-700"/></button>
                       <div>
                         <h2 className="text-lg font-black text-emerald-900 uppercase tracking-tighter flex items-center">[{activeDoc.docType}] {activeDoc.docNum}</h2>
+                        {activeDoc.client && <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
                         <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-0.5">Editando... (Autoguardado activado)</p>
                       </div>
                     </div>
@@ -5105,7 +4935,7 @@ export default function App() {
                         </div>
                         <select value={lineItem.sku} onChange={e=>{setLineItem({...lineItem, sku: e.target.value, qty: permittedSkus.find(s=>s.sku===e.target.value)?.requires_serial ? 1 : ''});}} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 uppercase bg-white">
                           <option value="">-- O seleccionar del catálogo --</option>
-                          {opsSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
+                          {docSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
                         </select>
                       </div>
                       {selSku.requires_lot && (
@@ -5160,7 +4990,6 @@ export default function App() {
             {activeTab === 'dispatch' && !activeDocId && (
               <div className="space-y-4">
                 {opsScopeBanner}
-                {opsClientBar}
                 <div className="max-w-4xl mx-auto flex justify-end">
                   <button onClick={() => setImportModal({ type: 'dispatch' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm transition-colors"><Upload size={14}/> Despachar desde Excel</button>
                 </div>
@@ -5169,18 +4998,19 @@ export default function App() {
                   workspaces={workspaces} newDocNum={newDocNum} setNewDocNum={setNewDocNum} newDocType={newDocType} setNewDocType={setNewDocType} newDocGlosa={newDocGlosa} setNewDocGlosa={setNewDocGlosa}
                   newDocDate={newDocDate} setNewDocDate={setNewDocDate} newDocRef={newDocRef} setNewDocRef={setNewDocRef} newDocEnteredAt={newDocEnteredAt} setNewDocEnteredAt={setNewDocEnteredAt}
                   documentTypes={documentTypes} handleCreateDoc={handleCreateDoc} removeDoc={removeDoc} setActiveDocId={setActiveDocId} currentUser={currentUser}
+                  is3PLMode={is3PLMode} opsClients={opsClients} newDocClient={newDocClient} setNewDocClient={setNewDocClient}
                 />
               </div>
             )}
             {activeTab === 'dispatch' && activeDocId && activeDoc && (
               <div className="max-w-4xl mx-auto flex flex-col space-y-4 animate-in slide-in-from-right">
-                {opsClientBar}
                 <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
                   <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-blue-50">
                     <div className="flex items-center gap-4">
                       <button onClick={() => setActiveDocId(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition-colors"><ArrowLeft size={16} className="text-blue-700"/></button>
                       <div>
                         <h2 className="text-lg font-black text-blue-900 uppercase tracking-tighter flex items-center">[{activeDoc.docType}] {activeDoc.docNum}</h2>
+                        {activeDoc.client && <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
                         <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Armando carro de extracción...</p>
                       </div>
                     </div>
@@ -5201,7 +5031,7 @@ export default function App() {
                       <div className="space-y-1">
                         <select value={lineItem.sku} onChange={e=>setLineItem({sku: e.target.value, selectedLpns: {}})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-blue-500 uppercase bg-white">
                           <option value="">-- O seleccionar del catálogo --</option>
-                          {opsSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
+                          {docSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
                         </select>
                       </div>
 
@@ -5423,7 +5253,6 @@ export default function App() {
             {activeTab === 'adjust' && !activeDocId && (
               <div className="space-y-4">
                 {opsScopeBanner}
-                {opsClientBar}
                 <DocTrayView
                   module="adjust" title="Hoja de Ajuste" colorClass="bg-amber-50" textClass="text-amber-700" btnColor="bg-amber-500 hover:bg-amber-600" Icon={ClipboardCheck}
                   workspaces={workspaces} newDocNum={newDocNum} setNewDocNum={setNewDocNum} newDocGlosa={newDocGlosa} setNewDocGlosa={setNewDocGlosa}
@@ -5484,13 +5313,13 @@ export default function App() {
             )}
             {activeTab === 'adjust' && activeDocId && activeDoc && (
               <div className="max-w-4xl mx-auto flex flex-col space-y-4 animate-in slide-in-from-right">
-                {opsClientBar}
                 <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden flex flex-col">
                   <div className="px-8 py-5 border-b border-slate-100 flex justify-between items-center bg-amber-50">
                     <div className="flex items-center gap-4">
                       <button onClick={() => setActiveDocId(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition-colors"><ArrowLeft size={16} className="text-amber-700"/></button>
                       <div>
                         <h2 className="text-lg font-black text-amber-900 uppercase tracking-tighter flex items-center">Doc: {activeDoc.docNum}</h2>
+                        {activeDoc.client && <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
                         <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">Agregando diferencias de inventario...</p>
                       </div>
                     </div>
@@ -5516,7 +5345,7 @@ export default function App() {
                         </div>
                         <select value={lineItem.sku} onChange={e=>{setLineItem({...lineItem, sku: e.target.value, qty: permittedSkus.find(s=>s.sku===e.target.value)?.requires_serial ? 1 : ''});}} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-amber-500 uppercase bg-white">
                           <option value="">-- O seleccionar del catálogo --</option>
-                          {opsSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
+                          {docSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
                         </select>
                       </div>
 
@@ -6215,7 +6044,7 @@ export default function App() {
                       ))}
                     </div>
                     <div className="flex gap-3">
-                      <button disabled={!newPO.doc_num || !newPO.supplier || newPO.items.length===0} onClick={async () => { const poPayload={...newPO,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !poPayload.client_id) poPayload.client_id=systemConfig.own_client_id||'PROPIO'; if(is3PLMode && activeClientMode==='single' && activeClientId) poPayload.client_id=activeClientId; if(is3PLMode && !poPayload.client_id){ showMsg('⛔ Selecciona un cliente específico para crear la OC',true); return; } const res = await apiFetch(`${host}/api/purchase-orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(poPayload)}); if(res.ok){const d=await res.json(); showMsg(`✅ OC ${d.poId} creada`); setNewPO({doc_num:'',supplier:'',client_id:'',expected_date:'',notes:'',items:[]}); setShowPOForm(false); const r2=await apiFetch(`${host}/api/purchase-orders`); setPurchaseOrders(await r2.json());} else showMsg('⛔ Error',true); }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50">Crear Orden de Compra</button>
+                      <button disabled={!newPO.doc_num || !newPO.supplier || newPO.items.length===0} onClick={async () => { const poPayload={...newPO,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !poPayload.client_id) poPayload.client_id=systemConfig.own_client_id||'PROPIO'; const res = await apiFetch(`${host}/api/purchase-orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(poPayload)}); if(res.ok){const d=await res.json(); showMsg(`✅ OC ${d.poId} creada`); setNewPO({doc_num:'',supplier:'',client_id:'',expected_date:'',notes:'',items:[]}); setShowPOForm(false); const r2=await apiFetch(`${host}/api/purchase-orders`); setPurchaseOrders(await r2.json());} else showMsg('⛔ Error',true); }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50">Crear Orden de Compra</button>
                       <button onClick={() => setShowPOForm(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[10px]">Cancelar</button>
                     </div>
                   </div>
@@ -6291,13 +6120,12 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {viewPurchaseOrders.map(po => (
+                    {purchaseOrders.map(po => (
                       <div key={po.id} className={`bg-white p-5 rounded-2xl border shadow-sm flex items-center justify-between hover:shadow-md transition-all ${po.status==='COMPLETED'?'border-emerald-200':po.status==='PARTIAL'?'border-amber-200':'border-slate-200'}`}>
                         <div>
                           <div className="flex items-center gap-3 mb-1">
                             <p className="text-sm font-black text-slate-800 uppercase">{po.doc_num}</p>
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${po.status==='COMPLETED'?'bg-emerald-100 text-emerald-700':po.status==='PARTIAL'?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600'}`}>{po.status}</span>
-                            {is3PLMode && activeClientMode==='all' && po.client_id && <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase bg-indigo-100 text-indigo-700"><Building2 size={9} className="inline mr-0.5"/>{clients.find(c=>c.id===po.client_id)?.name||po.client_id}</span>}
                           </div>
                           <p className="text-[10px] text-slate-500 font-bold">Proveedor: {po.supplier} · {po.received_lines}/{po.total_lines} líneas recibidas</p>
                           {po.expected_date && <p className="text-[9px] text-slate-400 mt-0.5">Esperado: {new Date(po.expected_date).toLocaleDateString('es-ES')}</p>}
@@ -6305,7 +6133,7 @@ export default function App() {
                         <button onClick={async () => { const res = await apiFetch(`${host}/api/purchase-orders/${po.id}/lines`); const d = await res.json(); setActivePO(d.po); setPoLines(d.lines); setPoReceivedQtys({}); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Search size={12}/> Ver / Comparar</button>
                       </div>
                     ))}
-                    {viewPurchaseOrders.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400"><FileText className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">No hay órdenes. Presiona Cargar o crea una nueva.</p></div>}
+                    {purchaseOrders.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400"><FileText className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">No hay órdenes. Presiona Cargar o crea una nueva.</p></div>}
                   </div>
                 )}
               </div>
@@ -7487,7 +7315,7 @@ export default function App() {
                       ))}
                     </div>
                   )}
-                  <button disabled={!newReturn.doc_num || !newReturn.reason || newReturn.items.length===0} onClick={async () => { const retPayload={...newReturn,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !retPayload.client_id) retPayload.client_id=systemConfig.own_client_id||'PROPIO'; if(is3PLMode && activeClientMode==='single' && activeClientId) retPayload.client_id=activeClientId; if(is3PLMode && !retPayload.client_id){ showMsg('⛔ Selecciona un cliente específico para la devolución',true); return; } const res = await apiFetch(`${host}/api/returns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(retPayload)}); if (res.ok) { const d=await res.json(); showMsg(`✅ Devolución ${d.returnId} procesada`); setNewReturn({doc_num:'',doc_type:'DEVOLUCION',client_id:'',reason:'',glosa:'',items:[]}); fetchData(); } else showMsg('⛔ Error',true); }} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"><ArrowLeft size={16}/> Procesar Devolución e Ingresar Stock</button>
+                  <button disabled={!newReturn.doc_num || !newReturn.reason || newReturn.items.length===0} onClick={async () => { const retPayload={...newReturn,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !retPayload.client_id) retPayload.client_id=systemConfig.own_client_id||'PROPIO'; const res = await apiFetch(`${host}/api/returns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(retPayload)}); if (res.ok) { const d=await res.json(); showMsg(`✅ Devolución ${d.returnId} procesada`); setNewReturn({doc_num:'',doc_type:'DEVOLUCION',client_id:'',reason:'',glosa:'',items:[]}); fetchData(); } else showMsg('⛔ Error',true); }} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"><ArrowLeft size={16}/> Procesar Devolución e Ingresar Stock</button>
                 </div>
                 {returnsData.length > 0 && (
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -7823,7 +7651,7 @@ export default function App() {
                     {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && cycleCountData.some(c=>c.status==='PENDIENTE_APROBACION') && (
                       <div className="space-y-3">
                         <h3 className="text-xs font-black text-amber-700 uppercase flex items-center gap-2"><AlertTriangle size={14}/> Pendientes de aprobación</h3>
-                        {viewCycleCounts.filter(c=>c.status==='PENDIENTE_APROBACION').map(cc=>(
+                        {cycleCountData.filter(c=>c.status==='PENDIENTE_APROBACION').map(cc=>(
                           <div key={cc.id} className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 flex justify-between items-center flex-wrap gap-3">
                             <div>
                               <p className="text-xs font-black text-amber-900 uppercase">{cc.id}</p>
@@ -7845,12 +7673,12 @@ export default function App() {
                     )}
 
                     {/* Lista de conteos */}
-                    {viewCycleCounts.length > 0 && (()=>{
+                    {cycleCountData.length > 0 && (()=>{
                       const STATUS_BADGE={PENDING:'bg-slate-100 text-slate-600',EN_PROCESO:'bg-cyan-100 text-cyan-700',PENDIENTE_APROBACION:'bg-amber-100 text-amber-700',COMPLETED:'bg-emerald-100 text-emerald-700',RECHAZADO:'bg-red-100 text-red-700',REVISION:'bg-orange-100 text-orange-700'};
                       const openable=['PENDING','EN_PROCESO','PENDIENTE_APROBACION'];
                       return (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {viewCycleCounts.map(cc=>(
+                          {cycleCountData.map(cc=>(
                             <div key={cc.id} className={`bg-white p-5 rounded-2xl border shadow-sm flex flex-col ${cc.status==='COMPLETED'?'border-emerald-200':cc.status==='RECHAZADO'?'border-red-200':cc.status==='PENDIENTE_APROBACION'?'border-amber-200':'border-cyan-200'}`}>
                               <div className="flex justify-between items-start mb-2">
                                 <div>
@@ -7904,9 +7732,25 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* CONTRASEÑAS — ver contraseñas (solo en su pestaña; Métricas y
-                    Eliminar-LPNs legacy se quitaron: ya existen condicionados abajo) */}
-                {superAdminTab === 'passwords' && (
+                {/* MÉTRICAS */}
+                <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8">
+                  <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Activity className="w-5 h-5 mr-2 text-indigo-500"/> Métricas del Sistema</h2>
+                    <button onClick={async () => { const res = await apiFetch(`${host}/api/system/metrics`); const d = await res.json(); setSystemMetrics(d); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
+                  </div>
+                  {systemMetrics ? (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">LPNs Activos</p><p className="text-2xl font-black text-slate-800">{systemMetrics.inventory?.lpns || 0}</p></div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">Unidades Stock</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.inventory?.units || 0).toLocaleString()}</p></div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">Total Logs</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.auditLogs || 0).toLocaleString()}</p></div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">Usuarios</p><div className="flex flex-wrap gap-1 mt-1">{systemMetrics.usersByRole?.map(u => <span key={u.role} className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-black">{u.role}: {u.count}</span>)}</div></div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Top 5 SKUs por Stock</p>{systemMetrics.topSkus?.map(s => <div key={s.sku} className="flex justify-between text-[10px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{s.sku}</span><span className="font-black">{Number(s.total_qty).toLocaleString()}</span></div>)}</div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Actividad (Últimos 7 días)</p>{systemMetrics.recentActivity?.map(a => <div key={a.type} className="flex justify-between text-[10px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{a.type}</span><span className="font-black">{a.count} transacciones</span></div>)}</div>
+                    </div>
+                  ) : <div className="text-center py-8 text-slate-400"><p className="text-[10px] font-black uppercase">Presiona Actualizar para cargar métricas</p></div>}
+                </div>
+
+                {/* CONTRASEÑAS */}
                 <div className="bg-white rounded-[40px] border border-red-100 shadow-sm p-8">
                   <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
                     <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Eye className="w-5 h-5 mr-2 text-red-500"/> Contraseñas de Usuarios</h2>
@@ -7930,7 +7774,32 @@ export default function App() {
                     </div>
                   )}
                 </div>
-                )}
+
+                {/* GESTIÓN DE INVENTARIO DIRECTO */}
+                <div className="bg-white rounded-[40px] border border-orange-100 shadow-sm p-8">
+                  <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Database className="w-5 h-5 mr-2 text-orange-500"/> Eliminar LPNs Directamente</h2>
+                    <span className="text-[9px] bg-orange-100 text-orange-700 px-2 py-1 rounded font-black uppercase border border-orange-200">⚠️ Operación Irreversible</span>
+                  </div>
+                  <div className="overflow-x-auto max-h-80 overflow-y-auto custom-scrollbar">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 sticky top-0"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase">LPN</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">SKU</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Ubicación</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Qty</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Eliminar</th></tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {safeData.slice(0,50).map(i => (
+                          <tr key={i.id} className="hover:bg-orange-50">
+                            <td className="p-3 font-mono text-[10px] font-black text-slate-600">{i.id}</td>
+                            <td className="p-3 text-xs font-black text-slate-800 uppercase">{i.sku}</td>
+                            <td className="p-3 text-[10px] font-mono text-slate-500">{i.location_id || 'PISO-RECEPCION'}</td>
+                            <td className="p-3 text-center font-black text-slate-800">{i.qty}</td>
+                            <td className="p-3 text-center">
+                              <button onClick={async () => { if (!(await confirm({ message: `⚠️ ¿Eliminar LPN ${i.id} con ${i.qty} unidades de ${i.sku}? Esta acción es IRREVERSIBLE.`, danger: true }))) return; const res = await apiFetch(`${host}/api/system/inventory/${i.id}`, { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({requester: currentUser.username}) }); if (res.ok) { showMsg(`✅ LPN ${i.id} eliminado`); fetchData(); } else { const e = await res.json(); showMsg(`⛔ ${e.error}`, true); } }} className="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded-lg transition-colors"><Trash2 size={12}/></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
                 {/* TAB: MÉTRICAS */}
                 {superAdminTab === 'metrics' && (
@@ -8059,20 +7928,6 @@ export default function App() {
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase">Máximo de Usuarios</label>
                         <input type="number" value={v('license_max_users',99)} onChange={e=>setEditingConfig(p=>({...p,license_max_users:e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500"/>
-                        {(() => { const m = parseInt(v('license_max_users',99),10); return Number.isFinite(m) && m > 0 && m < activeUserCount; })() && (
-                          <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1">⚠️ Hay {activeUserCount} usuarios activos. Puedes guardarlo, pero no se podrán crear/reactivar usuarios hasta bajar de {v('license_max_users',99)} (los existentes no se borran).</p>
-                        )}
-                      </div>
-                      {/* Aviso anticipado de licencia: días antes y mensaje (lo ven JEFE_BODEGA+) */}
-                      <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Aviso anticipado: días antes de vencer</label>
-                        <input type="number" min="0" value={v('license_warn_days',15)} onChange={e=>setEditingConfig(p=>({...p,license_warn_days:e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500"/>
-                        <p className="text-[9px] text-slate-400">El banner ámbar aparece cuando faltan ≤ estos días. Lo ven Jefe de Bodega y superiores.</p>
-                      </div>
-                      <div className="space-y-2 md:col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Mensaje del aviso de licencia (opcional)</label>
-                        <input type="text" value={v('license_warn_message')} onChange={e=>setEditingConfig(p=>({...p,license_warn_message:e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500" placeholder="Ej: Renovar contrato con el proveedor antes del vencimiento"/>
-                        <p className="text-[9px] text-slate-400">Si lo dejas vacío se muestra el texto por defecto. Se antepone al estado (días restantes / vencida).</p>
                       </div>
                       <div className="space-y-2 col-span-2">
                         <label className="text-[10px] font-black text-slate-400 uppercase">Mensaje de Mantenimiento</label>
@@ -8098,28 +7953,6 @@ export default function App() {
                         <button onClick={() => setEditingConfig({})} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[10px] tracking-widest">Descartar</button>
                       )}
                       <span className="text-[10px] font-bold text-slate-400 ml-auto">{Object.keys(editingConfig).length > 0 ? `${Object.keys(editingConfig).length} cambio(s) sin guardar` : 'Sin cambios'}</span>
-                    </div>
-                    {/* ── ZONA DE PELIGRO: formateo de fábrica ── */}
-                    <div className="mt-8 border-t-2 border-red-100 pt-6">
-                      <h3 className="text-sm font-black text-red-600 uppercase tracking-tighter flex items-center gap-2 mb-2"><ShieldAlert className="w-4 h-4"/> Zona de peligro</h3>
-                      <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-black text-red-700 uppercase">Formatear sistema (dejar de 0)</p>
-                          <p className="text-[10px] text-red-500 mt-1 max-w-md">Borra TODOS los datos (inventario, clientes, SKUs, movimientos, usuarios no-SUPERADMIN…) y deja el sistema como recién instalado. Conserva tu SUPERADMIN, la configuración/licencia y los catálogos base. Se crea un backup de seguridad automático antes. Irreversible salvo por ese backup.</p>
-                        </div>
-                        <button onClick={async () => {
-                          const ok = await confirm({ message: '⚠️ FORMATEAR EL SISTEMA borra TODOS los datos y lo deja como recién instalado. Se conservan tu SUPERADMIN, la configuración/licencia y los catálogos base, y se crea un backup de seguridad antes. ¿Continuar?', danger: true });
-                          if (!ok) return;
-                          const phrase = window.prompt('Acción IRREVERSIBLE. Escribe FORMATEAR (en mayúsculas) para confirmar:');
-                          if (phrase !== 'FORMATEAR') { showMsg('Formateo cancelado', true); return; }
-                          try {
-                            const res = await apiFetch(`${host}/api/system/factory-reset`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: 'FORMATEAR', requester: currentUser.username }) });
-                            const d = await res.json().catch(() => ({}));
-                            if (res.ok) { showMsg(`✅ Sistema formateado. Backup de seguridad: ${d.backup || '(creado)'}`); fetchData(); }
-                            else showMsg(`⛔ ${d.error || 'Error al formatear'}`, true);
-                          } catch (e) { showMsg('⛔ Error de red al formatear', true); }
-                        }} className="bg-red-600 hover:bg-red-700 text-white font-black py-3 px-6 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest flex items-center gap-2 shrink-0 whitespace-nowrap"><Trash2 size={14}/> Formatear sistema</button>
-                      </div>
                     </div>
                   </div>
                   );
@@ -8389,8 +8222,16 @@ export default function App() {
                   };
                   const handleDownload = async (b) => {
                     try {
-                      await descargarArchivoAutenticado(host, `/api/system/backups/${b.id}/download`, b.filename || `backup_${b.id}.json`);
-                    } catch (e) { showMsg(`⛔ ${e.message || 'Error al descargar backup'}`, true); }
+                      const r = await apiFetch(`${host}/api/system/backups/${b.id}/download`);
+                      if (!r.ok) { showMsg('⛔ No se pudo descargar el backup', true); return; }
+                      const blob = await r.blob();
+                      const url  = URL.createObjectURL(blob);
+                      const a    = document.createElement('a');
+                      a.href     = url;
+                      a.download = b.filename || `backup_${b.id}.json`;
+                      a.click();
+                      URL.revokeObjectURL(url);
+                    } catch (e) { showMsg('⛔ Error de red al descargar backup', true); }
                   };
                   const handleRestore = async (b) => {
                     const ok = await confirm({
@@ -9967,7 +9808,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {viewReturns.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin devoluciones registradas.</div> : viewReturns.map(r=>(
+                  {returns.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin devoluciones registradas.</div> : returns.map(r=>(
                     <div key={r.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-start justify-between">
                       <div>
                         <p className="font-black text-slate-800">{r.original_doc_num || `RET-${r.id}`}</p>
@@ -10132,7 +9973,7 @@ export default function App() {
               )}
 
               <div className="space-y-3">
-                {viewInvoices.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin facturas generadas.</div> : viewInvoices.map(inv=>(
+                {invoices.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin facturas generadas.</div> : invoices.map(inv=>(
                   <div key={inv.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                     <div className="flex items-start justify-between">
                       <div>
@@ -10429,7 +10270,7 @@ export default function App() {
                   const subItems = Object.entries(substituteModal.selection).map(([_, sel]) => ({ sku: sel.sku, qty: sel.qty }));
                   const res = await apiFetch(`${host}/api/dispatch_batch`, {
                     method: 'POST', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ ...substituteModal.doc, username: currentUser.username, allow_substitutes: true, substitute_items: subItems, reauth_password: reauthPw })
+                    body: JSON.stringify({ ...substituteModal.doc, client_id: substituteModal.doc?.client, username: currentUser.username, allow_substitutes: true, substitute_items: subItems, reauth_password: reauthPw })
                   });
                   if (res.ok) {
                     showMsg('✅ Despacho con sustitutos procesado');
@@ -10617,6 +10458,6 @@ export default function App() {
           </div>
         </div>
       )}
-    </ClienteActivoContext.Provider>
+    </>
   );
 }

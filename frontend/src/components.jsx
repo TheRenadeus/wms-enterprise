@@ -4,7 +4,7 @@ import {
   FolderOpen, Trash2, CheckCircle2, Search, X,
   Box, Calendar, Combine, Edit, Eye, Layers, Map as MapIcon,
   Scan, Split, Tag, Warehouse, XCircle,
-  Database, Download, Loader2, Upload, ShieldAlert, Lightbulb
+  Database, Download, Loader2, Upload, ShieldAlert, Lightbulb, Building2
 } from 'lucide-react';
 import { timeAgo, apiFetch, parseSpreadsheet } from './utils';
 import { DEMO_GLOSA_OPTIONS, IMPORT_CONFIG, DEMO_HINTS, SANDBOX_SCENARIOS, SANDBOX_ROLES, SANDBOX_MISSIONS } from './constants';
@@ -47,9 +47,11 @@ const DocTrayView = ({
   module, title, colorClass, textClass, btnColor, Icon,
   workspaces, newDocNum, setNewDocNum, newDocType, setNewDocType, newDocGlosa, setNewDocGlosa,
   newDocDate, setNewDocDate, newDocRef, setNewDocRef, newDocEnteredAt, setNewDocEnteredAt,
-  documentTypes, handleCreateDoc, removeDoc, setActiveDocId, currentUser
+  documentTypes, handleCreateDoc, removeDoc, setActiveDocId, currentUser,
+  is3PLMode, opsClients = [], newDocClient, setNewDocClient
 }) => {
   const docs = workspaces[module] || [];
+  const clientName = (id) => (opsClients.find(c => c.id === id)?.name) || id;
   const allowedTypes = (documentTypes || []).filter(d => d.flow_type === 'BOTH' || d.flow_type === (module === 'receive' ? 'INBOUND' : module === 'dispatch' ? 'OUTBOUND' : 'BOTH'));
   const canDeleteDoc = ['ADMIN', 'SUPERADMIN'].includes(currentUser?.role);
 
@@ -60,6 +62,16 @@ const DocTrayView = ({
           <Icon className={`w-6 h-6 mr-2 ${textClass}`}/> Crear Nuevo {title}
         </h2>
         <form onSubmit={(e) => handleCreateDoc(e, module)} className="flex flex-col gap-4">
+          {is3PLMode && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1"><Building2 size={12}/> Cliente del movimiento *</label>
+              <select value={newDocClient || ''} onChange={e=>setNewDocClient(e.target.value)} required className="w-full border-2 border-indigo-200 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 text-indigo-800">
+                <option value="">-- Seleccione el cliente --</option>
+                {opsClients.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
+              </select>
+              {opsClients.length === 0 && <p className="text-[9px] text-red-500 font-bold">No tiene clientes asignados para operar.</p>}
+            </div>
+          )}
           <div className="flex gap-4">
             {module !== 'adjust' && (
               <select value={newDocType} onChange={e=>setNewDocType(e.target.value)} required className="flex-[0.5] border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500 bg-white uppercase">
@@ -118,6 +130,7 @@ const DocTrayView = ({
                 <div>
                   <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest">En Proceso / Parcial</span>
                   <h4 className="text-lg font-black text-slate-800 uppercase mt-2 leading-none">[{d.docType || 'AJUSTE'}] {d.docNum}</h4>
+                  {d.client && <p className="text-[10px] font-black text-indigo-600 uppercase mt-1 flex items-center gap-1"><Building2 size={11}/> {clientName(d.client)}</p>}
                   {d.glosa && <p className="text-xs text-slate-500 mt-1 italic truncate">"{d.glosa}"</p>}
                   <div className="flex flex-wrap gap-2 mt-2">
                     {d.docDate && <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">📅 Doc: {d.docDate}</span>}
