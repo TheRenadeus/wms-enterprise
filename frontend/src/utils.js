@@ -137,6 +137,39 @@ export const apiFetch = (url, options = {}) => {
     });
 };
 
+/**
+ * Descarga un archivo desde un endpoint protegido del backend CON el token
+ * adjunto. Reemplaza el patrón roto window.open/location.href/<a href> hacia
+ * endpoints `requireAuth` (que no envían el header Authorization → 401 y baja un
+ * archivo con el JSON de error adentro).
+ *
+ * Se construye sobre apiFetch, así reutiliza la MISMA fuente de token y el mismo
+ * manejo de expiración: en 401 apiFetch ya hace logout + reload (no se baja un
+ * archivo corrupto). Hace fetch autenticado → blob → <a> temporal → click → revoke.
+ *
+ * @param {string} host     base del backend ('' = mismo origen)
+ * @param {string} path     ruta del endpoint, ej. '/api/export/inventory'
+ * @param {string} filename nombre del archivo a guardar (con extensión)
+ */
+export async function descargarArchivoAutenticado(host, path, filename) {
+  const res = await apiFetch(`${host}${path}`);
+  if (!res.ok) {
+    // apiFetch ya gestionó el 401 (logout). Para el resto, propagar el motivo.
+    let msg = `No se pudo descargar (HTTP ${res.status})`;
+    try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // UX-06: Calcula tiempo relativo para mostrar antigüedad de documentos
 export const timeAgo = (dateStr) => {
   if (!dateStr) return '';

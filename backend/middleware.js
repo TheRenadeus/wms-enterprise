@@ -237,8 +237,44 @@ const checkClientAccess = (mode = 'write') => async (req, res, next) => {
   }
 };
 
+// ── LICENCIA: expiración ─────────────────────────────────────────────────────
+// Estado de la licencia cacheado 60s (la fecha la fija el SUPERADMIN en system_config
+// como `license_expiry` = 'YYYY-MM-DD'). Vence al FINAL del día indicado.
+let _licCache = { at: 0, val: null };
+async function getLicenseStatus() {
+  if (_licCache.val && Date.now() - _licCache.at < 60000) return _licCache.val;
+  let val = { expiry: null, expired: false, daysLeft: null };
+  try {
+    const r = await pool.query("SELECT value FROM system_config WHERE key = 'license_expiry'");
+    const raw = r.rows[0]?.value;
+    if (raw) {
+      const exp = new Date(raw + 'T23:59:59');
+      if (!isNaN(exp.getTime())) {
+        const now = new Date();
+        val = { expiry: raw, expired: now > exp, daysLeft: Math.ceil((exp - now) / 86400000) };
+      }
+    }
+  } catch (e) { /* ante error de lectura, no bloquear */ }
+  _licCache = { at: Date.now(), val };
+  return val;
+}
+
+// Bloqueo por licencia vencida: con la licencia vencida, los no-SUPERADMIN no pueden
+// ESCRIBIR (sistema en solo lectura) hasta renovar. SUPERADMIN sí, para renovarla.
+const apiLicenseGate = async (req, res, next) => {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  if (!req.user || req.user.role === 'SUPERADMIN') return next();
+  try {
+    const lic = await getLicenseStatus();
+    if (lic.expired) return res.status(403).json({ error: `Licencia vencida el ${lic.expiry}. El sistema está en solo lectura hasta renovarla; contacte al proveedor.`, license_expired: true });
+  } catch (e) { /* no bloquear ante error */ }
+  next();
+};
+
 module.exports = {
   JWT_SECRET,
+  getLicenseStatus,
+  apiLicenseGate,
   requireAuth,
   requireReadOnly,
   requireAdmin,

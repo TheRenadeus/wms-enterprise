@@ -1952,7 +1952,7 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {},
               )}
               {safeResultErrors.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-1 max-h-48 overflow-y-auto">
-                  {safeResultErrors.map((e, i) => <p key={i} className="text-xs text-red-700 font-bold">{typeof e === 'string' ? e : `Fila ${e?.row ?? '-'}: ${e?.message ?? JSON.stringify(e)}`}</p>)}
+                  {safeResultErrors.map((e, i) => <p key={i} className="text-xs text-red-700 font-bold">{typeof e === 'string' ? e : `Fila ${e?.row ?? '-'}${e?.sku ? ` · ${e.sku}` : ''}: ${e?.message ?? JSON.stringify(e)}`}</p>)}
                 </div>
               )}
               <button onClick={handleCancel} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">Cerrar</button>

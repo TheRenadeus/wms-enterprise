@@ -58,6 +58,7 @@ const {
   portalLoginLimiter,
   stockWriteLimiter,
   apiAuthGate,
+  apiLicenseGate,
   apiClientScope,
   apiDemoBlock,
   apiClienteReadOnly,
@@ -111,6 +112,9 @@ app.use(globalLimiter);
 // apiLimiter (100/min) antes del auth gate: protege también el verificador de JWT.
 app.use('/api', apiLimiter);
 app.use('/api', apiAuthGate);
+// Bloqueo por licencia vencida (escrituras de no-SUPERADMIN). Va tras el auth gate
+// (necesita req.user). El SUPERADMIN pasa para poder renovar.
+app.use('/api', apiLicenseGate);
 
 // Invalidación automática de cache de maestros tras writes exitosos (P9).
 // Se evalúa al cierre de la respuesta para no invalidar si la operación falló.
@@ -1044,6 +1048,75 @@ const getImportRows = (body) => {
   return null;
 };
 
+// Valida filas de carga de stock contra el maestro (integridad referencial en la
+// capa de aplicación). Pre-carga SKUs activos y ubicaciones en UNA sola query cada
+// uno y valida en memoria (sin query por fila). Devuelve { valid, errors }, donde
+// errors = [{ row, sku, message }] y cada `valid` queda normalizado para el insert.
+//   forceClient:    si se pasa, todas las filas usan ese cliente (modo recepción 1 cliente).
+//   defaultClient:  cliente por defecto cuando la fila no trae client_id.
+//   defaultLocation: ubicación por defecto cuando la fila no trae location_id.
+async function validateStockRows(db, rows, { forceClient = null, defaultClient = 'GENERAL', defaultLocation = 'PISO-RECEPCION' } = {}) {
+  const norm = (v) => String(v ?? '').trim();
+  const up = (v) => norm(v).toUpperCase();
+
+  const prepared = rows.map((r, i) => ({
+    row: i + 2, // +2: la fila 1 del Excel es la cabecera
+    sku: up(r.sku),
+    qtyRaw: r.qty ?? r.qty_to_pick ?? '',
+    qty: parseFloat(r.qty ?? r.qty_to_pick),
+    client_id: forceClient ? up(forceClient) : (up(r.client_id) || up(defaultClient)),
+    location: norm(r.location_id) || defaultLocation,
+    batch: norm(r.batch_number) || null,
+    expiry: norm(r.expiry_date) || null,
+    serial: norm(r.serial_number) || null,
+    glosa: norm(r.glosa) || null,
+  }));
+
+  // SKUs activos (clave sku||client_id) + flags de trazabilidad.
+  const skus = [...new Set(prepared.map(p => p.sku).filter(Boolean))];
+  const skuMap = new Map();
+  const skuAnyClient = new Set();
+  if (skus.length) {
+    const sr = await db.query(
+      `SELECT sku, client_id, requires_lot, requires_serial FROM master_skus WHERE sku = ANY($1) AND deleted_at IS NULL`,
+      [skus]
+    );
+    sr.rows.forEach(s => {
+      skuMap.set(`${String(s.sku).toUpperCase()}||${String(s.client_id).toUpperCase()}`, s);
+      skuAnyClient.add(String(s.sku).toUpperCase());
+    });
+  }
+
+  // Ubicaciones existentes (PISO-RECEPCION siempre permitida).
+  const locs = [...new Set(prepared.map(p => p.location).filter(Boolean))];
+  const locSet = new Set(['PISO-RECEPCION']);
+  if (locs.length) {
+    const lr = await db.query(`SELECT location_id FROM locations_master WHERE location_id = ANY($1)`, [locs]);
+    lr.rows.forEach(l => locSet.add(String(l.location_id)));
+  }
+
+  const valid = [];
+  const errors = [];
+  const fail = (p, message) => errors.push({ row: p.row, sku: p.sku || '(vacío)', message });
+
+  for (const p of prepared) {
+    if (!p.sku) { fail(p, 'SKU vacío'); continue; }
+    if (p.qtyRaw === '' || isNaN(p.qty) || p.qty <= 0) { fail(p, 'La cantidad debe ser un número mayor a 0'); continue; }
+    const meta = skuMap.get(`${p.sku}||${p.client_id}`);
+    if (!meta) {
+      if (skuAnyClient.has(p.sku)) fail(p, `El SKU '${p.sku}' no pertenece al cliente '${p.client_id}'`);
+      else fail(p, `El SKU '${p.sku}' no existe o está inactivo`);
+      continue;
+    }
+    if (meta.requires_lot && !p.batch) { fail(p, `El SKU '${p.sku}' requiere número de lote (batch_number)`); continue; }
+    if (meta.requires_serial && !p.serial) { fail(p, `El SKU '${p.sku}' requiere número de serie`); continue; }
+    if (meta.requires_serial && p.qty !== 1) { fail(p, `El SKU '${p.sku}' es serializado: la cantidad debe ser 1 por serie`); continue; }
+    if (!locSet.has(p.location)) { fail(p, `La ubicación '${p.location}' no existe`); continue; }
+    valid.push(p);
+  }
+  return { valid, errors };
+}
+
 // Plantillas descargables con fila de descripciones
 const TEMPLATES = {
   skus: {
@@ -1302,34 +1375,27 @@ app.post('/api/import/inventory', requireStockWrite, async (req, res) => {
   const rows = getImportRows(req.body);
   if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
   if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
-  const results = { success: 0, errors: [] };
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // Recopilar filas válidas para batch insert
-    const validRows = [];
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (!r.sku || !r.qty || parseFloat(r.qty) <= 0) { results.errors.push(`Fila ${i+2}: SKU y cantidad > 0 son obligatorios`); continue; }
-      validRows.push({ lpnId: genLpnId('IMP'), sku: String(r.sku).toUpperCase().trim(), qty: parseFloat(r.qty), client_id: r.client_id || 'GENERAL', batch: r.batch_number || null, expiry: r.expiry_date || null, serial: r.serial_number || null, location: r.location_id || 'PISO-RECEPCION', glosa: r.glosa || 'Carga masiva' });
-    }
-    if (validRows.length > 0) {
-      // Batch insert inventory_lpns
+    // Integridad: validar cada fila contra el maestro (existe+activo, pertenece al
+    // cliente, lote/serie, ubicación). Solo las válidas se insertan.
+    const { valid, errors } = await validateStockRows(client, rows, { defaultClient: 'GENERAL', defaultLocation: 'PISO-RECEPCION' });
+    if (valid.length > 0) {
+      const validRows = valid.map(v => ({ ...v, lpnId: genLpnId('IMP') }));
       const invValues = validRows.map((_, idx) => `($${idx*9+1},$${idx*9+2},$${idx*9+3},$${idx*9+4},'DISPONIBLE',$${idx*9+5},$${idx*9+6},$${idx*9+7},$${idx*9+8},$${idx*9+9})`).join(',');
-      const invParams = validRows.flatMap(r => [r.lpnId, r.sku, r.qty, r.client_id, r.batch, r.expiry, r.serial, r.location, r.glosa]);
+      const invParams = validRows.flatMap(r => [r.lpnId, r.sku, r.qty, r.client_id, r.batch, r.expiry, r.serial, r.location, r.glosa || 'Carga masiva']);
       await client.query(`INSERT INTO inventory_lpns (id,sku,qty,client_id,status,batch_number,expiry_date,serial_number,location_id,glosa) VALUES ${invValues}`, invParams);
-      // Batch insert audit_log
       const audValues = validRows.map((_, idx) => `('INBOUND',$${idx*4+1},$${idx*4+2},$${idx*4+3},$${idx*4+4})`).join(',');
       const audParams = validRows.flatMap(r => [r.sku, r.qty, `Importación masiva. LPN: ${r.lpnId}`, username || 'IMPORT']);
       await client.query(`INSERT INTO audit_log (type,sku,qty,glosa,username) VALUES ${audValues}`, audParams);
-      results.success = validRows.length;
     }
     await client.query('COMMIT');
+    res.json({ imported: valid.length, success: valid.length, errors });
   } catch(err) {
     await client.query('ROLLBACK');
     return res.status(500).json({ error: mapDbError(err) });
   } finally { client.release(); }
-  res.json(results);
 });
 
 app.post('/api/import/receive', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), async (req, res) => {
@@ -1337,30 +1403,26 @@ app.post('/api/import/receive', stockWriteLimiter, requireStockWrite, checkClien
   const rows = getImportRows(req.body);
   if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
   if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
-  const results = { success: 0, errors: [] };
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (!r.sku || !r.qty || parseFloat(r.qty) <= 0) { results.errors.push(`Fila ${i+2}: sku y qty > 0 son obligatorios`); continue; }
+    // Integridad: si la recepción especifica client_id, todas las filas se validan
+    // contra ese cliente (forceClient). Solo las válidas se insertan.
+    const { valid, errors } = await validateStockRows(dbClient, rows, { forceClient: client_id || null, defaultClient: 'GENERAL', defaultLocation: 'PISO-RECEPCION' });
+    for (const v of valid) {
       const lpnId = genLpnId('REC');
-      const lineQty = parseFloat(r.qty);
-      const lineClient = client_id || r.client_id || 'GENERAL';
-      const lineLoc = r.location_id || 'PISO-RECEPCION';
       await dbClient.query(`INSERT INTO inventory_lpns (id, sku, qty, client_id, status, batch_number, expiry_date, serial_number, location_id, glosa) VALUES ($1,$2,$3,$4,'DISPONIBLE',$5,$6,$7,$8,$9)`,
-        [lpnId, r.sku, lineQty, lineClient, r.batch_number || null, r.expiry_date || null, r.serial_number || null, lineLoc, r.glosa || `Recepción masiva ${doc_num || ''}`]);
+        [lpnId, v.sku, v.qty, v.client_id, v.batch, v.expiry, v.serial, v.location, v.glosa || `Recepción masiva ${doc_num || ''}`]);
       await dbClient.query(`INSERT INTO audit_log (type, sku, qty, glosa, username) VALUES ('INBOUND', $1, $2, $3, $4)`,
-        [r.sku, lineQty, `Recepción masiva Doc:${doc_num || 'N/A'} LPN:${lpnId}`, username || 'IMPORT']);
-      await logStorageEvent(dbClient, { client_id: lineClient, event_type: 'MOVIMIENTO_IN', sku: r.sku, lpn_id: lpnId, qty: lineQty, location_id: lineLoc });
-      results.success++;
+        [v.sku, v.qty, `Recepción masiva Doc:${doc_num || 'N/A'} LPN:${lpnId}`, username || 'IMPORT']);
+      await logStorageEvent(dbClient, { client_id: v.client_id, event_type: 'MOVIMIENTO_IN', sku: v.sku, lpn_id: lpnId, qty: v.qty, location_id: v.location });
     }
     await dbClient.query('COMMIT');
+    res.json({ imported: valid.length, success: valid.length, errors });
   } catch(err) {
     await dbClient.query('ROLLBACK');
     return res.status(500).json({ error: mapDbError(err) });
   } finally { dbClient.release(); }
-  res.json(results);
 });
 
 app.post('/api/import/dispatch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), async (req, res) => {
@@ -2083,6 +2145,68 @@ app.delete('/api/system/audit', requireSuperAdmin, async (req, res) => {
     await pool.query("TRUNCATE audit_log RESTART IDENTITY");
     res.json({ success: true });
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+// FORMATEO DE FÁBRICA: deja el sistema "como recién instalado".
+// Borra TODOS los datos de negocio pero PRESERVA: el esqueleto base (statuses,
+// document_types, system_config = licencia/config) y los usuarios SUPERADMIN
+// (para no quedar bloqueado). Hace un backup de seguridad ANTES (reversible con
+// recover.js o el restore). Requiere confirm:'FORMATEAR' (también valida el server,
+// no solo el front). IRREVERSIBLE salvo por el backup previo.
+const FACTORY_PRESERVE = ['statuses', 'document_types', 'system_config'];
+app.post('/api/system/factory-reset', requireSuperAdmin, async (req, res) => {
+  if (req.body?.confirm !== 'FORMATEAR') return res.status(400).json({ error: "Confirmación inválida: envía confirm:'FORMATEAR'." });
+  let backupName = null;
+  try {
+    // 1) Backup de seguridad ANTES de borrar. Si falla, abortar (no borrar sin red).
+    try {
+      const b = await backupsRouter.ejecutarBackup('PRE_FORMAT', req.user.username);
+      backupName = b?.filename || null;
+    } catch (e) {
+      return res.status(500).json({ error: 'No se pudo crear el backup de seguridad previo; formateo abortado: ' + e.message });
+    }
+
+    // 2) Capturar el esqueleto a preservar (antes del wipe).
+    const supers = (await pool.query(`SELECT * FROM users WHERE role='SUPERADMIN'`)).rows;
+    const preserved = {};
+    for (const t of FACTORY_PRESERVE) preserved[t] = (await pool.query(`SELECT * FROM ${t}`)).rows;
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // 3) Vaciar TODO menos la tabla de migraciones.
+      const tbls = (await client.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> 'schema_migrations'`))
+        .rows.map(r => `"${r.tablename}"`);
+      await client.query(`TRUNCATE TABLE ${tbls.join(', ')} RESTART IDENTITY CASCADE`);
+      // 4) Re-insertar el esqueleto (superadmins + catálogos/config base).
+      const reinsert = async (table, rows) => {
+        for (const row of rows) {
+          const cols = Object.keys(row);
+          const colList = cols.map(c => `"${c}"`).join(',');
+          const ph = cols.map((_, i) => `$${i + 1}`).join(',');
+          await client.query(`INSERT INTO ${table} (${colList}) VALUES (${ph})`, cols.map(c => row[c]));
+        }
+      };
+      await reinsert('users', supers);
+      for (const t of FACTORY_PRESERVE) await reinsert(t, preserved[t]);
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally { client.release(); }
+
+    // 5) Registrar el formateo en el (ahora vacío) audit_log.
+    await pool.query(`INSERT INTO audit_log (type,sku,qty,glosa,username) VALUES ('SYSTEM','N/A',0,$1,$2)`,
+      [`Formateo de fábrica. Backup de seguridad: ${backupName || '(sin nombre)'}`, req.user.username]).catch(() => {});
+
+    res.json({
+      success: true,
+      backup: backupName,
+      preserved: { superadmins: supers.length, statuses: preserved.statuses.length, document_types: preserved.document_types.length, system_config: preserved.system_config.length },
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Error durante el formateo: ' + (err.message || err) + (backupName ? ` — el backup de seguridad '${backupName}' SÍ se creó.` : '') });
+  }
 });
 
 // Proteger creación de ADMIN - solo SUPERADMIN puede crear/eliminar admins
