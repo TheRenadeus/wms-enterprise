@@ -578,6 +578,10 @@ export default function App() {
   const [docInsumos, setDocInsumos] = useState([]);
   const [docInsumoLine, setDocInsumoLine] = useState({ insumo_id:'', cantidad:'' });
   const [savingDocInsumo, setSavingDocInsumo] = useState(false);
+  const [repRange, setRepRange] = useState({ from:'', to:'' });
+  const [repRows, setRepRows] = useState([]);
+  const [repLoading, setRepLoading] = useState(false);
+  const [repGroup, setRepGroup] = useState('insumo');
   const [insumoMove, setInsumoMove] = useState(null); // { insumo, tipo } | null
   const [insumoMoveQty, setInsumoMoveQty] = useState('');
   const [insumoMoveResult, setInsumoMoveResult] = useState(null);
@@ -1313,6 +1317,37 @@ export default function App() {
     setInsumoForm({ codigo:i.codigo, nombre:i.nombre, categoria:i.categoria, unidad:i.unidad, costo_unitario:i.costo_unitario, stock_minimo:i.stock_minimo });
     setIsEditingInsumo(i.id); window.scrollTo({ top:0, behavior:'smooth' });
   };
+  const loadInsumoReport = async () => {
+    setRepLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      if (repRange.from) qs.set('from', repRange.from);
+      if (repRange.to) qs.set('to', repRange.to);
+      const r = await apiFetch(`${host}/api/insumos/reportes/consumo?${qs.toString()}`);
+      setRepRows(r.ok ? await r.json() : []);
+    } catch(e) { setRepRows([]); } finally { setRepLoading(false); }
+  };
+  // Agrupación del reporte (por insumo o por cliente) con totales de cantidad y costo.
+  const repGrouped = useMemo(() => {
+    const acc = {};
+    for (const x of repRows) {
+      const key = repGroup === 'cliente' ? (x.client_name || x.client_id || 'Sin cliente') : `${x.codigo} — ${x.nombre}`;
+      if (!acc[key]) acc[key] = { key, cantidad: 0, costo: 0, unidad: x.unidad };
+      acc[key].cantidad += parseFloat(x.cantidad) || 0;
+      acc[key].costo += parseFloat(x.costo) || 0;
+    }
+    return Object.values(acc).sort((a,b)=>b.costo-a.costo);
+  }, [repRows, repGroup]);
+  const exportInsumoReport = () => {
+    const rows = repGrouped.map(g => ({ grupo: g.key, cantidad: g.cantidad, costo: Math.round(g.costo) }));
+    exportToExcel(rows, [
+      { key:'grupo', header: repGroup==='cliente'?'Cliente':'Insumo', format:'text' },
+      { key:'cantidad', header:'Cantidad', format:'number' },
+      { key:'costo', header:'Costo total', format:'number' },
+    ], `consumo_insumos_${repGroup}_${repRange.from||'inicio'}_${repRange.to||'hoy'}`, 'Consumo insumos');
+  };
+  const lowStockInsumos = insumos.filter(i => i.activo && parseFloat(i.stock_actual) < parseFloat(i.stock_minimo));
+
   const fetchDocInsumos = async (doc) => {
     if (!doc) { setDocInsumos([]); return; }
     try { const r = await apiFetch(`${host}/api/documentos/${doc.module}/${doc.id}/insumos`); setDocInsumos(r.ok ? await r.json() : []); } catch(e) { setDocInsumos([]); }
@@ -9956,10 +9991,17 @@ export default function App() {
               </div>
               {/* Sub-pestañas (Materiales; las demás se agregan en fases siguientes) */}
               <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 w-fit">
-                {[{id:'materiales',label:'Materiales'}, ...(canConsumeInsumos ? [{id:'asociar',label:'Asociar consumo'}] : [])].map(t => (
-                  <button key={t.id} onClick={()=>setInsumosTab(t.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${insumosTab===t.id ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}>{t.label}</button>
+                {[{id:'materiales',label:'Materiales'}, ...(canConsumeInsumos ? [{id:'asociar',label:'Asociar consumo'}] : []), {id:'reportes',label:'Reportes'}].map(t => (
+                  <button key={t.id} onClick={()=>setInsumosTab(t.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${insumosTab===t.id ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}>{t.label}{t.id==='materiales' && lowStockInsumos.length>0 && <span className="ml-1.5 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">{lowStockInsumos.length}</span>}</button>
                 ))}
               </div>
+              {/* Alerta de stock bajo */}
+              {lowStockInsumos.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[11px] font-bold text-red-700">
+                  <AlertTriangle size={14} className="shrink-0"/>
+                  <span>{lowStockInsumos.length} insumo(s) bajo el mínimo: {lowStockInsumos.slice(0,5).map(i=>i.codigo).join(', ')}{lowStockInsumos.length>5?'…':''}</span>
+                </div>
+              )}
 
               {insumosTab === 'materiales' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -10118,6 +10160,46 @@ export default function App() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {insumosTab === 'reportes' && (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-end gap-3">
+                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Desde</label><input type="date" value={repRange.from} onChange={e=>setRepRange({...repRange,from:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white"/></div>
+                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Hasta</label><input type="date" value={repRange.to} onChange={e=>setRepRange({...repRange,to:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white"/></div>
+                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Agrupar por</label>
+                      <select value={repGroup} onChange={e=>setRepGroup(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
+                        <option value="insumo">Insumo</option>
+                        <option value="cliente">Cliente</option>
+                      </select>
+                    </div>
+                    <button onClick={loadInsumoReport} disabled={repLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{repLoading ? <Loader2 size={14} className="animate-spin"/> : <BarChart3 size={14}/>} Generar</button>
+                    {repGrouped.length > 0 && <button onClick={exportInsumoReport} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
+                  </div>
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Consumo por {repGroup} ({repGrouped.length})</h3>
+                      <span className="text-[11px] font-black text-slate-700">Total: ${Math.round(repGrouped.reduce((s,g)=>s+g.costo,0)).toLocaleString('es-CL')}</span>
+                    </div>
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-100 border-b border-slate-200"><tr>
+                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">{repGroup==='cliente'?'Cliente':'Insumo'}</th>
+                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cantidad</th>
+                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-right pr-5">Costo</th>
+                      </tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {repGrouped.map(g => (
+                          <tr key={g.key} className="hover:bg-slate-50">
+                            <td className="p-3 pl-5 text-xs font-black text-slate-800">{g.key}</td>
+                            <td className="p-3 text-center text-sm font-black text-amber-600">{g.cantidad}</td>
+                            <td className="p-3 text-right pr-5 text-xs font-bold text-slate-600">${Math.round(g.costo).toLocaleString('es-CL')}</td>
+                          </tr>
+                        ))}
+                        {repGrouped.length === 0 && <tr><td colSpan={3} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">{repLoading ? 'Generando…' : 'Selecciona un período y genera el reporte'}</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 

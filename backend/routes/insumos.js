@@ -315,6 +315,54 @@ router.delete('/documentos/:tipo/:id/insumos/:movId', requireStockWrite, async (
   finally { client.release(); }
 });
 
+// ── GET /insumos/alertas ── insumos activos con stock por debajo del mínimo.
+router.get('/insumos/alertas', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT i.id, i.codigo, i.nombre, i.unidad, i.stock_minimo, COALESCE(s.cantidad,0) AS stock_actual
+         FROM insumos i LEFT JOIN insumo_stock s ON s.insumo_id = i.id
+        WHERE i.activo = TRUE AND COALESCE(s.cantidad,0) < i.stock_minimo
+        ORDER BY (i.stock_minimo - COALESCE(s.cantidad,0)) DESC`
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+// ── GET /insumos/reportes/consumo?from=&to= ── detalle de consumos en el período
+// (con costo = cantidad × costo_unitario), respetando scope. El frontend agrupa
+// por insumo / por cliente y exporta.
+router.get('/insumos/reportes/consumo', requireAuth, async (req, res) => {
+  const { from, to } = req.query;
+  try {
+    const conds = ["m.tipo = 'consumo'"];
+    const params = [];
+    let idx = 1;
+    if (from) { conds.push(`m.fecha >= $${idx++}`); params.push(from); }
+    if (to)   { conds.push(`m.fecha <= $${idx++}`); params.push(to + 'T23:59:59'); }
+    if (!['ADMIN', 'SUPERADMIN'].includes(req.user.role) && !req.user.is_demo) {
+      const perm = await getClientesPermitidos(req.user.username);
+      if (perm.scope === 'none') return res.json([]);
+      if (perm.scope === 'assigned') {
+        if (!perm.clients.length) return res.json([]);
+        conds.push(`m.client_id = ANY($${idx++})`); params.push(perm.clients);
+      }
+    }
+    const r = await pool.query(
+      `SELECT m.id, m.fecha, m.cantidad, m.documento_tipo, m.documento_id, m.client_id, m.usuario,
+              i.codigo, i.nombre, i.unidad, i.costo_unitario,
+              (m.cantidad * i.costo_unitario) AS costo,
+              COALESCE(c.name, m.client_id) AS client_name
+         FROM insumo_movimientos m
+         JOIN insumos i ON i.id = m.insumo_id
+         LEFT JOIN clients c ON c.id = m.client_id
+        WHERE ${conds.join(' AND ')}
+        ORDER BY m.fecha DESC LIMIT 5000`,
+      params
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
 module.exports = router;
 // Se expone el helper para reutilizarlo en el consumo ligado a documentos (Fase 4).
 module.exports.aplicarMovimiento = aplicarMovimiento;
