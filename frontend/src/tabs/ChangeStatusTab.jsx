@@ -2,12 +2,13 @@
 // filteredRelData se calcula en App.js (useMemo); aquí solo recibimos resultado.
 
 import React, { useRef } from 'react';
-import { Search, X, RefreshCcw, Scan } from 'lucide-react';
+import { Search, X, RefreshCcw, Scan, Building2 } from 'lucide-react';
 import { statusLabel } from '../constants';
 
 export default function ChangeStatusTab({
   relSearchTerm, setRelSearchTerm,
   filteredRelData,
+  is3PLMode, opsClients = [], relClientFilter, setRelClientFilter,
   lpnStatuses, setLpnStatuses,
   glosas, setGlosas,
   statuses,
@@ -28,6 +29,15 @@ export default function ChangeStatusTab({
               className="bg-transparent text-xs font-bold outline-none w-48 text-slate-700 uppercase"
             />
           </div>
+          {is3PLMode && (
+            <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+              <Building2 size={14} className="text-indigo-400 mr-2"/>
+              <select value={relClientFilter} onChange={(e)=>setRelClientFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none text-slate-700 max-w-[160px]">
+                <option value="">Todos los clientes</option>
+                {opsClients.map(c=><option key={c.id} value={c.id}>{c.id} · {c.name}</option>)}
+              </select>
+            </div>
+          )}
           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-72">
             <Search size={14} className="text-slate-400 mr-2" />
             <input

@@ -619,6 +619,8 @@ export default function App() {
   const closeConfirm = () => setConfirmDialog(null);
 
   const [relSearchTerm, setRelSearchTerm] = useState('');
+  // Filtro "trabajar por cliente" para reubicación y cambio de estado (operan sobre LPN existentes).
+  const [relClientFilter, setRelClientFilter] = useState('');
   const [destinations, setDestinations] = useState({});
   const [glosas, setGlosas] = useState({});
   const [relocateQtys, setRelocateQtys] = useState({});
@@ -1585,7 +1587,9 @@ export default function App() {
 
   const filteredRelData = permittedInventory.filter(i => {
     const term = relSearchTerm.toLowerCase();
-    return i.id.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term) || (i.location_id || '').toLowerCase().includes(term);
+    const matchesSearch = i.id.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term) || (i.location_id || '').toLowerCase().includes(term);
+    const matchesClient = relClientFilter ? (i.client_id || '') === relClientFilter : true;
+    return matchesSearch && matchesClient;
   });
   
   const filteredSkusList = useMemo(() => permittedSkus.filter(s => {
@@ -5414,6 +5418,7 @@ export default function App() {
                   workspaces={workspaces} newDocNum={newDocNum} setNewDocNum={setNewDocNum} newDocGlosa={newDocGlosa} setNewDocGlosa={setNewDocGlosa}
                   newDocDate={newDocDate} setNewDocDate={setNewDocDate} newDocRef={newDocRef} setNewDocRef={setNewDocRef} newDocEnteredAt={newDocEnteredAt} setNewDocEnteredAt={setNewDocEnteredAt}
                   handleCreateDoc={handleCreateDoc} removeDoc={removeDoc} setActiveDocId={setActiveDocId} currentUser={currentUser}
+                  is3PLMode={is3PLMode} opsClients={opsClients} newDocClient={newDocClient} setNewDocClient={setNewDocClient}
                 />
                 {/* Panel de solicitudes de ajuste */}
                 {adjustRequests.length > 0 && (
@@ -5698,6 +5703,16 @@ export default function App() {
                         >{m.icon} {m.label}</button>
                       ))}
                     </div>
+                    {/* Trabajar por cliente */}
+                    {is3PLMode && (
+                      <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+                        <Building2 size={14} className="text-indigo-400 mr-2"/>
+                        <select value={relClientFilter} onChange={e=>setRelClientFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none text-slate-700 max-w-[160px]">
+                          <option value="">Todos los clientes</option>
+                          {opsClients.map(c=><option key={c.id} value={c.id}>{c.id} · {c.name}</option>)}
+                        </select>
+                      </div>
+                    )}
                     {/* Búsqueda */}
                     <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-56">
                       <Search size={14} className="text-slate-400 mr-2"/>
@@ -8641,6 +8656,10 @@ export default function App() {
                   relSearchTerm={relSearchTerm}
                   setRelSearchTerm={setRelSearchTerm}
                   filteredRelData={filteredRelData}
+                  is3PLMode={is3PLMode}
+                  opsClients={opsClients}
+                  relClientFilter={relClientFilter}
+                  setRelClientFilter={setRelClientFilter}
                   lpnStatuses={lpnStatuses}
                   setLpnStatuses={setLpnStatuses}
                   glosas={glosas}
