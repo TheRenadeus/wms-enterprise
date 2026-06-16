@@ -10,7 +10,7 @@ const { genLpnId } = require('../helpers');
 
 const router = express.Router();
 
-router.post('/returns', requireAuth, checkClientAccess('write'), async (req, res) => {
+router.post('/returns', requireAuth, checkClientAccess('write', { required: true }), async (req, res) => {
   const { doc_num, doc_type, client_id, reason, glosa, items, username } = req.body;
   if (!items || items.length === 0) return res.status(400).json({ error: 'Debe incluir al menos un ítem.' });
   const client = await pool.connect();

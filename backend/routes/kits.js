@@ -27,7 +27,7 @@ router.get('/kits', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.post('/kits', requireJefe, async (req, res) => {
+router.post('/kits', requireJefe, checkClientAccess('write', { required: true }), async (req, res) => {
   const { kit_sku, client_id, description, components } = req.body;
   if (!kit_sku || !client_id) return res.status(400).json({ error: 'kit_sku y client_id son requeridos' });
   if (!components || components.length === 0) return res.status(400).json({ error: 'El kit debe tener al menos un componente' });
@@ -159,7 +159,7 @@ router.post('/kit-build', requireJefeOrAbove, checkClientAccess('write'), valida
   finally { client.release(); }
 });
 
-router.post('/kits/direct-dispatch', requireJefeOrAbove, async (req, res) => {
+router.post('/kits/direct-dispatch', requireJefeOrAbove, checkClientAccess('write', { required: true }), async (req, res) => {
   const { kit_sku, client_id, qty, doc_num, doc_type, glosa, username } = req.body;
   if (!kit_sku || !client_id || !qty || !username) return res.status(400).json({ error: 'Faltan parámetros' });
   const qtyN = parseInt(qty);

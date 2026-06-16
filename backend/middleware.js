@@ -197,10 +197,20 @@ async function getClientesPermitidos(username, db = _pool) {
   return { scope: 'assigned', clients: assigned.rows.map(r => r.client_id) };
 }
 
-// checkClientAccess(mode): middleware que bloquea operaciones de escritura sobre
-// clientes que el usuario no tiene asignados. Si mode='read' pasa siempre.
-// Extrae el client_id desde body, items[0], params o query.
-const checkClientAccess = (mode = 'write') => async (req, res, next) => {
+// Helper: ¿el set de clientes permitidos incluye este id? (tolera mayúsc/minúsc).
+function permIncludes(perm, cid) {
+  if (!cid) return true;
+  return perm.clients.includes(cid) || perm.clients.includes(String(cid).toUpperCase());
+}
+
+// checkClientAccess(mode, opts): middleware que bloquea operaciones de escritura
+// sobre clientes que el usuario no tiene asignados. Si mode='read' pasa siempre.
+//   opts.required: si true, rechaza la escritura cuando NO viene client_id
+//                  específico (no se puede crear "para todos los clientes").
+// Valida TODOS los client_id presentes (body.client_id + cada items[].client_id),
+// no solo el primero, para cerrar la manipulación de peticiones por lote.
+const checkClientAccess = (mode = 'write', opts = {}) => async (req, res, next) => {
+  const { required = false } = opts;
   if (mode === 'read') return next();
   if (!req.user) return res.status(401).json({ error: 'No autenticado' });
   // SUPERADMIN/ADMIN siempre pasan sin tocar DB.
@@ -211,22 +221,28 @@ const checkClientAccess = (mode = 'write') => async (req, res, next) => {
   try {
     const perm = await getClientesPermitidos(req.user.username);
     req.permitidosClientes = perm;
-    if (perm.scope === 'all') return next();
     if (perm.scope === 'none') {
       return res.status(403).json({ error: 'Sin clientes asignados. Contactar al administrador.' });
     }
-    // Detectar client_id desde varias fuentes
-    let clientId =
-      req.body?.client_id ||
-      (Array.isArray(req.body?.items) && req.body.items[0]?.client_id) ||
-      (Array.isArray(req.body?.items) && req.body.items[0]?.clientId) ||
-      req.params?.client_id ||
-      req.query?.client_id ||
-      null;
-    if (!clientId) return next(); // sin client_id explícito → no aplica
-    if (!perm.clients.includes(String(clientId).toUpperCase()) && !perm.clients.includes(clientId)) {
+    // Recolectar todos los client_id explícitos de la petición.
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const clientIds = [
+      req.body?.client_id,
+      req.params?.client_id,
+      req.query?.client_id,
+      ...items.map(it => it?.client_id || it?.clientId),
+    ].filter(Boolean);
+    if (clientIds.length === 0) {
+      if (required) {
+        return res.status(403).json({ error: 'Debes seleccionar un cliente específico para esta operación.' });
+      }
+      return next(); // sin client_id explícito → la validación fina queda a guardas por SKU/LPN
+    }
+    if (perm.scope === 'all') return next();
+    const bad = [...new Set(clientIds)].filter(cid => !permIncludes(perm, cid));
+    if (bad.length) {
       return res.status(403).json({
-        error: `No tienes permiso para operar con el cliente ${clientId}.`,
+        error: `No tienes permiso para operar con el cliente ${bad.join(', ')}.`,
         tus_clientes: perm.clients,
       });
     }
@@ -234,6 +250,58 @@ const checkClientAccess = (mode = 'write') => async (req, res, next) => {
   } catch (e) {
     console.error('[checkClientAccess]', e.message);
     return res.status(500).json({ error: 'Error al verificar permisos de cliente.' });
+  }
+};
+
+// checkBatchSkuClientAccess: para lotes (recepción/despacho/ajuste/import) donde el
+// cliente se deriva del SKU. Resuelve los client_id de los SKUs del body.items y
+// valida que TODOS estén dentro del scope del usuario. ADMIN/JEFE(all) pasan.
+const checkBatchSkuClientAccess = () => async (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'No autenticado' });
+  if (['ADMIN', 'SUPERADMIN'].includes(req.user.role) || req.user.is_demo) return next();
+  try {
+    const perm = req.permitidosClientes || await getClientesPermitidos(req.user.username);
+    req.permitidosClientes = perm;
+    if (perm.scope === 'all') return next();
+    if (perm.scope === 'none') return res.status(403).json({ error: 'Sin clientes asignados. Contactar al administrador.' });
+    const items = Array.isArray(req.body?.items) ? req.body.items : [];
+    const skus = [...new Set(items.map(it => it?.sku).filter(Boolean).map(String))];
+    if (skus.length === 0) return next();
+    const r = await pool.query('SELECT DISTINCT client_id FROM master_skus WHERE sku = ANY($1)', [skus]);
+    const cids = r.rows.map(x => x.client_id || 'GENERAL');
+    const bad = [...new Set(cids)].filter(c => c !== 'GENERAL' && !permIncludes(perm, c));
+    if (bad.length) {
+      return res.status(403).json({ error: `No tienes permiso para operar con SKUs del cliente ${bad.join(', ')}.`, tus_clientes: perm.clients });
+    }
+    next();
+  } catch (e) {
+    console.error('[checkBatchSkuClientAccess]', e.message);
+    return res.status(500).json({ error: 'Error al verificar permisos de cliente (SKU).' });
+  }
+};
+
+// checkLpnClientAccess: para operaciones por-LPN (reubicación, cambio de estado)
+// donde el cliente se deriva del LPN (body.id). Valida que el LPN pertenezca a un
+// cliente dentro del scope del usuario.
+const checkLpnClientAccess = (idField = 'id') => async (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'No autenticado' });
+  if (['ADMIN', 'SUPERADMIN'].includes(req.user.role) || req.user.is_demo) return next();
+  try {
+    const perm = req.permitidosClientes || await getClientesPermitidos(req.user.username);
+    req.permitidosClientes = perm;
+    if (perm.scope === 'all') return next();
+    if (perm.scope === 'none') return res.status(403).json({ error: 'Sin clientes asignados. Contactar al administrador.' });
+    const lpnId = req.body?.[idField] || req.params?.[idField];
+    if (!lpnId) return next();
+    const r = await pool.query('SELECT client_id FROM inventory_lpns WHERE id = $1 LIMIT 1', [lpnId]);
+    const cid = r.rows[0]?.client_id || 'GENERAL';
+    if (cid !== 'GENERAL' && !permIncludes(perm, cid)) {
+      return res.status(403).json({ error: `No tienes permiso para operar con el LPN ${lpnId} (cliente ${cid}).`, tus_clientes: perm.clients });
+    }
+    next();
+  } catch (e) {
+    console.error('[checkLpnClientAccess]', e.message);
+    return res.status(500).json({ error: 'Error al verificar permisos de cliente (LPN).' });
   }
 };
 
@@ -302,4 +370,6 @@ module.exports = {
   apiClienteReadOnly,
   getClientesPermitidos,
   checkClientAccess,
+  checkBatchSkuClientAccess,
+  checkLpnClientAccess,
 };

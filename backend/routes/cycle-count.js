@@ -21,7 +21,7 @@ function buildScopeLabel({ zone_code, client_id, sku, location_id }) {
 
 // ── CYCLE COUNT ──────────────────────────────────────────────────────────────
 
-router.post('/cycle-count/create', requireStaff, async (req, res) => {
+router.post('/cycle-count/create', requireStaff, checkClientAccess('write'), async (req, res) => {
   try {
     const { zone_code, client_id, sku, location_id, username, notes, blind } = req.body;
 

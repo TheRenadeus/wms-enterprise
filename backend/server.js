@@ -51,6 +51,8 @@ const {
   requirePickerOrAbove,
   requireJefeOrAbove,
   checkClientAccess,
+  checkBatchSkuClientAccess,
+  checkLpnClientAccess,
   getClientesPermitidos,
   globalLimiter,
   apiLimiter,
@@ -317,7 +319,7 @@ app.delete('/api/statuses/:id', requireJefe, async (req, res) => {
 
 // /api/clients (POST/DELETE) → routes/clients.js
 
-app.post('/api/skus', requireStockWrite, async (req, res) => {
+app.post('/api/skus', requireStockWrite, checkClientAccess('write', { required: true }), async (req, res) => {
   const { sku, desc, category, uom, weight, length, width, height, abc_class, requires_lot, requires_serial, client_id, barcode,
           manufacturer_id, manufacturer_code, manufacturer_sku, brand,
           allow_substitutes, substitute_scope, substitute_threshold } = req.body;
@@ -401,7 +403,7 @@ app.post('/api/skus', requireStockWrite, async (req, res) => {
 // El código del SKU NUNCA cambia. Si hay cambio crítico (requires_lot/serial)
 // con stock activo → bump de current_version y snapshot en sku_version_history.
 // Los cambios no críticos siempre se aplican in-place sobre la misma fila.
-app.put('/api/skus/:sku', requireStockWrite, async (req, res) => {
+app.put('/api/skus/:sku', requireStockWrite, checkClientAccess('write'), async (req, res) => {
   const sku = String(req.params.sku).toUpperCase().trim();
   const { client_id, requires_lot, requires_serial, desc, category, uom, weight, length, width, height,
           abc_class, barcode, manufacturer_id, manufacturer_code, manufacturer_sku, brand,
@@ -533,7 +535,7 @@ app.get('/api/skus/:sku/versions', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
-app.delete('/api/skus/:id', requireStockWrite, async (req, res) => {
+app.delete('/api/skus/:id', requireStockWrite, checkClientAccess('write'), async (req, res) => {
   const { client_id } = req.query;
   if (!client_id) return res.status(400).json({ error: 'Se requiere client_id como query param para identificar el SKU.' });
   try {
@@ -567,7 +569,7 @@ const STATUS_TRANSITIONS = {
   'DESPACHADO':  [], // terminal — no se puede cambiar
 };
 
-app.post('/api/inventory/status', requireStockWrite, async (req, res) => {
+app.post('/api/inventory/status', requireStockWrite, checkLpnClientAccess('id'), async (req, res) => {
   const { id, new_status, glosa, username } = req.body;
   try {
     const check = await pool.query('SELECT * FROM inventory_lpns WHERE id = $1', [id]);
@@ -590,7 +592,7 @@ app.post('/api/inventory/status', requireStockWrite, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-app.post('/api/receive_batch', stockWriteLimiter, requireStockWrite, requireReauth, checkClientAccess('write'), async (req, res) => {
+app.post('/api/receive_batch', stockWriteLimiter, requireStockWrite, requireReauth, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   const { items, docNum, glosa, docType, username } = req.body;
   if (!docNum) return res.status(400).json({ error: 'docNum es requerido para trazabilidad.' });
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem.' });
@@ -673,7 +675,7 @@ app.post('/api/receive_batch', stockWriteLimiter, requireStockWrite, requireReau
   } finally { client.release(); }
 });
 
-app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, requireReauth, checkClientAccess('write'), async (req, res) => {
+app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, requireReauth, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   const { items, docNum, glosa, docType, username, usePickConfirmations, allow_substitutes: allowSubstFlag } = req.body;
   if (!docNum) return res.status(400).json({ error: 'docNum es requerido para trazabilidad.' });
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem.' });
@@ -810,7 +812,7 @@ app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, requireRea
   } finally { client.release(); }
 });
 
-app.post('/api/relocate', requireStockWrite, checkClientAccess('write'), async (req, res) => {
+app.post('/api/relocate', requireStockWrite, checkClientAccess('write'), checkLpnClientAccess('id'), async (req, res) => {
   const { id, qty, glosa, username } = req.body;
   const new_location_id = req.body.new_location_id ? String(req.body.new_location_id).trim().toUpperCase() : null;
   if (!new_location_id) return res.status(400).json({ error: 'El destino de reubicación es requerido' });
@@ -853,7 +855,7 @@ app.post('/api/relocate', requireStockWrite, checkClientAccess('write'), async (
   } catch (err) { await client.query('ROLLBACK'); res.status(400).json({ error: err.message }); } finally { client.release(); }
 });
 
-app.post('/api/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('write'), async (req, res) => {
+app.post('/api/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   if (!['ADMIN','SUPERADMIN'].includes(req.user.role))
     return res.status(403).json({ error: 'Solo administradores pueden aplicar ajustes directamente. Use /api/adjust-request para solicitar aprobación.' });
   const { items, docNum, glosa, username } = req.body;
@@ -1398,7 +1400,7 @@ app.post('/api/import/inventory', requireStockWrite, async (req, res) => {
   } finally { client.release(); }
 });
 
-app.post('/api/import/receive', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), async (req, res) => {
+app.post('/api/import/receive', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   const { username, client_id, doc_num } = req.body;
   const rows = getImportRows(req.body);
   if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
@@ -1425,7 +1427,7 @@ app.post('/api/import/receive', stockWriteLimiter, requireStockWrite, checkClien
   } finally { dbClient.release(); }
 });
 
-app.post('/api/import/dispatch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), async (req, res) => {
+app.post('/api/import/dispatch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   const { username, doc_num } = req.body;
   const rows = getImportRows(req.body);
   if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
@@ -1703,7 +1705,7 @@ app.get('/api/analytics/client-movements', requireAuth, async (req, res) => {
 });
 
 // ── Guardar factura ────────────────────────────────────────────────────────────
-app.post('/api/billing/invoices', requireJefeOrAbove, async (req, res) => {
+app.post('/api/billing/invoices', requireJefeOrAbove, checkClientAccess('write', { required: true }), async (req, res) => {
   const { client_id, month, year, notes, due_date } = req.body;
   if (!client_id) return res.status(400).json({ error: 'client_id requerido.' });
   try {
@@ -1777,7 +1779,7 @@ app.get('/api/billing/summary', requireJefeOrAbove, async (req, res) => {
 });
 
 // Guardar tarifas personalizadas por cliente
-app.post('/api/client-tariffs', requireJefe, async (req, res) => {
+app.post('/api/client-tariffs', requireJefe, checkClientAccess('write', { required: true }), async (req, res) => {
   const { client_id, tariff_type, unit_price, currency, description } = req.body;
   if (!client_id || !tariff_type) return res.status(400).json({ error: 'client_id y tariff_type son requeridos.' });
   try {
@@ -2599,7 +2601,7 @@ app.get('/api/v1/movements', requireApiKey, async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 // ── Picker solicita una reubicación (no mueve stock) ─────────────────────
-app.post('/api/relocate-requests', requirePickerOrAbove, async (req, res) => {
+app.post('/api/relocate-requests', requirePickerOrAbove, checkLpnClientAccess('lpn_id'), async (req, res) => {
   const { lpn_id, location_to, qty, glosa } = req.body;
   if (!lpn_id || !location_to) return res.status(400).json({ error: 'lpn_id y location_to son requeridos.' });
   try {
@@ -2762,7 +2764,7 @@ app.get('/api/invoices', requireJefeOrAbove, async (req, res) => {
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }
 });
 // Generar factura automática desde actividad del período
-app.post('/api/invoices/generate', requireJefe, async (req, res) => {
+app.post('/api/invoices/generate', requireJefe, checkClientAccess('write', { required: true }), async (req, res) => {
   const { client_id, period_start, period_end, tax_rate, manual_lines } = req.body;
   if (!client_id || !period_start || !period_end) return res.status(400).json({ error: 'cliente, período inicio y fin son requeridos.' });
   const client = await pool.connect();
