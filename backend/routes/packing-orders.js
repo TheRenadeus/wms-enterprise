@@ -3,7 +3,7 @@
 
 const express = require('express');
 
-const { pool, mapDbError } = require('../db');
+const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireJefeOrAbove, requirePickerOrAbove } = require('../middleware');
 const { genLpnId } = require('../helpers');
 
@@ -33,7 +33,7 @@ router.post('/packing-orders', requireJefeOrAbove, async (req, res) => {
     }
     await client.query('COMMIT');
     res.json({ success: true, id });
-  } catch(e){ await client.query('ROLLBACK'); res.status(500).json({ error: mapDbError(e) }); }
+  } catch(e){ await client.query('ROLLBACK'); if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe una orden de packing para el documento '${dispatch_doc_num}' de este cliente.` }); res.status(500).json({ error: mapDbError(e) }); }
   finally { client.release(); }
 });
 

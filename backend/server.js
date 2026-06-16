@@ -7,7 +7,7 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 
-const { pool, mapDbError, sendDbError } = require('./db');
+const { pool, mapDbError, sendDbError, isUniqueViolation } = require('./db');
 const { getSandboxResponse } = require('./sandbox-data');
 const { runMigrations } = require('./migrations');
 const migrationList = require('./migrations/list');
@@ -670,6 +670,7 @@ app.post('/api/receive_batch', stockWriteLimiter, requireStockWrite, requireReau
     res.json({ success: true, imported: items.length, errors: [] });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (isUniqueViolation(err)) return res.status(409).json({ error: `El documento '${docNum}' ya fue procesado previamente para este cliente. No se puede registrar dos veces.` });
     console.error("Error Receive:", err.message);
     res.status(500).json({ error: mapDbError(err) });
   } finally { client.release(); }
@@ -808,6 +809,7 @@ app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, requireRea
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (isUniqueViolation(err)) return res.status(409).json({ error: `El documento '${docNum}' ya fue despachado previamente para este cliente. No se puede despachar dos veces.` });
     res.status(400).json({ error: err.message });
   } finally { client.release(); }
 });
@@ -1718,7 +1720,10 @@ app.post('/api/billing/invoices', requireJefeOrAbove, checkClientAccess('write',
        data.currency, notes||null, JSON.stringify(data.charges), req.user.username, due_date||null]
     );
     res.json({ success:true, id, data });
-  } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
+  } catch(e) {
+    if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe una factura para el cliente '${client_id}' en ese período (${month||'?'}/${year||'?'}).` });
+    res.status(500).json({ error: mapDbError(e) });
+  }
 });
 
 app.get('/api/billing/invoices', requireAuth, async (req, res) => {
@@ -2469,7 +2474,10 @@ app.post('/api/shipments', requireAuth, checkClientAccess('write'), async (req, 
        destination_address||destination||'', destination||destination_address||'',
        notes||'', created_by||username||'']);
     res.json({ success: true, id });
-  } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
+  } catch(e) {
+    if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe un envío con el documento '${doc_num||dispatch_doc_id}' para este cliente.` });
+    res.status(500).json({ error: mapDbError(e) });
+  }
 });
 app.put('/api/shipments/:id/status', requireStockWrite, async (req, res) => {
   const { status } = req.body;
@@ -2771,7 +2779,14 @@ app.post('/api/invoices/generate', requireJefe, checkClientAccess('write', { req
   try {
     await client.query('BEGIN');
     const id = genLpnId('INV');
-    const invNum = `F-${Date.now()}`;
+    // Correlativo de factura POR CLIENTE (atómico, a prueba de concurrencia).
+    const seq = await client.query(
+      `INSERT INTO invoice_counters (client_id, last_num) VALUES ($1, 1)
+       ON CONFLICT (client_id) DO UPDATE SET last_num = invoice_counters.last_num + 1
+       RETURNING last_num`,
+      [client_id]
+    );
+    const invNum = `F-${client_id}-${String(seq.rows[0].last_num).padStart(5, '0')}`;
     await client.query(`INSERT INTO invoices (id,invoice_num,client_id,period_start,period_end,tax_rate,created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [id, invNum, client_id, period_start, period_end, parseFloat(tax_rate)||19, req.user.username]);
 
@@ -2802,7 +2817,11 @@ app.post('/api/invoices/generate', requireJefe, checkClientAccess('write', { req
       [subtotal, taxAmt, subtotal+taxAmt, id]);
     await client.query('COMMIT');
     res.json({ success: true, id, invoice_num: invNum, subtotal, total: subtotal+taxAmt });
-  } catch(e){ await client.query('ROLLBACK'); res.status(500).json({ error: mapDbError(e) }); }
+  } catch(e){
+    await client.query('ROLLBACK');
+    if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe una factura con ese número para el cliente '${client_id}'.` });
+    res.status(500).json({ error: mapDbError(e) });
+  }
   finally { client.release(); }
 });
 app.post('/api/invoices/:id/issue', requireJefe, async (req, res) => {
@@ -2893,7 +2912,10 @@ app.post('/api/dispatch-schedules', requireJefeOrAbove, checkClientAccess('write
        scheduled_date, scheduled_time||null, carrier||null, destination||null, notes||null, req.user.username]
     );
     res.json({ success: true, id });
-  } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
+  } catch (err) {
+    if (isUniqueViolation(err)) return res.status(409).json({ error: `Ya existe una programación con el documento '${doc_num}' para este cliente y tipo.` });
+    res.status(500).json({ error: mapDbError(err) });
+  }
 });
 
 app.patch('/api/dispatch-schedules/:id', requireJefeOrAbove, async (req, res) => {

@@ -6,7 +6,7 @@
 
 const express = require('express');
 
-const { pool, mapDbError, sendDbError } = require('../db');
+const { pool, mapDbError, sendDbError, isUniqueViolation } = require('../db');
 const { requireJefeOrAbove, requirePickerOrAbove, requireStockWrite } = require('../middleware');
 const { genLpnId } = require('../helpers');
 
@@ -79,6 +79,7 @@ router.post('/pick-tasks', requireStockWrite, async (req, res) => {
     res.json({ success: true, task_ids: createdTasks, count: createdTasks.length });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (isUniqueViolation(err)) return res.status(409).json({ error: `Ya existe una tarea de picking activa para ese documento y cliente.` });
     res.status(500).json({ error: mapDbError(err) });
   } finally { client.release(); }
 });

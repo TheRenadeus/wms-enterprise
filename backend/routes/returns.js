@@ -3,7 +3,7 @@
 // La inspección puede repostear stock si disposition=RESTOCK.
 
 const express = require('express');
-const { pool, mapDbError } = require('../db');
+const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireAuth, requireJefeOrAbove, checkClientAccess } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId } = require('../helpers');
@@ -58,6 +58,7 @@ router.post('/returns', requireAuth, checkClientAccess('write', { required: true
     res.json({ success: true, returnId });
   } catch(e) {
     await client.query('ROLLBACK');
+    if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe una devolución con el número '${doc_num}' para este cliente y tipo.` });
     res.status(400).json({ error: e.message || mapDbError(e) });
   } finally { client.release(); }
 });
