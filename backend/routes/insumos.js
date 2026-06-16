@@ -2,7 +2,7 @@
 // Fase 1: maestro de materiales (CRUD con borrado lógico).
 const express = require('express');
 const { pool, mapDbError, isUniqueViolation } = require('../db');
-const { requireAuth, requireJefe, requireStockWrite } = require('../middleware');
+const { requireAuth, requireJefe, requireStockWrite, getClientesPermitidos } = require('../middleware');
 
 const router = express.Router();
 
@@ -172,6 +172,43 @@ router.get('/insumos/:id/movimientos', requireAuth, async (req, res) => {
   try {
     const r = await pool.query(
       `SELECT * FROM insumo_movimientos WHERE insumo_id = $1 ORDER BY fecha DESC LIMIT 200`, [req.params.id]
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+// ── GET /insumos/documentos ── busca despachos/recepciones CONFIRMADOS por número
+// O por cliente (parcial, case-insensitive), filtrable por tipo. Respeta scope:
+// EJECUTIVO_CUENTA solo ve documentos de sus clientes asignados; JEFE/ADMIN todos.
+router.get('/insumos/documentos', requireAuth, async (req, res) => {
+  const { tipo, q } = req.query;
+  try {
+    const conds = ["dh.status = 'ACTIVO'", "dh.module IN ('receive','dispatch')"];
+    const params = [];
+    let idx = 1;
+    if (tipo === 'dispatch' || tipo === 'receive') { conds.push(`dh.module = $${idx++}`); params.push(tipo); }
+    if (q && String(q).trim()) {
+      conds.push(`(dh.doc_num ILIKE $${idx} OR dh.client_id ILIKE $${idx} OR c.name ILIKE $${idx})`);
+      params.push(`%${String(q).trim()}%`); idx++;
+    }
+    // Scope por cliente (no admin): limitar a clientes asignados.
+    if (!['ADMIN', 'SUPERADMIN'].includes(req.user.role) && !req.user.is_demo) {
+      const perm = await getClientesPermitidos(req.user.username);
+      if (perm.scope === 'none') return res.json([]);
+      if (perm.scope === 'assigned') {
+        if (!perm.clients.length) return res.json([]);
+        conds.push(`dh.client_id = ANY($${idx++})`); params.push(perm.clients);
+      }
+    }
+    params.push(50);
+    const r = await pool.query(
+      `SELECT dh.id, dh.module, dh.doc_num, dh.doc_type, dh.client_id,
+              COALESCE(c.name, dh.client_id) AS client_name, dh.created_at, dh.status, dh.total_qty
+         FROM document_history dh
+         LEFT JOIN clients c ON c.id = dh.client_id
+        WHERE ${conds.join(' AND ')}
+        ORDER BY dh.created_at DESC LIMIT $${idx}`,
+      params
     );
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
