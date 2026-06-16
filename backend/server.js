@@ -878,6 +878,17 @@ app.post('/api/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Anti-reúso: el número de hoja de ajuste no se puede reutilizar por cliente.
+    const adjType = 'ADJ';
+    const firstAdjSku = await client.query('SELECT client_id FROM master_skus WHERE sku=$1 LIMIT 1', [String(items[0]?.sku)]);
+    const adjClientId = String(req.body.client_id || firstAdjSku.rows[0]?.client_id || 'GENERAL').toUpperCase();
+    if (docNum) {
+      const alreadyAdj = await client.query('SELECT 1 FROM processed_docs WHERE doc_num=$1 AND doc_type=$2 AND client_id=$3', [String(docNum).toUpperCase(), adjType, adjClientId]);
+      if (alreadyAdj.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: `La hoja de ajuste '${docNum}' ya fue cerrada para este cliente. No se puede reutilizar.` });
+      }
+    }
     for (let it of items) {
       const sku = String(it.sku);
       const qty = parseFloat(it.qty);
@@ -944,12 +955,14 @@ app.post('/api/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess(
       }
     }
     await client.query('DELETE FROM inventory_lpns WHERE qty <= 0');
-    await client.query('COMMIT'); 
+    if (docNum) await client.query('INSERT INTO processed_docs(doc_num,doc_type,client_id,processed_by) VALUES($1,$2,$3,$4)', [String(docNum).toUpperCase(), adjType, adjClientId, username || 'SYSTEM']);
+    await client.query('COMMIT');
     res.json({ success: true });
-  } catch (err) { 
-    await client.query('ROLLBACK'); 
+  } catch (err) {
+    await client.query('ROLLBACK');
+    if (isUniqueViolation(err)) return res.status(409).json({ error: `La hoja de ajuste '${docNum}' ya fue cerrada para este cliente. No se puede reutilizar.` });
     console.error("Error Adjust:", err.message);
-    res.status(400).json({ error: err.message }); 
+    res.status(400).json({ error: err.message });
   } finally { client.release(); }
 });
 

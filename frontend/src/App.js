@@ -818,9 +818,10 @@ export default function App() {
     if (newDocClient && !canOperateClient(newDocClient)) return showMsg("No tiene permiso para operar con ese cliente", true);
     const docClient = is3PLMode ? newDocClient : (systemConfig.own_client_id || 'PROPIO');
     // Un documento ya cerrado no se puede reutilizar ni reabrir para agregar movimientos.
-    if (module === 'receive' || module === 'dispatch') {
+    if (module === 'receive' || module === 'dispatch' || module === 'adjust') {
       try {
-        const qs = new URLSearchParams({ doc_num: newDocNum, doc_type: newDocType || '', client_id: docClient || '' });
+        const checkType = module === 'adjust' ? 'ADJ' : (newDocType || '');
+        const qs = new URLSearchParams({ doc_num: newDocNum, doc_type: checkType, client_id: docClient || '' });
         const r = await apiFetch(`${host}/api/processed-docs/exists?${qs.toString()}`);
         if (r.ok) { const d = await r.json(); if (d.exists) return showMsg(`⛔ El documento ${newDocNum} ya fue cerrado para este cliente; no se puede reutilizar.`, true); }
       } catch (err) { /* si falla la verificación, el backend igualmente bloquea el cierre (409) */ }
@@ -6036,7 +6037,7 @@ export default function App() {
                       <div className="flex gap-3 mb-3">
                         <select value={newPOLine.sku} onChange={e=>setNewPOLine({...newPOLine,sku:e.target.value})} className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white uppercase">
                           <option value="">-- SKU --</option>
-                          {permittedSkus.map(s=><option key={s.sku} value={s.sku}>{s.sku} — {s.desc}</option>)}
+                          {permittedSkus.filter(s=>!newPO.client_id || (s.client_id||'')===newPO.client_id).map(s=><option key={s.sku} value={s.sku}>{s.sku} — {s.desc}</option>)}
                         </select>
                         <input type="number" min="0.01" placeholder="Cant. Esperada" value={newPOLine.expected_qty} onChange={e=>setNewPOLine({...newPOLine,expected_qty:e.target.value})} className="w-36 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none text-center"/>
                         <button onClick={() => { if (!newPOLine.sku || !newPOLine.expected_qty) return; setNewPO(p=>({...p,items:[...p.items,{...newPOLine}]})); setNewPOLine({sku:'',expected_qty:''}); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Plus size={12}/> Agregar</button>
@@ -6049,7 +6050,7 @@ export default function App() {
                       ))}
                     </div>
                     <div className="flex gap-3">
-                      <button disabled={!newPO.doc_num || !newPO.supplier || newPO.items.length===0} onClick={async () => { const poPayload={...newPO,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !poPayload.client_id) poPayload.client_id=systemConfig.own_client_id||'PROPIO'; const res = await apiFetch(`${host}/api/purchase-orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(poPayload)}); if(res.ok){const d=await res.json(); showMsg(`✅ OC ${d.poId} creada`); setNewPO({doc_num:'',supplier:'',client_id:'',expected_date:'',notes:'',items:[]}); setShowPOForm(false); const r2=await apiFetch(`${host}/api/purchase-orders`); setPurchaseOrders(await r2.json());} else showMsg('⛔ Error',true); }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50">Crear Orden de Compra</button>
+                      <button disabled={!newPO.doc_num || !newPO.supplier || newPO.items.length===0} onClick={async () => { const poPayload={...newPO,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !poPayload.client_id) poPayload.client_id=systemConfig.own_client_id||'PROPIO'; if(is3PLMode && !poPayload.client_id) return showMsg('⛔ Selecciona el cliente de la orden de compra', true); const res = await apiFetch(`${host}/api/purchase-orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(poPayload)}); if(res.ok){const d=await res.json(); showMsg(`✅ OC ${d.poId} creada`); setNewPO({doc_num:'',supplier:'',client_id:'',expected_date:'',notes:'',items:[]}); setShowPOForm(false); const r2=await apiFetch(`${host}/api/purchase-orders`); setPurchaseOrders(await r2.json());} else { const e=await res.json().catch(()=>({})); showMsg(`⛔ ${e.error||'Error'}`,true); } }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50">Crear Orden de Compra</button>
                       <button onClick={() => setShowPOForm(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[10px]">Cancelar</button>
                     </div>
                   </div>
@@ -7300,7 +7301,7 @@ export default function App() {
                     <div className="grid grid-cols-3 gap-3">
                       <select value={returnLineItem.sku} onChange={e=>setReturnLineItem({...returnLineItem,sku:e.target.value})} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white uppercase">
                         <option value="">-- SKU --</option>
-                        {permittedSkus.map(s=><option key={s.sku} value={s.sku}>{s.sku}</option>)}
+                        {permittedSkus.filter(s=>!newReturn.client_id || (s.client_id||'')===newReturn.client_id).map(s=><option key={s.sku} value={s.sku}>{s.sku}</option>)}
                       </select>
                       <input type="number" placeholder="Cantidad" value={returnLineItem.qty} onChange={e=>setReturnLineItem({...returnLineItem,qty:e.target.value})} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none"/>
                       <select value={returnLineItem.condition} onChange={e=>setReturnLineItem({...returnLineItem,condition:e.target.value})} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white">
@@ -7320,7 +7321,7 @@ export default function App() {
                       ))}
                     </div>
                   )}
-                  <button disabled={!newReturn.doc_num || !newReturn.reason || newReturn.items.length===0} onClick={async () => { const retPayload={...newReturn,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !retPayload.client_id) retPayload.client_id=systemConfig.own_client_id||'PROPIO'; const res = await apiFetch(`${host}/api/returns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(retPayload)}); if (res.ok) { const d=await res.json(); showMsg(`✅ Devolución ${d.returnId} procesada`); setNewReturn({doc_num:'',doc_type:'DEVOLUCION',client_id:'',reason:'',glosa:'',items:[]}); fetchData(); } else showMsg('⛔ Error',true); }} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"><ArrowLeft size={16}/> Procesar Devolución e Ingresar Stock</button>
+                  <button disabled={!newReturn.doc_num || !newReturn.reason || newReturn.items.length===0} onClick={async () => { const retPayload={...newReturn,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !retPayload.client_id) retPayload.client_id=systemConfig.own_client_id||'PROPIO'; if(is3PLMode && !retPayload.client_id) return showMsg('⛔ Selecciona el cliente de la devolución', true); const res = await apiFetch(`${host}/api/returns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(retPayload)}); if (res.ok) { const d=await res.json(); showMsg(`✅ Devolución ${d.returnId} procesada`); setNewReturn({doc_num:'',doc_type:'DEVOLUCION',client_id:'',reason:'',glosa:'',items:[]}); fetchData(); } else { const e=await res.json().catch(()=>({})); showMsg(`⛔ ${e.error||'Error'}`,true); } }} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"><ArrowLeft size={16}/> Procesar Devolución e Ingresar Stock</button>
                 </div>
                 {returnsData.length > 0 && (
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
