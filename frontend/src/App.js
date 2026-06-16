@@ -596,8 +596,6 @@ export default function App() {
   const closeConfirm = () => setConfirmDialog(null);
 
   const [relSearchTerm, setRelSearchTerm] = useState('');
-  // Filtro "trabajar por cliente" compartido por recepción / despacho / reubicación
-  const [opsClientFilter, setOpsClientFilter] = useState('');
   const [destinations, setDestinations] = useState({});
   const [glosas, setGlosas] = useState({});
   const [relocateQtys, setRelocateQtys] = useState({});
@@ -831,6 +829,7 @@ export default function App() {
   const handleCommitAPI = async (endpoint, module) => {
     if (!activeDoc || activeDoc.items.length === 0) return;
     if (isCommitting) return; // evitar doble submit
+    if (isWriteBlocked) { showMsg('⛔ Selecciona un cliente específico para confirmar esta operación', true); return; }
     // Step-up: recepción y despacho exigen re-clave del usuario.
     let reauthPw = '';
     if (module === 'receive' || module === 'dispatch') {
@@ -894,6 +893,7 @@ export default function App() {
 
   const openDispatchConfirm = () => {
     if (!activeDoc || activeDoc.items.length === 0) return;
+    if (isWriteBlocked) { showMsg('⛔ Selecciona un cliente específico para despachar', true); return; }
     const initialQtys = {};
     activeDoc.items.forEach((it, idx) => { initialQtys[idx] = it.qtyToPick; });
     setShipQtys(initialQtys);
@@ -1127,6 +1127,10 @@ export default function App() {
     setIsSavingSku(true);
     const payload = { ...skuForm, requires_lot: skuForm.traceability === 'LOT', requires_serial: skuForm.traceability === 'SERIAL', username: currentUser?.username };
     if ((!is3PLMode || isHybridMode) && !payload.client_id) payload.client_id = systemConfig.own_client_id || 'PROPIO';
+    // Cliente activo: en creación 3PL en modo single, el dueño se fija al cliente activo.
+    if (is3PLMode && !isEditingSku && activeClientMode === 'single' && activeClientId) payload.client_id = activeClientId;
+    // En 3PL no se permite crear SKU sin cliente específico (modo "Todos" exige elegir uno).
+    if (is3PLMode && !isEditingSku && !payload.client_id) { setIsSavingSku(false); showMsg('⛔ Selecciona un cliente específico para el nuevo SKU', true); return; }
     try {
       // En edición → PUT (puede versionar). En creación → POST.
       const url = isEditingSku ? `${host}/api/skus/${encodeURIComponent(skuForm.sku)}` : `${host}/api/skus`;
@@ -1199,6 +1203,7 @@ export default function App() {
   const handleSaveAlert = async (e) => { e.preventDefault(); try { const res = await apiFetch(`${host}/api/skus/alerts`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(alertForm)}); if(res.ok){showMsg('✅ Límites de stock guardados');setAlertForm({sku:'',client_id:'',stock_min:'',stock_max:''});fetchData();}else{const err=await res.json();showMsg(`⛔ ${err.error}`,true);}}catch(e){showMsg('⛔ Error de red',true);}};
 
   const handleRelocate = async (id, currentLoc, maxQty) => {
+    if (isWriteBlocked) { showMsg('⛔ Selecciona un cliente específico para reubicar', true); return; }
     const newLoc = destinations[id];
     const moveQty = relocateQtys[id] ? parseFloat(relocateQtys[id]) : parseFloat(maxQty);
     if (!newLoc || newLoc === currentLoc) return;
@@ -1273,6 +1278,8 @@ export default function App() {
     try {
       const kitPayload = { ...kitForm };
       if ((!is3PLMode || isHybridMode) && !kitPayload.client_id) kitPayload.client_id = systemConfig.own_client_id || 'PROPIO';
+      if (is3PLMode && activeClientMode === 'single' && activeClientId) kitPayload.client_id = activeClientId;
+      if (is3PLMode && !kitPayload.client_id) return showMsg('⛔ Selecciona un cliente específico para crear el kit', true);
       const res = await apiFetch(`${host}/api/kits`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(kitPayload) });
       if (res.ok) { showMsg('✅ Kit guardado'); setKitForm({ kit_sku: '', client_id: '', description: '', components: [] }); setKitComponentLine({ sku: '', qty: '' }); fetchData(); }
       else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
@@ -1360,6 +1367,16 @@ export default function App() {
     activeClientId, activeClientMode, activeClient,
     setActiveClient, options: activeClientOptions, canSeeAll: canSeeAllClients,
   };
+  // Sincroniza los formularios de creación (OC, devolución, kit, conteo) con el
+  // cliente activo en modo single, para que el client_id quede pre-asignado y visible.
+  useEffect(() => {
+    if (!is3PLMode || activeClientMode !== 'single' || !activeClientId) return;
+    setNewPO(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
+    setNewReturn(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
+    setKitForm(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
+    setCcFilter(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeClientId, activeClientMode, is3PLMode]);
   // Banner informativo para módulos operativos.
   const opsScopeBanner = (() => {
     if (opsClientScope === 'all') return null;
@@ -1385,23 +1402,56 @@ export default function App() {
       </div>
     );
   })();
-  const permittedSkus = isAllClients ? safeSkus : safeSkus.filter(s => userClientsArray.includes(s.client_id) || !s.client_id || s.client_id === 'GENERAL');
-  const permittedInventory = isAllClients ? safeData : safeData.filter(i => userClientsArray.includes(i.client_id) || !i.client_id || i.client_id === 'GENERAL');
+  // Scope COMPLETO del usuario (todos sus clientes permitidos), sin aplicar el cliente activo.
+  const permittedSkusAll = isAllClients ? safeSkus : safeSkus.filter(s => userClientsArray.includes(s.client_id) || !s.client_id || s.client_id === 'GENERAL');
+  const permittedInventoryAll = isAllClients ? safeData : safeData.filter(i => userClientsArray.includes(i.client_id) || !i.client_id || i.client_id === 'GENERAL');
 
-  // ── "Trabajar por cliente": acota catálogos de SKU en recepción/despacho al cliente elegido ──
-  const opsSkus = opsClientFilter ? permittedSkus.filter(s => (s.client_id || '') === opsClientFilter) : permittedSkus;
-  // Barra reutilizable de selección de cliente para módulos operativos (solo 3PL/HYBRID).
-  const opsClientBar = is3PLMode ? (
-    <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-xl px-4 py-2.5 flex items-center gap-3 shadow-sm">
-      <Building2 size={15} className="text-indigo-500 shrink-0"/>
-      <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest shrink-0">Trabajar por cliente</span>
-      <select value={opsClientFilter} onChange={e=>setOpsClientFilter(e.target.value)} className="flex-1 border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-indigo-400 bg-white text-slate-700">
-        <option value="">— Todos los clientes —</option>
-        {opsClients.map(c => <option key={c.id} value={c.id}>{c.id} · {c.name}</option>)}
-      </select>
-      {opsClientFilter && <button type="button" onClick={()=>setOpsClientFilter('')} className="bg-red-50 text-red-500 border border-red-200 rounded-lg px-2.5 py-2 text-[9px] font-black uppercase flex items-center gap-1 shrink-0"><X size={10}/> Limpiar</button>}
-    </div>
-  ) : null;
+  // ── CLIENTE ACTIVO (Fase 3): helpers de filtrado/escritura ──────────────────
+  // En modo 'single' acota al cliente activo; en modo 'Todos' (all) no acota.
+  const activeClientMatch = (cid) => (activeClientMode === 'all' || !activeClientId) ? true : (cid || '') === activeClientId;
+  // En modo 'Todos' las escrituras quedan bloqueadas (listados consolidados de solo lectura).
+  const isWriteBlocked = activeClientMode === 'all';
+  // KPIs/agregados del backend (globales) solo en modo "Todos"; en single se derivan del inventario filtrado.
+  const useGlobalStats = isAllClients && activeClientMode === 'all';
+  // Filtro tolerante para DOCUMENTOS (OC, devoluciones, conteos, kits, facturas):
+  // los registros sin cliente específico ('' o GENERAL) se ven siempre.
+  const filterDocByActiveClient = (arr) => Array.isArray(arr) ? arr.filter(x => {
+    if (activeClientMode === 'all' || !activeClientId) return true;
+    const cid = x?.client_id;
+    if (!cid || cid === 'GENERAL') return true;
+    return cid === activeClientId;
+  }) : [];
+
+  // Catálogos ya filtrados por el cliente activo (cubren SKUs, inventario y todos
+  // los módulos operativos que derivan de estos arrays).
+  const permittedSkus = permittedSkusAll.filter(s => activeClientMatch(s.client_id));
+  const permittedInventory = permittedInventoryAll.filter(i => activeClientMatch(i.client_id));
+  const opsSkus = permittedSkus; // alias: el filtrado por cliente ya está aplicado en el origen
+  // Listados de documentos acotados al cliente activo (Tier B).
+  const viewPurchaseOrders = filterDocByActiveClient(purchaseOrders);
+  const viewReturns = filterDocByActiveClient(returns);
+  const viewKits = filterDocByActiveClient(kits);
+  const viewInvoices = filterDocByActiveClient(invoices);
+  const viewCycleCounts = filterDocByActiveClient(cycleCountData);
+
+  // Banner de contexto para módulos operativos (solo 3PL/HYBRID): muestra el cliente
+  // activo o, en modo "Todos", avisa que la escritura está bloqueada.
+  const opsClientBar = (() => {
+    if (!is3PLMode) return null;
+    if (isWriteBlocked) return (
+      <div className="max-w-4xl mx-auto bg-amber-50 border border-amber-300 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[11px] font-bold text-amber-800">
+        <ShieldAlert size={14} className="shrink-0"/>
+        <span>Modo <b>Todos los clientes</b> (solo lectura). Selecciona un cliente específico en la cabecera para crear o confirmar operaciones.</span>
+      </div>
+    );
+    if (activeClient) return (
+      <div className="max-w-4xl mx-auto bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[11px] font-bold text-indigo-700">
+        <Building2 size={14} className="shrink-0"/>
+        <span>Operando sobre el cliente: <b>{activeClient.name || activeClient.id}</b> <span className="font-mono opacity-70">({activeClient.id})</span></span>
+      </div>
+    );
+    return null;
+  })();
 
   const selSku = permittedSkus.find(s => s.sku === lineItem.sku) || {};
   
@@ -1482,9 +1532,7 @@ export default function App() {
 
   const filteredRelData = permittedInventory.filter(i => {
     const term = relSearchTerm.toLowerCase();
-    const matchesSearch = i.id.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term) || (i.location_id || '').toLowerCase().includes(term);
-    const matchesClient = opsClientFilter ? (i.client_id || '') === opsClientFilter : true;
-    return matchesSearch && matchesClient;
+    return i.id.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term) || (i.location_id || '').toLowerCase().includes(term);
   });
   
   const filteredSkusList = useMemo(() => permittedSkus.filter(s => {
@@ -2423,7 +2471,7 @@ export default function App() {
                     <div className="relative z-10">
                       <div className="p-3 bg-white/20 rounded-xl w-fit mb-4 backdrop-blur-md group-hover:bg-white/30 transition-colors"><Package className="text-white"/></div>
                       <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-100">Unidades Totales</h3>
-                      <p className="text-4xl font-black mt-1">{isAllClients ? Number(stats?.units || 0).toLocaleString() : permittedInventory.reduce((sum, i) => sum + parseFloat(i.qty), 0).toLocaleString()}</p>
+                      <p className="text-4xl font-black mt-1">{useGlobalStats ? Number(stats?.units || 0).toLocaleString() : permittedInventory.reduce((sum, i) => sum + parseFloat(i.qty), 0).toLocaleString()}</p>
                     </div>
                     <Box className="absolute -bottom-6 -right-4 w-40 h-40 text-white opacity-10 group-hover:scale-110 transition-transform duration-500" />
                   </div>
@@ -2431,13 +2479,13 @@ export default function App() {
                   <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-all hover:shadow-md cursor-default">
                     <div className="p-3 bg-emerald-50 rounded-xl w-fit mb-4 group-hover:bg-emerald-100 transition-colors"><Box className="text-emerald-600"/></div>
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">LPNs Activos</h3>
-                    <p className="text-4xl font-black text-slate-800 mt-1">{isAllClients ? Number(stats?.lpns || 0).toLocaleString() : permittedInventory.length.toLocaleString()}</p>
+                    <p className="text-4xl font-black text-slate-800 mt-1">{useGlobalStats ? Number(stats?.lpns || 0).toLocaleString() : permittedInventory.length.toLocaleString()}</p>
                   </div>
 
                   <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-purple-300 transition-all hover:shadow-md cursor-default">
                     <div className="p-3 bg-purple-50 rounded-xl w-fit mb-4 group-hover:bg-purple-100 transition-colors"><FileText className="text-purple-600"/></div>
                     <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Catálogo SKUs</h3>
-                    <p className="text-4xl font-black text-slate-800 mt-1">{isAllClients ? Number(stats?.skus || 0).toLocaleString() : permittedSkus.length.toLocaleString()}</p>
+                    <p className="text-4xl font-black text-slate-800 mt-1">{useGlobalStats ? Number(stats?.skus || 0).toLocaleString() : permittedSkus.length.toLocaleString()}</p>
                   </div>
 
                   {is3PLMode && (
@@ -3317,10 +3365,10 @@ export default function App() {
                   {/* Panel derecho: lista de kits */}
                   <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
                     <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kits Definidos ({kits.length})</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kits Definidos ({viewKits.length})</p>
                     </div>
                     <div className="space-y-4">
-                      {kits.map(k => (
+                      {viewKits.map(k => (
                         <div key={`${k.kit_sku}-${k.client_id}`} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:bg-white transition-colors shadow-sm">
                           <div className="flex justify-between items-start mb-3">
                             <div>
@@ -3344,7 +3392,7 @@ export default function App() {
                           </div>
                         </div>
                       ))}
-                      {kits.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay kits definidos</p></div>}
+                      {viewKits.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay kits definidos</p></div>}
                     </div>
                   </div>
                 </div>
@@ -3360,7 +3408,7 @@ export default function App() {
                         <label className="text-[10px] font-black text-slate-400 uppercase">Kit (SKU) *</label>
                         <select value={kitBuildForm.kit_sku} onChange={e=>{ setKitBuildForm({...kitBuildForm,kit_sku:e.target.value}); setKitAvailability(null); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
                           <option value="">-- Seleccionar --</option>
-                          {kits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
+                          {viewKits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
                         </select>
                       </div>
                       <div className="space-y-1">
@@ -3424,7 +3472,7 @@ export default function App() {
                           onChange={e=>{ setKitDispatchForm({...kitDispatchForm, kit_sku:e.target.value}); setKitDispatchAvail(null); }}
                           className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 bg-white">
                           <option value="">-- Seleccionar --</option>
-                          {kits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
+                          {viewKits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
                         </select>
                       </div>
                       <div className="space-y-1">
@@ -4684,10 +4732,19 @@ export default function App() {
                           <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Código de Barras (UPC/EAN)</label><input type="text" value={skuForm.barcode || ''} onChange={e=>setSkuForm({...skuForm, barcode: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500" placeholder="Opcional"/></div>
                           {is3PLMode && (
                             <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Cliente / Dueño *</label>
-                              <select value={skuForm.client_id || ''} onChange={e=>setSkuForm({...skuForm, client_id: e.target.value})} required disabled={isEditingSku} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 ${isEditingSku ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300' : 'bg-white'}`}>
-                                <option value="">-- Seleccione Cliente --</option>
-                                {clients.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
-                              </select>
+                              {isEditingSku ? (
+                                <select value={skuForm.client_id || ''} disabled className="w-full border-2 rounded-xl px-4 py-3 text-sm font-bold bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300">
+                                  <option value="">-- Cliente --</option>
+                                  {clients.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
+                                </select>
+                              ) : (activeClientMode === 'single' && activeClient) ? (
+                                <div className="w-full border-2 border-indigo-200 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-black text-indigo-700 flex items-center gap-2"><Building2 size={14} className="shrink-0"/> {activeClient.name || activeClient.id} <span className="font-mono opacity-70 text-xs">({activeClient.id})</span></div>
+                              ) : (
+                                <select value={skuForm.client_id || ''} onChange={e=>setSkuForm({...skuForm, client_id: e.target.value})} required className="w-full border-2 border-amber-300 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-amber-500 bg-amber-50">
+                                  <option value="">-- Selecciona un cliente --</option>
+                                  {activeClientOptions.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
+                                </select>
+                              )}
                             </div>
                           )}
                         </div>
@@ -5658,16 +5715,6 @@ export default function App() {
                         >{m.icon} {m.label}</button>
                       ))}
                     </div>
-                    {/* Trabajar por cliente */}
-                    {is3PLMode && (
-                      <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
-                        <Building2 size={14} className="text-indigo-400 mr-2"/>
-                        <select value={opsClientFilter} onChange={e=>setOpsClientFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none text-slate-700 max-w-[180px]">
-                          <option value="">Todos los clientes</option>
-                          {opsClients.map(c => <option key={c.id} value={c.id}>{c.id} · {c.name}</option>)}
-                        </select>
-                      </div>
-                    )}
                     {/* Búsqueda */}
                     <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-56">
                       <Search size={14} className="text-slate-400 mr-2"/>
@@ -6170,7 +6217,7 @@ export default function App() {
                       ))}
                     </div>
                     <div className="flex gap-3">
-                      <button disabled={!newPO.doc_num || !newPO.supplier || newPO.items.length===0} onClick={async () => { const poPayload={...newPO,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !poPayload.client_id) poPayload.client_id=systemConfig.own_client_id||'PROPIO'; const res = await apiFetch(`${host}/api/purchase-orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(poPayload)}); if(res.ok){const d=await res.json(); showMsg(`✅ OC ${d.poId} creada`); setNewPO({doc_num:'',supplier:'',client_id:'',expected_date:'',notes:'',items:[]}); setShowPOForm(false); const r2=await apiFetch(`${host}/api/purchase-orders`); setPurchaseOrders(await r2.json());} else showMsg('⛔ Error',true); }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50">Crear Orden de Compra</button>
+                      <button disabled={!newPO.doc_num || !newPO.supplier || newPO.items.length===0} onClick={async () => { const poPayload={...newPO,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !poPayload.client_id) poPayload.client_id=systemConfig.own_client_id||'PROPIO'; if(is3PLMode && activeClientMode==='single' && activeClientId) poPayload.client_id=activeClientId; if(is3PLMode && !poPayload.client_id){ showMsg('⛔ Selecciona un cliente específico para crear la OC',true); return; } const res = await apiFetch(`${host}/api/purchase-orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(poPayload)}); if(res.ok){const d=await res.json(); showMsg(`✅ OC ${d.poId} creada`); setNewPO({doc_num:'',supplier:'',client_id:'',expected_date:'',notes:'',items:[]}); setShowPOForm(false); const r2=await apiFetch(`${host}/api/purchase-orders`); setPurchaseOrders(await r2.json());} else showMsg('⛔ Error',true); }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50">Crear Orden de Compra</button>
                       <button onClick={() => setShowPOForm(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[10px]">Cancelar</button>
                     </div>
                   </div>
@@ -6246,12 +6293,13 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {purchaseOrders.map(po => (
+                    {viewPurchaseOrders.map(po => (
                       <div key={po.id} className={`bg-white p-5 rounded-2xl border shadow-sm flex items-center justify-between hover:shadow-md transition-all ${po.status==='COMPLETED'?'border-emerald-200':po.status==='PARTIAL'?'border-amber-200':'border-slate-200'}`}>
                         <div>
                           <div className="flex items-center gap-3 mb-1">
                             <p className="text-sm font-black text-slate-800 uppercase">{po.doc_num}</p>
                             <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${po.status==='COMPLETED'?'bg-emerald-100 text-emerald-700':po.status==='PARTIAL'?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600'}`}>{po.status}</span>
+                            {is3PLMode && activeClientMode==='all' && po.client_id && <span className="text-[9px] font-black px-2 py-0.5 rounded uppercase bg-indigo-100 text-indigo-700"><Building2 size={9} className="inline mr-0.5"/>{clients.find(c=>c.id===po.client_id)?.name||po.client_id}</span>}
                           </div>
                           <p className="text-[10px] text-slate-500 font-bold">Proveedor: {po.supplier} · {po.received_lines}/{po.total_lines} líneas recibidas</p>
                           {po.expected_date && <p className="text-[9px] text-slate-400 mt-0.5">Esperado: {new Date(po.expected_date).toLocaleDateString('es-ES')}</p>}
@@ -6259,7 +6307,7 @@ export default function App() {
                         <button onClick={async () => { const res = await apiFetch(`${host}/api/purchase-orders/${po.id}/lines`); const d = await res.json(); setActivePO(d.po); setPoLines(d.lines); setPoReceivedQtys({}); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Search size={12}/> Ver / Comparar</button>
                       </div>
                     ))}
-                    {purchaseOrders.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400"><FileText className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">No hay órdenes. Presiona Cargar o crea una nueva.</p></div>}
+                    {viewPurchaseOrders.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400"><FileText className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">No hay órdenes. Presiona Cargar o crea una nueva.</p></div>}
                   </div>
                 )}
               </div>
@@ -7441,7 +7489,7 @@ export default function App() {
                       ))}
                     </div>
                   )}
-                  <button disabled={!newReturn.doc_num || !newReturn.reason || newReturn.items.length===0} onClick={async () => { const retPayload={...newReturn,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !retPayload.client_id) retPayload.client_id=systemConfig.own_client_id||'PROPIO'; const res = await apiFetch(`${host}/api/returns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(retPayload)}); if (res.ok) { const d=await res.json(); showMsg(`✅ Devolución ${d.returnId} procesada`); setNewReturn({doc_num:'',doc_type:'DEVOLUCION',client_id:'',reason:'',glosa:'',items:[]}); fetchData(); } else showMsg('⛔ Error',true); }} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"><ArrowLeft size={16}/> Procesar Devolución e Ingresar Stock</button>
+                  <button disabled={!newReturn.doc_num || !newReturn.reason || newReturn.items.length===0} onClick={async () => { const retPayload={...newReturn,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !retPayload.client_id) retPayload.client_id=systemConfig.own_client_id||'PROPIO'; if(is3PLMode && activeClientMode==='single' && activeClientId) retPayload.client_id=activeClientId; if(is3PLMode && !retPayload.client_id){ showMsg('⛔ Selecciona un cliente específico para la devolución',true); return; } const res = await apiFetch(`${host}/api/returns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(retPayload)}); if (res.ok) { const d=await res.json(); showMsg(`✅ Devolución ${d.returnId} procesada`); setNewReturn({doc_num:'',doc_type:'DEVOLUCION',client_id:'',reason:'',glosa:'',items:[]}); fetchData(); } else showMsg('⛔ Error',true); }} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"><ArrowLeft size={16}/> Procesar Devolución e Ingresar Stock</button>
                 </div>
                 {returnsData.length > 0 && (
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
@@ -7777,7 +7825,7 @@ export default function App() {
                     {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && cycleCountData.some(c=>c.status==='PENDIENTE_APROBACION') && (
                       <div className="space-y-3">
                         <h3 className="text-xs font-black text-amber-700 uppercase flex items-center gap-2"><AlertTriangle size={14}/> Pendientes de aprobación</h3>
-                        {cycleCountData.filter(c=>c.status==='PENDIENTE_APROBACION').map(cc=>(
+                        {viewCycleCounts.filter(c=>c.status==='PENDIENTE_APROBACION').map(cc=>(
                           <div key={cc.id} className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 flex justify-between items-center flex-wrap gap-3">
                             <div>
                               <p className="text-xs font-black text-amber-900 uppercase">{cc.id}</p>
@@ -7799,12 +7847,12 @@ export default function App() {
                     )}
 
                     {/* Lista de conteos */}
-                    {cycleCountData.length > 0 && (()=>{
+                    {viewCycleCounts.length > 0 && (()=>{
                       const STATUS_BADGE={PENDING:'bg-slate-100 text-slate-600',EN_PROCESO:'bg-cyan-100 text-cyan-700',PENDIENTE_APROBACION:'bg-amber-100 text-amber-700',COMPLETED:'bg-emerald-100 text-emerald-700',RECHAZADO:'bg-red-100 text-red-700',REVISION:'bg-orange-100 text-orange-700'};
                       const openable=['PENDING','EN_PROCESO','PENDIENTE_APROBACION'];
                       return (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {cycleCountData.map(cc=>(
+                          {viewCycleCounts.map(cc=>(
                             <div key={cc.id} className={`bg-white p-5 rounded-2xl border shadow-sm flex flex-col ${cc.status==='COMPLETED'?'border-emerald-200':cc.status==='RECHAZADO'?'border-red-200':cc.status==='PENDIENTE_APROBACION'?'border-amber-200':'border-cyan-200'}`}>
                               <div className="flex justify-between items-start mb-2">
                                 <div>
@@ -9921,7 +9969,7 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {returns.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin devoluciones registradas.</div> : returns.map(r=>(
+                  {viewReturns.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin devoluciones registradas.</div> : viewReturns.map(r=>(
                     <div key={r.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-start justify-between">
                       <div>
                         <p className="font-black text-slate-800">{r.original_doc_num || `RET-${r.id}`}</p>
@@ -10086,7 +10134,7 @@ export default function App() {
               )}
 
               <div className="space-y-3">
-                {invoices.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin facturas generadas.</div> : invoices.map(inv=>(
+                {viewInvoices.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin facturas generadas.</div> : viewInvoices.map(inv=>(
                   <div key={inv.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                     <div className="flex items-start justify-between">
                       <div>
