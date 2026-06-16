@@ -592,7 +592,21 @@ app.post('/api/inventory/status', requireStockWrite, checkLpnClientAccess('id'),
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-app.post('/api/receive_batch', stockWriteLimiter, requireStockWrite, requireReauth, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
+// ¿Un documento ya fue cerrado/procesado para este cliente+tipo? Permite que el
+// frontend impida reiniciar (y agregar movimientos a) un número ya cerrado.
+app.get('/api/processed-docs/exists', requireAuth, async (req, res) => {
+  const { doc_num, doc_type, client_id } = req.query;
+  if (!doc_num) return res.status(400).json({ error: 'doc_num requerido' });
+  try {
+    const r = await pool.query(
+      'SELECT 1 FROM processed_docs WHERE doc_num=$1 AND doc_type=$2 AND client_id=$3 LIMIT 1',
+      [String(doc_num).toUpperCase(), String(doc_type || '').toUpperCase(), String(client_id || '').toUpperCase()]
+    );
+    res.json({ exists: r.rows.length > 0 });
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+app.post('/api/receive_batch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   const { items, docNum, glosa, docType, username } = req.body;
   if (!docNum) return res.status(400).json({ error: 'docNum es requerido para trazabilidad.' });
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem.' });
@@ -676,7 +690,7 @@ app.post('/api/receive_batch', stockWriteLimiter, requireStockWrite, requireReau
   } finally { client.release(); }
 });
 
-app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, requireReauth, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
+app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   const { items, docNum, glosa, docType, username, usePickConfirmations, allow_substitutes: allowSubstFlag } = req.body;
   if (!docNum) return res.status(400).json({ error: 'docNum es requerido para trazabilidad.' });
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem.' });

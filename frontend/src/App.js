@@ -810,13 +810,21 @@ export default function App() {
 
   const getStatusBadge = (statusId) => { if (!statusId || statusId === 'DISPONIBLE') return colorMap.emerald; const st = statuses.find(s => s.id === statusId); return colorMap[st?.color] || colorMap.slate; };
 
-  const handleCreateDoc = (e, module) => {
+  const handleCreateDoc = async (e, module) => {
     e.preventDefault(); if (!newDocNum) return showMsg("Ingrese un número de documento", true);
     if (module !== 'adjust' && !newDocType) return showMsg("Seleccione un Tipo de Documento", true);
     // En 3PL/HYBRID el cliente del movimiento es obligatorio y se elige aquí.
     if (is3PLMode && !newDocClient) return showMsg("Seleccione el cliente del movimiento", true);
     if (newDocClient && !canOperateClient(newDocClient)) return showMsg("No tiene permiso para operar con ese cliente", true);
     const docClient = is3PLMode ? newDocClient : (systemConfig.own_client_id || 'PROPIO');
+    // Un documento ya cerrado no se puede reutilizar ni reabrir para agregar movimientos.
+    if (module === 'receive' || module === 'dispatch') {
+      try {
+        const qs = new URLSearchParams({ doc_num: newDocNum, doc_type: newDocType || '', client_id: docClient || '' });
+        const r = await apiFetch(`${host}/api/processed-docs/exists?${qs.toString()}`);
+        if (r.ok) { const d = await r.json(); if (d.exists) return showMsg(`⛔ El documento ${newDocNum} ya fue cerrado para este cliente; no se puede reutilizar.`, true); }
+      } catch (err) { /* si falla la verificación, el backend igualmente bloquea el cierre (409) */ }
+    }
     const id = `${module.toUpperCase()}-${Date.now()}`;
     const newDoc = { id, docNum: newDocNum, docType: newDocType, client: docClient, glosa: newDocGlosa, docDate: newDocDate, docRef: newDocRef, docEnteredAt: newDocEnteredAt || new Date().toISOString().slice(0,16), items: [], createdAt: new Date().toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) };
     setWorkspaces(prev => ({ ...prev, [module]: [newDoc, ...prev[module]] }));
@@ -832,12 +840,8 @@ export default function App() {
   const handleCommitAPI = async (endpoint, module) => {
     if (!activeDoc || activeDoc.items.length === 0) return;
     if (isCommitting) return; // evitar doble submit
-    // Step-up: recepción y despacho exigen re-clave del usuario.
-    let reauthPw = '';
-    if (module === 'receive' || module === 'dispatch') {
-      reauthPw = await promptReauth(module === 'receive' ? 'recepción' : 'despacho');
-      if (!reauthPw) return; // cancelado
-    }
+    // El cierre de recepción/despacho ya NO pide re-clave (step-up desactivado).
+    const reauthPw = '';
     setIsCommitting(true);
     try {
       const res = await apiFetch(`${host}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...activeDoc, client_id: activeDoc.client, username: currentUser.username, ...(reauthPw ? { reauth_password: reauthPw } : {}) }) });
@@ -877,6 +881,8 @@ export default function App() {
           return;
         }
         showMsg(`⛔ ${errBody?.error || `Error ${res.status}`}`, true);
+        // Documento ya cerrado/procesado: descartar el borrador (no se reabre).
+        if (res.status === 409) { removeDoc(module, activeDocId); setActiveDocId(null); fetchData(); }
       }
     } catch(err) { showMsg(`⛔ Error de red`, true); }
     finally { setIsCommitting(false); }
@@ -966,8 +972,7 @@ export default function App() {
     const itemsToShip = activeDoc.items.map((it, idx) => ({ ...it, qtyToPick: shipQtys[idx] || 0 })).filter(it => it.qtyToPick > 0);
     if (itemsToShip.length === 0) return showMsg('⚠️ Ingrese cantidad mayor a 0', true);
     if (isCommitting) return;
-    const reauthPw = await promptReauth('despacho');
-    if (!reauthPw) return; // cancelado
+    const reauthPw = ''; // cierre de despacho sin re-clave
     const isValid = await validateRealTimeStock(itemsToShip);
     if (!isValid) { fetchData(); return; }
     setIsCommitting(true);
