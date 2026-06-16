@@ -575,6 +575,9 @@ export default function App() {
   const [docResults, setDocResults] = useState([]);
   const [docSearching, setDocSearching] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState(null);
+  const [docInsumos, setDocInsumos] = useState([]);
+  const [docInsumoLine, setDocInsumoLine] = useState({ insumo_id:'', cantidad:'' });
+  const [savingDocInsumo, setSavingDocInsumo] = useState(false);
   const [insumoMove, setInsumoMove] = useState(null); // { insumo, tipo } | null
   const [insumoMoveQty, setInsumoMoveQty] = useState('');
   const [insumoMoveResult, setInsumoMoveResult] = useState(null);
@@ -1310,6 +1313,37 @@ export default function App() {
     setInsumoForm({ codigo:i.codigo, nombre:i.nombre, categoria:i.categoria, unidad:i.unidad, costo_unitario:i.costo_unitario, stock_minimo:i.stock_minimo });
     setIsEditingInsumo(i.id); window.scrollTo({ top:0, behavior:'smooth' });
   };
+  const fetchDocInsumos = async (doc) => {
+    if (!doc) { setDocInsumos([]); return; }
+    try { const r = await apiFetch(`${host}/api/documentos/${doc.module}/${doc.id}/insumos`); setDocInsumos(r.ok ? await r.json() : []); } catch(e) { setDocInsumos([]); }
+  };
+  useEffect(() => { fetchDocInsumos(selectedDoc); /* eslint-disable-next-line */ }, [selectedDoc?.id]);
+  const addDocInsumo = async () => {
+    if (!selectedDoc || savingDocInsumo) return;
+    const cantidad = parseFloat(docInsumoLine.cantidad);
+    if (!docInsumoLine.insumo_id || !(cantidad > 0)) return showMsg('⚠️ Elige un insumo y cantidad > 0', true);
+    setSavingDocInsumo(true);
+    try {
+      const res = await apiFetch(`${host}/api/documentos/${selectedDoc.module}/${selectedDoc.id}/insumos`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ lineas: [{ insumo_id: parseFloat(docInsumoLine.insumo_id), cantidad }] }) });
+      const d = await res.json().catch(()=>({}));
+      if (res.ok) {
+        const r0 = d.resumenes?.[0];
+        if (r0) showMsg(`✅ ${r0.insumo.codigo}: −${r0.cantidad} ${r0.insumo.unidad} (stock ${r0.stock_antes}→${r0.stock_despues})`);
+        setDocInsumoLine({ insumo_id:'', cantidad:'' }); fetchDocInsumos(selectedDoc); fetchInsumos();
+      } else showMsg(`⛔ ${d.error||'Error'}`, true);
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setSavingDocInsumo(false); }
+  };
+  const removeDocInsumo = async (movId) => {
+    if (!selectedDoc) return;
+    if (!(await confirm({ message: '¿Quitar este consumo y reintegrar el stock?' }))) return;
+    try {
+      const res = await apiFetch(`${host}/api/documentos/${selectedDoc.module}/${selectedDoc.id}/insumos/${movId}`, { method:'DELETE' });
+      const d = await res.json().catch(()=>({}));
+      if (res.ok) { showMsg(`✅ Reintegrado ${d.reintegrado}`); fetchDocInsumos(selectedDoc); fetchInsumos(); }
+      else showMsg(`⛔ ${d.error||'Error'}`, true);
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+
   const searchInsumoDocs = async () => {
     setDocSearching(true);
     try {
@@ -10044,11 +10078,44 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Documento seleccionado (el panel para asociar insumos llega en la Fase 4) */}
+                  {/* Panel de asociación de insumos al documento seleccionado */}
                   {selectedDoc && (
-                    <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-4 flex items-center justify-between">
-                      <p className="text-xs font-black text-orange-800 uppercase">Seleccionado: [{selectedDoc.doc_type}] {selectedDoc.doc_num} · {selectedDoc.client_name}</p>
-                      <button onClick={()=>setSelectedDoc(null)} className="text-orange-400 hover:text-orange-700"><X size={16}/></button>
+                    <div className="bg-white rounded-3xl border-2 border-orange-200 shadow-sm overflow-hidden">
+                      <div className="bg-orange-50 border-b border-orange-200 p-4 flex items-center justify-between">
+                        <p className="text-xs font-black text-orange-800 uppercase">[{selectedDoc.doc_type}] {selectedDoc.doc_num} · {selectedDoc.client_name}</p>
+                        <button onClick={()=>setSelectedDoc(null)} className="text-orange-400 hover:text-orange-700"><X size={16}/></button>
+                      </div>
+                      {canConsumeInsumos && (
+                        <div className="p-4 flex flex-wrap items-end gap-3 border-b border-slate-100">
+                          <div className="flex-1 min-w-[200px] space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Insumo</label>
+                            <select value={docInsumoLine.insumo_id} onChange={e=>setDocInsumoLine({...docInsumoLine,insumo_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
+                              <option value="">-- Seleccionar insumo --</option>
+                              {insumos.filter(i=>i.activo).map(i=><option key={i.id} value={i.id}>{i.codigo} — {i.nombre} (stock {parseFloat(i.stock_actual)} {i.unidad})</option>)}
+                            </select>
+                          </div>
+                          <div className="w-28 space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad</label>
+                            <input type="number" min="0.001" step="0.001" value={docInsumoLine.cantidad} onChange={e=>setDocInsumoLine({...docInsumoLine,cantidad:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')addDocInsumo();}} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black text-center outline-none focus:border-orange-500"/>
+                          </div>
+                          <button onClick={addDocInsumo} disabled={savingDocInsumo} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{savingDocInsumo ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} Registrar</button>
+                        </div>
+                      )}
+                      <div className="divide-y divide-slate-100">
+                        {docInsumos.map(l => (
+                          <div key={l.id} className="p-3 px-4 flex items-center justify-between hover:bg-slate-50">
+                            <div>
+                              <p className="text-xs font-black text-slate-800">{l.codigo} — {l.nombre}</p>
+                              <p className="text-[10px] text-slate-500">{new Date(l.fecha).toLocaleString('es-CL')} · {l.usuario} · costo ${Number((l.costo_unitario||0)*parseFloat(l.cantidad)).toLocaleString('es-CL')}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-black text-amber-600">−{parseFloat(l.cantidad)} {l.unidad}</span>
+                              {canConsumeInsumos && <button onClick={()=>removeDocInsumo(l.id)} className="text-slate-300 hover:text-red-500" title="Quitar (reintegra stock)"><Trash2 size={15}/></button>}
+                            </div>
+                          </div>
+                        ))}
+                        {docInsumos.length === 0 && <div className="p-8 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin insumos asociados a este documento</div>}
+                      </div>
                     </div>
                   )}
                 </div>

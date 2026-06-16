@@ -214,6 +214,107 @@ router.get('/insumos/documentos', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
+// ── Helpers de la Fase 4 ──
+const TIPO_MODULE = { dispatch: 'dispatch', receive: 'receive' };
+// ¿El usuario puede operar el cliente del documento? (scope)
+async function userCanAccessClient(req, clientId) {
+  if (['ADMIN', 'SUPERADMIN'].includes(req.user.role) || req.user.is_demo) return true;
+  const perm = await getClientesPermitidos(req.user.username);
+  if (perm.scope === 'all') return true;
+  if (perm.scope === 'none') return false;
+  return perm.clients.includes(clientId) || perm.clients.includes(String(clientId || '').toUpperCase());
+}
+// ¿El documento (por su cliente y fecha) ya quedó facturado? Bloquea el reintegro.
+async function documentoFacturado(db, clientId, fecha) {
+  if (!clientId) return false;
+  const r = await db.query(
+    `SELECT 1 FROM invoices WHERE client_id = $1 AND $2::timestamp BETWEEN period_start AND period_end LIMIT 1`,
+    [clientId, fecha]
+  );
+  return r.rows.length > 0;
+}
+
+// ── POST /documentos/:tipo/:id/insumos ── asocia consumo de insumos a un documento
+// CONFIRMADO. Descuenta stock (sin negativo) y liga el movimiento al doc + cliente.
+// EJECUTIVO_CUENTA+ y solo sobre clientes de su scope.
+router.post('/documentos/:tipo/:id/insumos', requireStockWrite, async (req, res) => {
+  const { tipo, id } = req.params;
+  const lineas = Array.isArray(req.body.lineas) ? req.body.lineas : (Array.isArray(req.body) ? req.body : []);
+  if (!TIPO_MODULE[tipo]) return res.status(400).json({ error: 'Tipo de documento inválido (dispatch|receive).' });
+  if (!lineas.length) return res.status(400).json({ error: 'Debe indicar al menos un insumo.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const doc = await client.query('SELECT id, client_id, status FROM document_history WHERE id = $1 AND module = $2', [id, TIPO_MODULE[tipo]]);
+    if (!doc.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Documento no encontrado.' }); }
+    if (doc.rows[0].status !== 'ACTIVO') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'El documento no está confirmado (ACTIVO).' }); }
+    const docClientId = doc.rows[0].client_id;
+    if (!(await userCanAccessClient(req, docClientId))) { await client.query('ROLLBACK'); return res.status(403).json({ error: `No tienes permiso para operar con el cliente ${docClientId}.` }); }
+    const resumenes = [];
+    for (const l of lineas) {
+      const cantidad = parseFloat(l.cantidad);
+      if (!l.insumo_id || !(cantidad > 0)) throw Object.assign(new Error('Línea inválida: insumo y cantidad > 0.'), { status: 400 });
+      const out = await aplicarMovimiento(client, {
+        insumoId: l.insumo_id, tipo: 'consumo', delta: -cantidad,
+        meta: { documento_tipo: tipo, documento_id: id, client_id: docClientId, usuario: req.user.username },
+      });
+      resumenes.push(out);
+    }
+    await client.query('COMMIT');
+    res.json({ success: true, documento: { tipo, id, client_id: docClientId }, resumenes });
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  finally { client.release(); }
+});
+
+// ── GET /documentos/:tipo/:id/insumos ── insumos ya asociados a un documento.
+router.get('/documentos/:tipo/:id/insumos', requireAuth, async (req, res) => {
+  const { tipo, id } = req.params;
+  try {
+    const r = await pool.query(
+      `SELECT m.id, m.insumo_id, m.cantidad, m.fecha, m.usuario, m.client_id,
+              i.codigo, i.nombre, i.unidad, i.costo_unitario
+         FROM insumo_movimientos m
+         JOIN insumos i ON i.id = m.insumo_id
+        WHERE m.tipo = 'consumo' AND m.documento_tipo = $1 AND m.documento_id = $2
+        ORDER BY m.fecha DESC`,
+      [tipo, id]
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+// ── DELETE /documentos/:tipo/:id/insumos/:movId ── quita una línea de consumo y
+// REINTEGRA el stock. Solo si el documento NO está facturado. EJECUTIVO_CUENTA+ (scope).
+router.delete('/documentos/:tipo/:id/insumos/:movId', requireStockWrite, async (req, res) => {
+  const { tipo, id, movId } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const mov = await client.query(
+      `SELECT m.id, m.insumo_id, m.cantidad, m.client_id, dh.created_at
+         FROM insumo_movimientos m
+         LEFT JOIN document_history dh ON dh.id = m.documento_id
+        WHERE m.id = $1 AND m.tipo = 'consumo' AND m.documento_tipo = $2 AND m.documento_id = $3 FOR UPDATE`,
+      [movId, tipo, id]
+    );
+    if (!mov.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Línea de consumo no encontrada.' }); }
+    const row = mov.rows[0];
+    if (!(await userCanAccessClient(req, row.client_id))) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Sin permiso sobre el cliente del documento.' }); }
+    if (await documentoFacturado(client, row.client_id, row.created_at)) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'El documento ya está facturado; no se puede quitar el consumo.' });
+    }
+    // Reintegrar stock (lock de la fila) y borrar la línea.
+    const lock = await client.query('SELECT cantidad FROM insumo_stock WHERE insumo_id = $1 FOR UPDATE', [row.insumo_id]);
+    const antes = lock.rows.length ? parseFloat(lock.rows[0].cantidad) : 0;
+    await client.query('UPDATE insumo_stock SET cantidad = $2, updated_at = NOW() WHERE insumo_id = $1', [row.insumo_id, antes + parseFloat(row.cantidad)]);
+    await client.query('DELETE FROM insumo_movimientos WHERE id = $1', [movId]);
+    await client.query('COMMIT');
+    res.json({ success: true, reintegrado: parseFloat(row.cantidad), stock_despues: antes + parseFloat(row.cantidad) });
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  finally { client.release(); }
+});
+
 module.exports = router;
 // Se expone el helper para reutilizarlo en el consumo ligado a documentos (Fase 4).
 module.exports.aplicarMovimiento = aplicarMovimiento;
