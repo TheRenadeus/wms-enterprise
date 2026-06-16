@@ -39,6 +39,7 @@ const backupsRouter = require('./routes/backups');
 const feedbackRouter = require('./routes/feedback');
 const manufacturersRouter = require('./routes/manufacturers');
 const substitutesRouter = require('./routes/substitutes');
+const insumosRouter = require('./routes/insumos');
 const {
   JWT_SECRET,
   requireAuth,
@@ -265,6 +266,7 @@ app.use('/api', backupsRouter);        // /system/backup, /system/backups/*
 app.use('/api', feedbackRouter);       // /feedback (sugerencias del staff)
 app.use('/api', manufacturersRouter);  // /manufacturers (CRUD)
 app.use('/api', substitutesRouter);    // /skus/:sku/substitutes + /skus/substitutes
+app.use('/api', insumosRouter);        // /insumos (maestro), /insumos/* (movimientos, consumo)
 
 // /api/stats (genérico) sigue inline.
 app.get('/api/stats', requireAuth, async (req, res) => { try { const stock = await pool.query('SELECT COUNT(id) as total_lpns, COALESCE(SUM(qty), 0) as total_units FROM inventory_lpns WHERE qty > 0'); const skus = await pool.query('SELECT COUNT(*) as total_skus FROM master_skus'); res.json({ lpns: parseInt(stock.rows[0].total_lpns), units: parseFloat(stock.rows[0].total_units), skus: parseInt(skus.rows[0].total_skus) }); } catch (err) { sendDbError(res, err); }});

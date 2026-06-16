@@ -27,6 +27,7 @@ export const APP_MODULES = [
   { id: 'cycle-count', label: 'Contar físicamente' },
   { id: 'docks', label: 'Agenda de muelles' },
   { id: 'kits', label: 'Armar kits' },
+  { id: 'insumos', label: 'Insumos de bodega' },
   // Compras y proveedores
   { id: 'suppliers', label: 'Proveedores' },
   { id: 'manufacturers', label: 'Fabricantes' },

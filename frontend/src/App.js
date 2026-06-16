@@ -325,6 +325,7 @@ export default function App() {
       if (resDocTypes?.ok) setDocumentTypes(await resDocTypes.json());
       if (resUsers?.ok) setUsers(await resUsers.json());
       if (resKits?.ok) setKits(await resKits.json());
+      try { const rIns = await apiFetch(`${host}/api/insumos?all=1`).catch(()=>null); if (rIns?.ok) setInsumos(await rIns.json()); } catch(e) {}
       // Cargar config global
       try {
         const resCfg = await apiFetch(`${host}/api/system/config`).catch(()=>null);
@@ -432,14 +433,14 @@ export default function App() {
     if (currentUser.role === 'JEFE_BODEGA') {
       if (disabledModules.includes(tabId)) return false;
       if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
-      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','purchase-orders','cycle-count','suppliers','waves','packing','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers'].includes(tabId);
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','purchase-orders','cycle-count','suppliers','waves','packing','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers','insumos'].includes(tabId);
     }
     // EJECUTIVO_CUENTA (operario de piso): operaciones de stock y SKUs; sin gestión 3PL
     // (clientes, facturación, proveedores, docks) ni supervisión avanzada.
     if (currentUser.role === 'EJECUTIVO_CUENTA') {
       if (disabledModules.includes(tabId)) return false;
       if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
-      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','cycle-count','waves','packing','returns','occupation','lpn-history'].includes(tabId);
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','cycle-count','waves','packing','returns','occupation','lpn-history','insumos'].includes(tabId);
     }
     // DEMO role legado ve todo excepto superadmin y users
     if (currentUser.role === 'DEMO') return tabId !== 'users' && tabId !== 'superadmin';
@@ -564,6 +565,12 @@ export default function App() {
   const [newDocType, setNewDocType] = useState('');
   // Cliente del movimiento: se elige al CREAR el documento (recepción/despacho/ajuste).
   const [newDocClient, setNewDocClient] = useState('');
+  // ── Módulo INSUMOS (materiales de bodega) ──
+  const [insumos, setInsumos] = useState([]);
+  const [insumosTab, setInsumosTab] = useState('materiales');
+  const [insumoForm, setInsumoForm] = useState({ codigo:'', nombre:'', categoria:'embalaje', unidad:'UN', costo_unitario:'', stock_minimo:'' });
+  const [isEditingInsumo, setIsEditingInsumo] = useState(false);
+  const [isSavingInsumo, setIsSavingInsumo] = useState(false);
   const [newDocDate, setNewDocDate] = useState('');
   const [newDocRef, setNewDocRef] = useState('');
   const [newDocEnteredAt, setNewDocEnteredAt] = useState(() => new Date().toISOString().slice(0,16));
@@ -753,6 +760,8 @@ export default function App() {
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN';
   const isDemo = currentUser?.role === 'DEMO' || currentUser?.is_demo === true;
   const canManageMasters = isAdmin || currentUser?.role === 'EJECUTIVO_CUENTA' || isDemo;
+  // Maestro/entradas de INSUMOS: JEFE_BODEGA+ (el consumo se habilita aparte en Fase 4).
+  const canManageInsumos = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) || isDemo;
 
   // COD-05: solo resetear selección activa y sidebar — preservar formularios para que el
   // usuario no pierda datos al cambiar de tab accidentalmente
@@ -1268,6 +1277,41 @@ export default function App() {
     setKitComponentLine({ sku: '', qty: '' });
   };
   const removeKitComponent = (sku) => setKitForm(prev => ({ ...prev, components: prev.components.filter(c => c.sku !== sku) }));
+  // ── INSUMOS: maestro de materiales ──
+  const fetchInsumos = async () => {
+    try { const r = await apiFetch(`${host}/api/insumos?all=1`); if (r.ok) setInsumos(await r.json()); } catch(e) {}
+  };
+  const handleSaveInsumo = async (e) => {
+    e.preventDefault();
+    if (isSavingInsumo) return;
+    if (!insumoForm.codigo.trim() || !insumoForm.nombre.trim()) return showMsg('⚠️ Código y nombre son requeridos', true);
+    setIsSavingInsumo(true);
+    try {
+      const url = isEditingInsumo ? `${host}/api/insumos/${isEditingInsumo}` : `${host}/api/insumos`;
+      const method = isEditingInsumo ? 'PUT' : 'POST';
+      const res = await apiFetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(insumoForm) });
+      if (res.ok) {
+        showMsg(isEditingInsumo ? '✅ Insumo actualizado' : '✅ Insumo creado');
+        setInsumoForm({ codigo:'', nombre:'', categoria:'embalaje', unidad:'UN', costo_unitario:'', stock_minimo:'' });
+        setIsEditingInsumo(false); fetchInsumos();
+      } else { const err = await res.json().catch(()=>({})); showMsg(`⛔ ${err.error||'Error'}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setIsSavingInsumo(false); }
+  };
+  const handleEditInsumo = (i) => {
+    setInsumoForm({ codigo:i.codigo, nombre:i.nombre, categoria:i.categoria, unidad:i.unidad, costo_unitario:i.costo_unitario, stock_minimo:i.stock_minimo });
+    setIsEditingInsumo(i.id); window.scrollTo({ top:0, behavior:'smooth' });
+  };
+  const handleToggleInsumo = async (i) => {
+    if (i.activo && !(await confirm({ message: `¿Desactivar el insumo ${i.nombre}?`, danger: true }))) return;
+    try {
+      const res = i.activo
+        ? await apiFetch(`${host}/api/insumos/${i.id}`, { method:'DELETE' })
+        : await apiFetch(`${host}/api/insumos/${i.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ activo: true }) });
+      if (res.ok) { showMsg(i.activo ? '✅ Insumo desactivado' : '✅ Insumo reactivado'); fetchInsumos(); }
+      else { const err = await res.json().catch(()=>({})); showMsg(`⛔ ${err.error||'Error'}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+
   const handleSaveKit = async (e) => {
     e.preventDefault();
     if (kitForm.components.length === 0) return showMsg('⚠️ Agrega al menos un componente', true);
@@ -2114,6 +2158,7 @@ export default function App() {
                     </button>
                   )}
                   {canView('docks') && <button onClick={() => switchTab('docks')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'docks' ? 'bg-teal-500/20 text-teal-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Muelles / Yard</button>}
+                  {canView('insumos') && <button onClick={() => switchTab('insumos')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'insumos' ? 'bg-orange-500/20 text-orange-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Insumos de Bodega</button>}
                   {canView('transport') && <button onClick={() => switchTab('transport')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'transport' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte</button>}
                   {canView('purchase-orders') && <button onClick={() => switchTab('purchase-orders')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'purchase-orders' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800 text-slate-300'}`}><FileText size={18} className="mr-3"/> Órdenes de Compra</button>}
                   {canView('suppliers') && <button onClick={() => switchTab('suppliers')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'suppliers' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Building2 size={18} className="mr-3"/> Proveedores & ASN</button>}
@@ -9827,6 +9872,91 @@ export default function App() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ═══════════════ INSUMOS DE BODEGA ═══════════════ */}
+          {activeTab === 'insumos' && (
+            <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Layers className="text-orange-500"/> Insumos de Bodega</h1>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Materiales propios de la bodega · globales (no por cliente)</span>
+              </div>
+              {/* Sub-pestañas (Materiales; las demás se agregan en fases siguientes) */}
+              <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 w-fit">
+                {[{id:'materiales',label:'Materiales'}].map(t => (
+                  <button key={t.id} onClick={()=>setInsumosTab(t.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${insumosTab===t.id ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}>{t.label}</button>
+                ))}
+              </div>
+
+              {insumosTab === 'materiales' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Formulario (solo JEFE+) */}
+                  {canManageInsumos && (
+                    <div className="lg:col-span-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 h-fit">
+                      <h3 className="text-sm font-black text-slate-700 uppercase tracking-tighter border-b border-slate-100 pb-3 mb-4">{isEditingInsumo ? 'Editar material' : 'Nuevo material'}</h3>
+                      <form onSubmit={handleSaveInsumo} className="space-y-3">
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Código *</label><input type="text" value={insumoForm.codigo} onChange={e=>setInsumoForm({...insumoForm,codigo:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 uppercase" placeholder="EJ: CAJA-M"/></div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Nombre *</label><input type="text" value={insumoForm.nombre} onChange={e=>setInsumoForm({...insumoForm,nombre:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="Caja mediana"/></div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Categoría</label>
+                            <select value={insumoForm.categoria} onChange={e=>setInsumoForm({...insumoForm,categoria:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
+                              {['embalaje','etiquetado','pallets','epp','otros'].map(c=><option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Unidad</label><input type="text" value={insumoForm.unidad} onChange={e=>setInsumoForm({...insumoForm,unidad:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 uppercase" placeholder="UN"/></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Costo unit.</label><input type="number" min="0" step="0.01" value={insumoForm.costo_unitario} onChange={e=>setInsumoForm({...insumoForm,costo_unitario:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
+                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Stock mínimo</label><input type="number" min="0" step="0.001" value={insumoForm.stock_minimo} onChange={e=>setInsumoForm({...insumoForm,stock_minimo:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
+                        </div>
+                        <div className="flex gap-2 pt-2">
+                          <button type="submit" disabled={isSavingInsumo} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isSavingInsumo ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}{isEditingInsumo ? 'Guardar' : 'Crear'}</button>
+                          {isEditingInsumo && <button type="button" onClick={()=>{setIsEditingInsumo(false);setInsumoForm({codigo:'',nombre:'',categoria:'embalaje',unidad:'UN',costo_unitario:'',stock_minimo:''});}} className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black px-4 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>}
+                        </div>
+                      </form>
+                    </div>
+                  )}
+                  {/* Tabla del maestro */}
+                  <div className={`${canManageInsumos ? 'lg:col-span-2' : 'lg:col-span-3'} bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden`}>
+                    <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Maestro de materiales ({insumos.length})</h3>
+                      {!canManageInsumos && <span className="text-[9px] font-bold text-slate-400 uppercase">Solo lectura</span>}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead className="bg-slate-100 border-b border-slate-200"><tr>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Código / Nombre</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Categoría</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Mínimo</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-right">Costo</th>
+                          {canManageInsumos && <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Acciones</th>}
+                        </tr></thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {insumos.map(i => {
+                            const low = parseFloat(i.stock_actual) < parseFloat(i.stock_minimo);
+                            return (
+                              <tr key={i.id} className={`${!i.activo ? 'opacity-50' : ''} ${low && i.activo ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
+                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{i.codigo}{!i.activo && <span className="ml-2 text-[8px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded uppercase">Inactivo</span>}</p><p className="text-[10px] text-slate-500">{i.nombre}</p></td>
+                                <td className="p-3 text-[10px] font-bold text-slate-500 uppercase">{i.categoria}</td>
+                                <td className="p-3 text-center"><span className={`text-sm font-black ${low ? 'text-amber-600' : 'text-slate-700'}`}>{parseFloat(i.stock_actual)}</span> <span className="text-[9px] text-slate-400">{i.unidad}</span>{low && i.activo && <p className="text-[8px] font-black text-amber-600 uppercase">⚠ Bajo mínimo</p>}</td>
+                                <td className="p-3 text-center text-[10px] font-bold text-slate-500">{parseFloat(i.stock_minimo)}</td>
+                                <td className="p-3 text-right text-[10px] font-bold text-slate-500">${Number(i.costo_unitario||0).toLocaleString('es-CL')}</td>
+                                {canManageInsumos && <td className="p-3 text-center whitespace-nowrap">
+                                  <button onClick={()=>handleEditInsumo(i)} className="text-slate-400 hover:text-indigo-600 mr-2" title="Editar"><Pencil size={15}/></button>
+                                  <button onClick={()=>handleToggleInsumo(i)} className={`${i.activo ? 'text-slate-400 hover:text-red-500' : 'text-emerald-500 hover:text-emerald-700'}`} title={i.activo ? 'Desactivar' : 'Reactivar'}>{i.activo ? <Trash2 size={15}/> : <RefreshCcw size={15}/>}</button>
+                                </td>}
+                              </tr>
+                            );
+                          })}
+                          {insumos.length === 0 && <tr><td colSpan={canManageInsumos ? 6 : 5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">No hay insumos registrados</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
