@@ -18,4 +18,5 @@ module.exports = [
   require('./016_sku_soft_delete'),
   require('./018_doc_unique_constraints'),
   require('./019_insumos'),
+  require('./020_insumo_movimientos'),
 ];

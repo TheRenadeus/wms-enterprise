@@ -2,11 +2,43 @@
 // Fase 1: maestro de materiales (CRUD con borrado lógico).
 const express = require('express');
 const { pool, mapDbError, isUniqueViolation } = require('../db');
-const { requireAuth, requireJefe } = require('../middleware');
+const { requireAuth, requireJefe, requireStockWrite } = require('../middleware');
 
 const router = express.Router();
 
 const CATEGORIAS = ['embalaje', 'etiquetado', 'pallets', 'epp', 'otros'];
+
+// Aplica un movimiento de stock dentro de una transacción YA ABIERTA (client).
+// delta: +entrada / -consumo / signed en ajuste. Bloquea la fila de stock con
+// FOR UPDATE para que stock_antes/despues sean exactos bajo concurrencia y nunca
+// quede negativo. Devuelve el resumen { tipo, insumo, cantidad, stock_antes, stock_despues }.
+async function aplicarMovimiento(client, { insumoId, tipo, delta, meta = {} }) {
+  const ins = await client.query('SELECT id, codigo, nombre, unidad, activo FROM insumos WHERE id = $1', [insumoId]);
+  if (!ins.rows.length) { const e = new Error('Insumo no encontrado.'); e.status = 404; throw e; }
+  if (!ins.rows[0].activo) { const e = new Error('El insumo está desactivado.'); e.status = 400; throw e; }
+  // Bloquea (o crea) la fila de stock.
+  let lock = await client.query('SELECT cantidad FROM insumo_stock WHERE insumo_id = $1 FOR UPDATE', [insumoId]);
+  if (!lock.rows.length) {
+    await client.query('INSERT INTO insumo_stock (insumo_id, cantidad) VALUES ($1, 0) ON CONFLICT DO NOTHING', [insumoId]);
+    lock = await client.query('SELECT cantidad FROM insumo_stock WHERE insumo_id = $1 FOR UPDATE', [insumoId]);
+  }
+  const antes = parseFloat(lock.rows[0].cantidad);
+  const despues = antes + delta;
+  if (despues < 0) { const e = new Error(`Stock insuficiente: disponible ${antes}, se intentó descontar ${Math.abs(delta)}.`); e.status = 409; throw e; }
+  await client.query('UPDATE insumo_stock SET cantidad = $2, updated_at = NOW() WHERE insumo_id = $1', [insumoId, despues]);
+  await client.query(
+    `INSERT INTO insumo_movimientos (insumo_id, tipo, cantidad, stock_antes, stock_despues, documento_tipo, documento_id, client_id, usuario)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+    [insumoId, tipo, Math.abs(delta), antes, despues, meta.documento_tipo || null, meta.documento_id || null, meta.client_id || null, meta.usuario || null]
+  );
+  return {
+    tipo,
+    insumo: { id: ins.rows[0].id, codigo: ins.rows[0].codigo, nombre: ins.rows[0].nombre, unidad: ins.rows[0].unidad },
+    cantidad: Math.abs(delta),
+    stock_antes: antes,
+    stock_despues: despues,
+  };
+}
 
 // ── GET /insumos ── lista del maestro con su stock. Lectura para cualquier rol
 // autenticado (AUDITOR incluido). ?all=1 incluye los desactivados.
@@ -90,4 +122,61 @@ router.delete('/insumos/:id', requireJefe, async (req, res) => {
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
+// ── POST /insumos/:id/entrada ── reposición (+stock). JEFE_BODEGA+.
+router.post('/insumos/:id/entrada', requireJefe, async (req, res) => {
+  const cantidad = parseFloat(req.body.cantidad);
+  if (!(cantidad > 0)) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const out = await aplicarMovimiento(client, { insumoId: req.params.id, tipo: 'entrada', delta: cantidad, meta: { usuario: req.user.username } });
+    await client.query('COMMIT');
+    res.json({ success: true, resumen: out });
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  finally { client.release(); }
+});
+
+// ── POST /insumos/:id/ajuste ── recuento: fija el stock a nueva_cantidad. JEFE_BODEGA+.
+router.post('/insumos/:id/ajuste', requireJefe, async (req, res) => {
+  const nueva = parseFloat(req.body.nueva_cantidad);
+  if (isNaN(nueva) || nueva < 0) return res.status(400).json({ error: 'La nueva cantidad debe ser 0 o mayor.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const cur = await client.query('SELECT cantidad FROM insumo_stock WHERE insumo_id = $1 FOR UPDATE', [req.params.id]);
+    const antes = cur.rows.length ? parseFloat(cur.rows[0].cantidad) : 0;
+    const out = await aplicarMovimiento(client, { insumoId: req.params.id, tipo: 'ajuste', delta: nueva - antes, meta: { usuario: req.user.username } });
+    await client.query('COMMIT');
+    res.json({ success: true, resumen: out });
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  finally { client.release(); }
+});
+
+// ── POST /insumos/:id/consumo ── consumo genérico (-stock). EJECUTIVO_CUENTA+.
+// (El consumo LIGADO a un documento/cliente se agrega en la Fase 4.)
+router.post('/insumos/:id/consumo', requireStockWrite, async (req, res) => {
+  const cantidad = parseFloat(req.body.cantidad);
+  if (!(cantidad > 0)) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const out = await aplicarMovimiento(client, { insumoId: req.params.id, tipo: 'consumo', delta: -cantidad, meta: { usuario: req.user.username } });
+    await client.query('COMMIT');
+    res.json({ success: true, resumen: out });
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  finally { client.release(); }
+});
+
+// ── GET /insumos/:id/movimientos ── historial de un insumo.
+router.get('/insumos/:id/movimientos', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query(
+      `SELECT * FROM insumo_movimientos WHERE insumo_id = $1 ORDER BY fecha DESC LIMIT 200`, [req.params.id]
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
 module.exports = router;
+// Se expone el helper para reutilizarlo en el consumo ligado a documentos (Fase 4).
+module.exports.aplicarMovimiento = aplicarMovimiento;

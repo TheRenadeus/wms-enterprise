@@ -571,6 +571,10 @@ export default function App() {
   const [insumoForm, setInsumoForm] = useState({ codigo:'', nombre:'', categoria:'embalaje', unidad:'UN', costo_unitario:'', stock_minimo:'' });
   const [isEditingInsumo, setIsEditingInsumo] = useState(false);
   const [isSavingInsumo, setIsSavingInsumo] = useState(false);
+  const [insumoMove, setInsumoMove] = useState(null); // { insumo, tipo } | null
+  const [insumoMoveQty, setInsumoMoveQty] = useState('');
+  const [insumoMoveResult, setInsumoMoveResult] = useState(null);
+  const [isMovingInsumo, setIsMovingInsumo] = useState(false);
   const [newDocDate, setNewDocDate] = useState('');
   const [newDocRef, setNewDocRef] = useState('');
   const [newDocEnteredAt, setNewDocEnteredAt] = useState(() => new Date().toISOString().slice(0,16));
@@ -760,8 +764,9 @@ export default function App() {
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN';
   const isDemo = currentUser?.role === 'DEMO' || currentUser?.is_demo === true;
   const canManageMasters = isAdmin || currentUser?.role === 'EJECUTIVO_CUENTA' || isDemo;
-  // Maestro/entradas de INSUMOS: JEFE_BODEGA+ (el consumo se habilita aparte en Fase 4).
+  // Maestro/entradas/ajuste de INSUMOS: JEFE_BODEGA+. Consumo: EJECUTIVO_CUENTA+.
   const canManageInsumos = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) || isDemo;
+  const canConsumeInsumos = ['EJECUTIVO_CUENTA','JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) || isDemo;
 
   // COD-05: solo resetear selección activa y sidebar — preservar formularios para que el
   // usuario no pierda datos al cambiar de tab accidentalmente
@@ -1301,6 +1306,22 @@ export default function App() {
     setInsumoForm({ codigo:i.codigo, nombre:i.nombre, categoria:i.categoria, unidad:i.unidad, costo_unitario:i.costo_unitario, stock_minimo:i.stock_minimo });
     setIsEditingInsumo(i.id); window.scrollTo({ top:0, behavior:'smooth' });
   };
+  const submitInsumoMove = async () => {
+    if (!insumoMove || isMovingInsumo) return;
+    const { insumo, tipo } = insumoMove;
+    const qty = parseFloat(insumoMoveQty);
+    if (isNaN(qty) || (tipo !== 'ajuste' && qty <= 0) || (tipo === 'ajuste' && qty < 0)) return showMsg('⚠️ Cantidad inválida', true);
+    setIsMovingInsumo(true);
+    try {
+      const path = tipo === 'entrada' ? 'entrada' : tipo === 'consumo' ? 'consumo' : 'ajuste';
+      const body = tipo === 'ajuste' ? { nueva_cantidad: qty } : { cantidad: qty };
+      const res = await apiFetch(`${host}/api/insumos/${insumo.id}/${path}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const d = await res.json().catch(()=>({}));
+      if (res.ok) { setInsumoMoveResult(d.resumen); setInsumoMove(null); setInsumoMoveQty(''); fetchInsumos(); }
+      else showMsg(`⛔ ${d.error||'Error'}`, true);
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setIsMovingInsumo(false); }
+  };
+
   const handleToggleInsumo = async (i) => {
     if (i.activo && !(await confirm({ message: `¿Desactivar el insumo ${i.nombre}?`, danger: true }))) return;
     try {
@@ -9933,7 +9954,7 @@ export default function App() {
                           <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
                           <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Mínimo</th>
                           <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-right">Costo</th>
-                          {canManageInsumos && <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Acciones</th>}
+                          {(canManageInsumos || canConsumeInsumos) && <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Acciones</th>}
                         </tr></thead>
                         <tbody className="divide-y divide-slate-100">
                           {insumos.map(i => {
@@ -9945,9 +9966,12 @@ export default function App() {
                                 <td className="p-3 text-center"><span className={`text-sm font-black ${low ? 'text-amber-600' : 'text-slate-700'}`}>{parseFloat(i.stock_actual)}</span> <span className="text-[9px] text-slate-400">{i.unidad}</span>{low && i.activo && <p className="text-[8px] font-black text-amber-600 uppercase">⚠ Bajo mínimo</p>}</td>
                                 <td className="p-3 text-center text-[10px] font-bold text-slate-500">{parseFloat(i.stock_minimo)}</td>
                                 <td className="p-3 text-right text-[10px] font-bold text-slate-500">${Number(i.costo_unitario||0).toLocaleString('es-CL')}</td>
-                                {canManageInsumos && <td className="p-3 text-center whitespace-nowrap">
-                                  <button onClick={()=>handleEditInsumo(i)} className="text-slate-400 hover:text-indigo-600 mr-2" title="Editar"><Pencil size={15}/></button>
-                                  <button onClick={()=>handleToggleInsumo(i)} className={`${i.activo ? 'text-slate-400 hover:text-red-500' : 'text-emerald-500 hover:text-emerald-700'}`} title={i.activo ? 'Desactivar' : 'Reactivar'}>{i.activo ? <Trash2 size={15}/> : <RefreshCcw size={15}/>}</button>
+                                {(canManageInsumos || canConsumeInsumos) && <td className="p-3 text-center whitespace-nowrap">
+                                  {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'entrada'});setInsumoMoveQty('');}} className="text-emerald-500 hover:text-emerald-700 mr-2 font-black text-sm" title="Entrada (+)">＋</button>}
+                                  {i.activo && canConsumeInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'consumo'});setInsumoMoveQty('');}} className="text-amber-500 hover:text-amber-700 mr-2 font-black text-sm" title="Consumo (−)">－</button>}
+                                  {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'ajuste'});setInsumoMoveQty(String(parseFloat(i.stock_actual)));}} className="text-slate-400 hover:text-cyan-600 mr-2" title="Ajustar (recuento)"><Sliders size={14}/></button>}
+                                  {canManageInsumos && <button onClick={()=>handleEditInsumo(i)} className="text-slate-400 hover:text-indigo-600 mr-2" title="Editar"><Pencil size={15}/></button>}
+                                  {canManageInsumos && <button onClick={()=>handleToggleInsumo(i)} className={`${i.activo ? 'text-slate-400 hover:text-red-500' : 'text-emerald-500 hover:text-emerald-700'}`} title={i.activo ? 'Desactivar' : 'Reactivar'}>{i.activo ? <Trash2 size={15}/> : <RefreshCcw size={15}/>}</button>}
                                 </td>}
                               </tr>
                             );
@@ -9959,6 +9983,48 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {/* Resumen del último movimiento (clases literales para que Tailwind no las purgue) */}
+              {insumoMoveResult && (() => {
+                const r = insumoMoveResult;
+                const cls = r.tipo === 'entrada'
+                  ? { box:'bg-emerald-50 border-emerald-300', num:'text-emerald-600', strong:'text-emerald-700' }
+                  : r.tipo === 'consumo'
+                  ? { box:'bg-amber-50 border-amber-300', num:'text-amber-600', strong:'text-amber-700' }
+                  : { box:'bg-cyan-50 border-cyan-300', num:'text-cyan-600', strong:'text-cyan-700' };
+                const signo = r.tipo === 'entrada' ? '+' : r.tipo === 'consumo' ? '−' : 'Δ';
+                return (
+                  <div className={`${cls.box} border-2 rounded-2xl p-5 flex items-center justify-between gap-4 animate-in fade-in`}>
+                    <div className="flex items-center gap-4">
+                      <div className={`text-3xl font-black ${cls.num}`}>{signo}{r.cantidad} <span className="text-sm">{r.insumo.unidad}</span></div>
+                      <div>
+                        <p className="text-xs font-black text-slate-800 uppercase">{r.tipo} · {r.insumo.codigo} — {r.insumo.nombre}</p>
+                        <p className="text-[11px] font-bold text-slate-500">Stock: <span className="font-mono">{r.stock_antes}</span> → <span className={`font-mono font-black ${cls.strong}`}>{r.stock_despues}</span> {r.insumo.unidad}</p>
+                      </div>
+                    </div>
+                    <button onClick={()=>setInsumoMoveResult(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Modal de movimiento de insumo (entrada / consumo / ajuste) */}
+          {insumoMove && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>setInsumoMove(null)}>
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6" onClick={e=>e.stopPropagation()}>
+                <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                  {insumoMove.tipo === 'entrada' ? <span className="text-emerald-600">＋ Entrada</span> : insumoMove.tipo === 'consumo' ? <span className="text-amber-600">－ Consumo</span> : <span className="text-cyan-600">Δ Ajuste (recuento)</span>}
+                </h3>
+                <p className="text-xs font-bold text-slate-500 mt-1">{insumoMove.insumo.codigo} — {insumoMove.insumo.nombre}</p>
+                <p className="text-[11px] text-slate-400 mt-1">Stock actual: <span className="font-mono font-black text-slate-700">{parseFloat(insumoMove.insumo.stock_actual)}</span> {insumoMove.insumo.unidad}</p>
+                <label className="text-[10px] font-black text-slate-400 uppercase mt-4 block">{insumoMove.tipo === 'ajuste' ? 'Nueva cantidad (recuento)' : 'Cantidad'}</label>
+                <input autoFocus type="number" min="0" step="0.001" value={insumoMoveQty} onChange={e=>setInsumoMoveQty(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitInsumoMove();}} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none focus:border-slate-500 mt-1"/>
+                <div className="flex gap-2 mt-5">
+                  <button onClick={()=>setInsumoMove(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
+                  <button onClick={submitInsumoMove} disabled={isMovingInsumo} className="flex-1 bg-slate-900 hover:bg-black text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isMovingInsumo ? <Loader2 size={14} className="animate-spin"/> : 'Confirmar'}</button>
+                </div>
+              </div>
             </div>
           )}
 
