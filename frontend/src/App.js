@@ -1360,7 +1360,6 @@ export default function App() {
     if (next == null) next = canSeeAllClients ? 'ALL' : (validIds[0] || null);
     setActiveClientIdState(next);
     try { sessionStorage.setItem(ACTIVE_CLIENT_KEY, JSON.stringify({ id: next })); } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.username, clients.length]);
   // Valor expuesto al árbol vía contexto (lo consumen los tabs hijos en fases siguientes).
   const clienteActivoValue = {
@@ -1375,7 +1374,6 @@ export default function App() {
     setNewReturn(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
     setKitForm(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
     setCcFilter(p => p.client_id === activeClientId ? p : ({ ...p, client_id: activeClientId }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeClientId, activeClientMode, is3PLMode]);
   // Banner informativo para módulos operativos.
   const opsScopeBanner = (() => {
