@@ -285,6 +285,32 @@ export function getPosition(loc) {
   return { x: 0, y: 0, z: 0, width: w, depth: d, height: h };
 }
 
+// ── Coloreado FEFO por vencimiento (lotes) ───────────────────────────────────
+// Días hasta el vencimiento (negativo = ya vencido). null si no hay fecha válida.
+function daysUntilExpiry(expiry) {
+  if (!expiry) return null;
+  const d = new Date(expiry);
+  if (isNaN(d.getTime())) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.ceil((d - today) / 86400000);
+}
+// Horizonte en días a partir del cual el lote se considera "fresco" (verde pleno).
+const FRESH_DAYS = 90;
+// Color en escala verde→amarillo→naranjo→rojo según cercanía al vencimiento.
+// >= FRESH_DAYS → verde; se acerca a 0 → rojo; vencido (<0) → rojo intenso.
+function expiryColor(days) {
+  if (days == null) return null;
+  if (days < 0) return 'hsl(0, 85%, 38%)';                 // vencido: rojo intenso
+  const t = Math.max(0, Math.min(1, days / FRESH_DAYS));   // 0 = por vencer, 1 = fresco
+  const hue = Math.round(t * 130);                         // 0 rojo → 130 verde
+  return `hsl(${hue}, 70%, 45%)`;
+}
+// Mínimo de días al vencimiento entre los items con lote/fecha de una celda (el más urgente).
+function minLotDays(items) {
+  const ds = (items || []).map(i => daysUntilExpiry(i.expiry_date)).filter(d => d != null);
+  return ds.length ? Math.min(...ds) : null;
+}
+
 function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBadge, clients, userRole }) {
   // Editar el layout (unir/bloquear casillas) solo desde JEFE_BODEGA o superior.
   const canEditLayout = ['JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'].includes(userRole);
@@ -585,6 +611,13 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
       <div className="flex flex-col lg:flex-row gap-4 min-h-[60vh] lg:min-h-[500px]">
         <div className={`bg-slate-900 rounded-[28px] sm:rounded-[40px] flex-1 flex flex-col p-4 sm:p-8 border-4 sm:border-8 shadow-2xl relative overflow-auto custom-scrollbar transition-colors min-h-[350px] ${editMode ? 'border-red-500/30' : 'border-slate-800'}`}>
           <div className={`absolute inset-0 pointer-events-none transition-colors ${editMode ? 'bg-[radial-gradient(circle_at_50%_50%,rgba(239,68,68,0.05),transparent)]' : 'bg-[radial-gradient(circle_at_50%_50%,rgba(67,56,202,0.1),transparent)]'}`}></div>
+          {!editMode && (
+            <div className="absolute top-3 right-3 z-20 bg-slate-800/80 backdrop-blur rounded-xl px-3 py-2 border border-white/10 pointer-events-none">
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-1">Vencimiento de lotes</p>
+              <div className="h-2 w-32 rounded-full" style={{ background: 'linear-gradient(to right, hsl(0,85%,38%), hsl(0,70%,45%), hsl(40,70%,45%), hsl(90,70%,45%), hsl(130,70%,45%))' }}></div>
+              <div className="flex justify-between text-[7px] font-bold text-white/60 mt-0.5"><span>Vencido</span><span>Fresco (+{FRESH_DAYS}d)</span></div>
+            </div>
+          )}
           
           {sortedAisles.length === 0 ? (
              <div className="h-full flex flex-col items-center justify-center text-center opacity-60 z-10">
@@ -638,12 +671,22 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                           const isViewSelected = selectedLoc?.locId === locId && !editMode;
 
                           let bgClass = 'bg-emerald-400/80 border-emerald-300';
-                          
+                          let lotBg = null; // color FEFO por vencimiento (va inline)
+
                           if (isBlocked) {
                              bgClass = editMode ? 'bg-slate-900 border-dashed border-red-500/50 flex items-center justify-center opacity-60 hover:bg-red-900/50' : 'opacity-0 pointer-events-none';
                           } else if (itemsInLoc.length > 0) {
                             const hasHold = itemsInLoc.some(i => i.status && i.status !== 'DISPONIBLE');
-                            bgClass = hasHold ? 'bg-red-500 border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse' : 'bg-indigo-500 border-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.4)]';
+                            const lotDays = minLotDays(itemsInLoc); // null si la celda no tiene lotes con fecha
+                            if (hasHold) {
+                              bgClass = 'bg-red-500 border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse';
+                            } else if (lotDays != null) {
+                              // Lotes: color en escala según cercanía al vencimiento (el más urgente).
+                              lotBg = expiryColor(lotDays);
+                              bgClass = 'border-white/25 shadow-[0_0_10px_rgba(0,0,0,0.35)]';
+                            } else {
+                              bgClass = 'bg-indigo-500 border-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.4)]';
+                            }
                           }
 
                           if (inEditSelection && editMode) bgClass += ' ring-4 ring-white z-30 scale-105';
@@ -652,7 +695,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                           return (
                             <div 
                               key={locId} 
-                              style={{ gridColumn: `${cIdx + 1} / span ${colSpan}`, gridRow: `${gridRowStart} / span ${rowSpan}` }}
+                              style={{ gridColumn: `${cIdx + 1} / span ${colSpan}`, gridRow: `${gridRowStart} / span ${rowSpan}`, ...(lotBg ? { backgroundColor: lotBg } : {}) }}
                               onMouseEnter={() => !isBlocked && !editMode && setHoveredLoc({ locId, items: itemsInLoc })} 
                               onMouseLeave={() => !isBlocked && !editMode && setHoveredLoc(null)} 
                               onClick={() => handleCellClick(locId, itemsInLoc, mergeBlock)}
