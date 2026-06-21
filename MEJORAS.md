@@ -3,6 +3,35 @@
 
 ---
 
+## ESTADO DE SEGUIMIENTO — actualizado 2026-06-21
+> ⚠️ Este reporte es **histórico** (1-abr). El backend se modularizó en `backend/routes/*`
+> (30 routers) y `server.js` ya no es la única fuente; las líneas citadas abajo ya no
+> corresponden. Estado verificado por inspección del código actual:
+
+**✅ RESUELTOS (verificados):**
+- **SEC-01** bcrypt en login/alta de usuarios (`routes/auth.js` compara `$2b$`).
+- **SEC-02** Autenticación: `requireAuth` (JWT) aplicado; `jsonwebtoken` en deps.
+- **SEC-03** CORS restringido (`app.use(cors({ ... }))`).
+- **SEC-04** Token real en frontend (`wms_token` + header `Bearer`).
+- **SEC-05** `ILIKE $1 ESCAPE '\\'` en `/api/lpn/history/:lpnId`.
+- **SEC-06** Rate limiting (`globalLimiter`/`apiLimiter`/`loginLimiter`/`stockWriteLimiter`).
+- **SEC-07** Endpoint de contraseñas ahora devuelve `410 Gone`.
+- **EST-01** LPN IDs vía `genLpnId()` con UUID (`helpers.js`).
+- **COD-02** Backend separado en routers (`backend/routes/`).
+
+**🟥 ABIERTOS (verificados):**
+- **COD-01** `frontend/src/App.js` sigue monolítico y **creció a ~11.740 líneas**.
+  Bloquea historial de commits temáticos (cambios de varios módulos se entrelazan
+  en el mismo archivo). Pendiente: separar por módulo en componentes/hooks.
+
+**❓ NO AUDITADOS en esta pasada:** SEC-08..10, todos los REN-*, EST-02..12,
+todos los UX-* y COD-03..10. Revisar antes de darlos por cerrados.
+
+> Limpieza aparte: hay ~19 archivos `backend/server.js.bak-*` (respaldos) que
+> conviene eliminar del repo.
+
+---
+
 ## RESUMEN EJECUTIVO
 
 | Categoría   | CRÍTICO | ALTO | MEDIO | BAJO | Total |
