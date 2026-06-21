@@ -19,4 +19,6 @@ module.exports = [
   require('./018_doc_unique_constraints'),
   require('./019_insumos'),
   require('./020_insumo_movimientos'),
+  require('./021_insumo_lead_time'),
+  require('./022_insumo_mov_anulado'),
 ];

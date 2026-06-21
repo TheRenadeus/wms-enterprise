@@ -26,10 +26,10 @@ async function aplicarMovimiento(client, { insumoId, tipo, delta, meta = {} }) {
   const despues = antes + delta;
   if (despues < 0) { const e = new Error(`Stock insuficiente: disponible ${antes}, se intentó descontar ${Math.abs(delta)}.`); e.status = 409; throw e; }
   await client.query('UPDATE insumo_stock SET cantidad = $2, updated_at = NOW() WHERE insumo_id = $1', [insumoId, despues]);
-  await client.query(
-    `INSERT INTO insumo_movimientos (insumo_id, tipo, cantidad, stock_antes, stock_despues, documento_tipo, documento_id, client_id, usuario)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-    [insumoId, tipo, Math.abs(delta), antes, despues, meta.documento_tipo || null, meta.documento_id || null, meta.client_id || null, meta.usuario || null]
+  const movIns = await client.query(
+    `INSERT INTO insumo_movimientos (insumo_id, tipo, cantidad, stock_antes, stock_despues, documento_tipo, documento_id, client_id, usuario, fecha)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, COALESCE($10::timestamp, NOW())) RETURNING fecha`,
+    [insumoId, tipo, Math.abs(delta), antes, despues, meta.documento_tipo || null, meta.documento_id || null, meta.client_id || null, meta.usuario || null, meta.fecha || null]
   );
   return {
     tipo,
@@ -37,6 +37,7 @@ async function aplicarMovimiento(client, { insumoId, tipo, delta, meta = {} }) {
     cantidad: Math.abs(delta),
     stock_antes: antes,
     stock_despues: despues,
+    fecha: movIns.rows[0].fecha,
   };
 }
 
@@ -58,18 +59,21 @@ router.get('/insumos', requireAuth, async (req, res) => {
 
 // ── POST /insumos ── crear material (JEFE_BODEGA+). Crea fila de stock en 0.
 router.post('/insumos', requireJefe, async (req, res) => {
-  const { codigo, nombre, categoria, unidad, costo_unitario, stock_minimo } = req.body;
+  const { codigo, nombre, categoria, unidad, costo_unitario, stock_minimo, lead_time_dias } = req.body;
   if (!codigo || !String(codigo).trim()) return res.status(400).json({ error: 'El código es requerido.' });
   if (!nombre || !String(nombre).trim()) return res.status(400).json({ error: 'El nombre es requerido.' });
   const cat = CATEGORIAS.includes(categoria) ? categoria : 'otros';
+  // lead_time_dias es opcional: vacío/null = sin definir; si viene, entero >= 0.
+  const lead = (lead_time_dias === undefined || lead_time_dias === null || lead_time_dias === '') ? null : parseInt(lead_time_dias);
+  if (lead !== null && (isNaN(lead) || lead < 0)) return res.status(400).json({ error: 'El tiempo de reposición (días) debe ser un entero ≥ 0.' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const ins = await client.query(
-      `INSERT INTO insumos (codigo, nombre, categoria, unidad, costo_unitario, stock_minimo, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      `INSERT INTO insumos (codigo, nombre, categoria, unidad, costo_unitario, stock_minimo, lead_time_dias, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
       [String(codigo).trim(), String(nombre).trim(), cat, (unidad || 'UN').trim(),
-       parseFloat(costo_unitario) || 0, parseFloat(stock_minimo) || 0, req.user.username]
+       parseFloat(costo_unitario) || 0, parseFloat(stock_minimo) || 0, lead, req.user.username]
     );
     await client.query('INSERT INTO insumo_stock (insumo_id, cantidad) VALUES ($1, 0)', [ins.rows[0].id]);
     await client.query('COMMIT');
@@ -83,8 +87,14 @@ router.post('/insumos', requireJefe, async (req, res) => {
 
 // ── PUT /insumos/:id ── editar material (JEFE_BODEGA+). No cambia el stock.
 router.put('/insumos/:id', requireJefe, async (req, res) => {
-  const { codigo, nombre, categoria, unidad, costo_unitario, stock_minimo, activo } = req.body;
+  const { codigo, nombre, categoria, unidad, costo_unitario, stock_minimo, activo, lead_time_dias } = req.body;
   const cat = categoria !== undefined ? (CATEGORIAS.includes(categoria) ? categoria : 'otros') : undefined;
+  // lead_time_dias opcional: '' o null lo limpia (NULL); un número lo fija (entero ≥ 0).
+  let lead; // undefined = no tocar
+  if (lead_time_dias !== undefined) {
+    if (lead_time_dias === null || lead_time_dias === '') lead = null;
+    else { lead = parseInt(lead_time_dias); if (isNaN(lead) || lead < 0) return res.status(400).json({ error: 'El tiempo de reposición (días) debe ser un entero ≥ 0.' }); }
+  }
   try {
     const r = await pool.query(
       `UPDATE insumos SET
@@ -94,7 +104,8 @@ router.put('/insumos/:id', requireJefe, async (req, res) => {
          unidad = COALESCE($5, unidad),
          costo_unitario = COALESCE($6, costo_unitario),
          stock_minimo = COALESCE($7, stock_minimo),
-         activo = COALESCE($8, activo)
+         activo = COALESCE($8, activo),
+         lead_time_dias = CASE WHEN $10::boolean THEN $9 ELSE lead_time_dias END
        WHERE id = $1 RETURNING *`,
       [req.params.id,
        codigo !== undefined ? String(codigo).trim() : null,
@@ -103,7 +114,9 @@ router.put('/insumos/:id', requireJefe, async (req, res) => {
        unidad !== undefined ? String(unidad).trim() : null,
        costo_unitario !== undefined ? parseFloat(costo_unitario) : null,
        stock_minimo !== undefined ? parseFloat(stock_minimo) : null,
-       typeof activo === 'boolean' ? activo : null]
+       typeof activo === 'boolean' ? activo : null,
+       lead ?? null,                       // $9: valor (NULL incluido)
+       lead_time_dias !== undefined]       // $10: ¿se debe actualizar el campo?
     );
     if (!r.rows.length) return res.status(404).json({ error: 'Insumo no encontrado.' });
     res.json({ success: true, insumo: r.rows[0] });
@@ -126,10 +139,19 @@ router.delete('/insumos/:id', requireJefe, async (req, res) => {
 router.post('/insumos/:id/entrada', requireJefe, async (req, res) => {
   const cantidad = parseFloat(req.body.cantidad);
   if (!(cantidad > 0)) return res.status(400).json({ error: 'La cantidad debe ser mayor a 0.' });
+  // Fecha de ingreso OPCIONAL: permite registrar una entrada con fecha real (no la
+  // de captura). Si no viene, queda NOW(). No se admite fecha futura.
+  let fecha = null;
+  if (req.body.fecha) {
+    const d = new Date(req.body.fecha);
+    if (isNaN(d.getTime())) return res.status(400).json({ error: 'La fecha de ingreso no es válida.' });
+    if (d.getTime() > Date.now() + 60000) return res.status(400).json({ error: 'La fecha de ingreso no puede ser futura.' });
+    fecha = d.toISOString();
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const out = await aplicarMovimiento(client, { insumoId: req.params.id, tipo: 'entrada', delta: cantidad, meta: { usuario: req.user.username } });
+    const out = await aplicarMovimiento(client, { insumoId: req.params.id, tipo: 'entrada', delta: cantidad, meta: { usuario: req.user.username, fecha } });
     await client.query('COMMIT');
     res.json({ success: true, resumen: out });
   } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
@@ -275,7 +297,7 @@ router.get('/documentos/:tipo/:id/insumos', requireAuth, async (req, res) => {
               i.codigo, i.nombre, i.unidad, i.costo_unitario
          FROM insumo_movimientos m
          JOIN insumos i ON i.id = m.insumo_id
-        WHERE m.tipo = 'consumo' AND m.documento_tipo = $1 AND m.documento_id = $2
+        WHERE m.tipo = 'consumo' AND m.documento_tipo = $1 AND m.documento_id = $2 AND m.anulado = FALSE
         ORDER BY m.fecha DESC`,
       [tipo, id]
     );
@@ -294,7 +316,7 @@ router.delete('/documentos/:tipo/:id/insumos/:movId', requireStockWrite, async (
       `SELECT m.id, m.insumo_id, m.cantidad, m.client_id, dh.created_at
          FROM insumo_movimientos m
          LEFT JOIN document_history dh ON dh.id = m.documento_id
-        WHERE m.id = $1 AND m.tipo = 'consumo' AND m.documento_tipo = $2 AND m.documento_id = $3 FOR UPDATE`,
+        WHERE m.id = $1 AND m.tipo = 'consumo' AND m.documento_tipo = $2 AND m.documento_id = $3 AND m.anulado = FALSE FOR UPDATE OF m`,
       [movId, tipo, id]
     );
     if (!mov.rows.length) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Línea de consumo no encontrada.' }); }
@@ -304,11 +326,12 @@ router.delete('/documentos/:tipo/:id/insumos/:movId', requireStockWrite, async (
       await client.query('ROLLBACK');
       return res.status(409).json({ error: 'El documento ya está facturado; no se puede quitar el consumo.' });
     }
-    // Reintegrar stock (lock de la fila) y borrar la línea.
+    // Reintegrar stock (lock de la fila) y ANULAR la línea (no se borra: queda en el
+    // histórico con su marca de anulación para conservar la trazabilidad).
     const lock = await client.query('SELECT cantidad FROM insumo_stock WHERE insumo_id = $1 FOR UPDATE', [row.insumo_id]);
     const antes = lock.rows.length ? parseFloat(lock.rows[0].cantidad) : 0;
     await client.query('UPDATE insumo_stock SET cantidad = $2, updated_at = NOW() WHERE insumo_id = $1', [row.insumo_id, antes + parseFloat(row.cantidad)]);
-    await client.query('DELETE FROM insumo_movimientos WHERE id = $1', [movId]);
+    await client.query('UPDATE insumo_movimientos SET anulado = TRUE, anulado_at = NOW(), anulado_by = $2 WHERE id = $1', [movId, req.user.username]);
     await client.query('COMMIT');
     res.json({ success: true, reintegrado: parseFloat(row.cantidad), stock_despues: antes + parseFloat(row.cantidad) });
   } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
@@ -334,7 +357,7 @@ router.get('/insumos/alertas', requireAuth, async (req, res) => {
 router.get('/insumos/reportes/consumo', requireAuth, async (req, res) => {
   const { from, to } = req.query;
   try {
-    const conds = ["m.tipo = 'consumo'"];
+    const conds = ["m.tipo = 'consumo'", 'm.anulado = FALSE'];
     const params = [];
     let idx = 1;
     if (from) { conds.push(`m.fecha >= $${idx++}`); params.push(from); }
@@ -351,12 +374,144 @@ router.get('/insumos/reportes/consumo', requireAuth, async (req, res) => {
       `SELECT m.id, m.fecha, m.cantidad, m.documento_tipo, m.documento_id, m.client_id, m.usuario,
               i.codigo, i.nombre, i.unidad, i.costo_unitario,
               (m.cantidad * i.costo_unitario) AS costo,
-              COALESCE(c.name, m.client_id) AS client_name
+              COALESCE(c.name, m.client_id) AS client_name,
+              dh.doc_num, dh.doc_type
          FROM insumo_movimientos m
          JOIN insumos i ON i.id = m.insumo_id
          LEFT JOIN clients c ON c.id = m.client_id
+         LEFT JOIN document_history dh ON dh.id = m.documento_id
         WHERE ${conds.join(' AND ')}
         ORDER BY m.fecha DESC LIMIT 5000`,
+      params
+    );
+    res.json(r.rows);
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+// ════════════════ ANÁLISIS DE INVENTARIO (solo lectura) ════════════════
+// Vista derivada de los movimientos de consumo ya registrados. No escribe nada.
+// Permiso: cualquier staff autenticado EXCEPTO CLIENTE (AUDITOR sí, es solo lectura).
+// Para roles no-admin se aplica el mismo scope por cliente que /reportes/consumo.
+const denyCliente = (req, res, next) => {
+  if (req.user?.role === 'CLIENTE') return res.status(403).json({ error: 'Tu rol no tiene acceso al análisis de inventario.' });
+  next();
+};
+
+// Resuelve el scope de clientes del usuario. Devuelve:
+//   { block:true }              → no debe ver nada (responder vacío)
+//   { clients:[...] }           → limitar a estos client_id (scope 'assigned')
+//   {}                          → sin límite (admin / demo / scope 'all')
+async function scopeClientes(req) {
+  if (['ADMIN', 'SUPERADMIN'].includes(req.user.role) || req.user.is_demo) return {};
+  const perm = await getClientesPermitidos(req.user.username);
+  if (perm.scope === 'all') return {};
+  if (perm.scope === 'none') return { block: true };
+  if (!perm.clients.length) return { block: true };
+  return { clients: perm.clients };
+}
+
+// ── GET /insumos/analisis?dias=30&client_id=&umbral_dias=15 ──
+// Resumen por insumo + KPIs del período. Agregación (SUM/GROUP BY) en SQL.
+router.get('/insumos/analisis', requireAuth, denyCliente, async (req, res) => {
+  const dias = Math.min(Math.max(parseInt(req.query.dias) || 30, 1), 365);
+  const umbral = Math.min(Math.max(parseInt(req.query.umbral_dias) || 15, 1), 365);
+  const clientId = req.query.client_id ? String(req.query.client_id).trim() : null;
+  try {
+    const sc = await scopeClientes(req);
+    if (sc.block) return res.json({ periodo: { dias, umbral_dias: umbral, client_id: clientId }, kpis: { en_riesgo: 0, consumo_total_periodo: 0, insumo_mas_consumido: null }, items: [] });
+
+    // $1=dias, $2=umbral; los opcionales empiezan en $3.
+    const params = [dias, umbral];
+    let idx = 3;
+    const cc = ["m.tipo = 'consumo'", 'm.anulado = FALSE', `m.fecha >= NOW() - ($1::int * INTERVAL '1 day')`];
+    if (clientId) { cc.push(`m.client_id = $${idx++}`); params.push(clientId); }
+    if (sc.clients) { cc.push(`m.client_id = ANY($${idx++})`); params.push(sc.clients); }
+
+    const sql = `
+      WITH consumo AS (
+        SELECT m.insumo_id, SUM(m.cantidad) AS consumo_total
+          FROM insumo_movimientos m
+         WHERE ${cc.join(' AND ')}
+         GROUP BY m.insumo_id
+      ),
+      base AS (
+        SELECT i.id, i.codigo, i.nombre, i.unidad, i.categoria,
+               i.costo_unitario, i.stock_minimo, i.lead_time_dias,
+               COALESCE(s.cantidad,0)::numeric          AS stock_actual,
+               COALESCE(c.consumo_total,0)::numeric     AS consumo_total_periodo,
+               (COALESCE(c.consumo_total,0)::numeric / $1::numeric) AS consumo_prom_diario
+          FROM insumos i
+          LEFT JOIN insumo_stock s ON s.insumo_id = i.id
+          LEFT JOIN consumo c      ON c.insumo_id = i.id
+         WHERE i.activo = TRUE
+      ),
+      calc AS (
+        SELECT b.*,
+               CASE WHEN consumo_prom_diario > 0 THEN stock_actual / consumo_prom_diario END AS dias_cobertura,
+               CASE WHEN consumo_prom_diario > 0
+                    THEN COALESCE(lead_time_dias::numeric, stock_minimo / consumo_prom_diario) END AS umbral_critico
+          FROM base b
+      )
+      SELECT id, codigo, nombre, unidad, categoria, costo_unitario, stock_minimo, lead_time_dias,
+             stock_actual, consumo_total_periodo,
+             ROUND(consumo_prom_diario, 3) AS consumo_prom_diario,
+             CASE WHEN dias_cobertura IS NOT NULL THEN ROUND(dias_cobertura, 1) END AS dias_cobertura,
+             CASE WHEN dias_cobertura IS NOT NULL
+                  THEN (CURRENT_DATE + LEAST(FLOOR(dias_cobertura), 3650)::int) END AS quiebre_estimado,
+             CASE
+               WHEN consumo_prom_diario = 0       THEN 'ok'
+               WHEN dias_cobertura <= umbral_critico THEN 'critico'
+               WHEN dias_cobertura <= $2::numeric    THEN 'por_quebrar'
+               ELSE 'ok'
+             END AS estado
+        FROM calc
+       ORDER BY
+         CASE WHEN consumo_prom_diario = 0 THEN 2
+              WHEN dias_cobertura <= umbral_critico THEN 0
+              WHEN dias_cobertura <= $2::numeric THEN 1 ELSE 2 END,
+         dias_cobertura ASC NULLS LAST, nombre ASC`;
+
+    const r = await pool.query(sql, params);
+    const items = r.rows;
+    // KPIs derivados del resultado (conjunto pequeño: 1 fila por insumo activo).
+    const enRiesgo = items.filter(i => i.estado === 'critico' || i.estado === 'por_quebrar').length;
+    const consumoTotal = items.reduce((s, i) => s + parseFloat(i.consumo_total_periodo || 0), 0);
+    const top = items.reduce((best, i) =>
+      parseFloat(i.consumo_total_periodo || 0) > parseFloat(best?.consumo_total_periodo || 0) ? i : best, null);
+    const insumoMasConsumido = (top && parseFloat(top.consumo_total_periodo) > 0)
+      ? { id: top.id, codigo: top.codigo, nombre: top.nombre, unidad: top.unidad, consumo_total_periodo: parseFloat(top.consumo_total_periodo) }
+      : null;
+
+    res.json({
+      periodo: { dias, umbral_dias: umbral, client_id: clientId },
+      kpis: { en_riesgo: enRiesgo, consumo_total_periodo: consumoTotal, insumo_mas_consumido: insumoMasConsumido },
+      items,
+    });
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+// ── GET /insumos/:id/consumo-clientes?dias=30 ──
+// Consumo de UN insumo desglosado por cliente (mayor a menor). Agregación en SQL.
+router.get('/insumos/:id/consumo-clientes', requireAuth, denyCliente, async (req, res) => {
+  const dias = Math.min(Math.max(parseInt(req.query.dias) || 30, 1), 365);
+  try {
+    const sc = await scopeClientes(req);
+    if (sc.block) return res.json([]);
+    const params = [req.params.id, dias];
+    let idx = 3;
+    const cc = ["m.tipo = 'consumo'", 'm.anulado = FALSE', 'm.insumo_id = $1', `m.fecha >= NOW() - ($2::int * INTERVAL '1 day')`];
+    if (sc.clients) { cc.push(`m.client_id = ANY($${idx++})`); params.push(sc.clients); }
+    const r = await pool.query(
+      `SELECT m.client_id,
+              COALESCE(cl.name, m.client_id, 'Sin cliente') AS client_name,
+              SUM(m.cantidad)                    AS consumo_total,
+              SUM(m.cantidad * i.costo_unitario) AS costo
+         FROM insumo_movimientos m
+         JOIN insumos i  ON i.id = m.insumo_id
+         LEFT JOIN clients cl ON cl.id = m.client_id
+        WHERE ${cc.join(' AND ')}
+        GROUP BY m.client_id, cl.name
+        ORDER BY consumo_total DESC`,
       params
     );
     res.json(r.rows);
