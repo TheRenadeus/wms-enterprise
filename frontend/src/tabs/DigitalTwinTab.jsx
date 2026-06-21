@@ -6,7 +6,7 @@
 import React from 'react';
 import { DigitalTwinView } from '../components';
 
-export default function DigitalTwinTab({ inventory, locations, warehouses, zones, getStatusBadge, clients }) {
+export default function DigitalTwinTab({ inventory, locations, warehouses, zones, getStatusBadge, clients, userRole }) {
   return (
     <DigitalTwinView
       inventory={inventory}
@@ -15,6 +15,7 @@ export default function DigitalTwinTab({ inventory, locations, warehouses, zones
       zones={zones}
       getStatusBadge={getStatusBadge}
       clients={clients}
+      userRole={userRole}
     />
   );
 }

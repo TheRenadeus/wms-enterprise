@@ -29,7 +29,7 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
     const u = result.rows[0];
-    if (u.status === 'SUSPENDED') return res.status(403).json({ error: 'Cuenta Suspendida.' });
+    if (u.status === 'SUSPENDED') return res.status(403).json({ error: 'Cuenta inhabilitada. Contacte a un administrador.' });
 
     let valid = false;
     if (u.password && (u.password.startsWith('$2b$') || u.password.startsWith('$2a$'))) {

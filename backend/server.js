@@ -15,6 +15,7 @@ const { cached, invalidate: cacheInvalidate } = require('./cache');
 const { parsePagination, setPaginationHeaders } = require('./pagination');
 const { validateBody, schemas } = require('./schemas');
 const { genLpnId: genLpnIdFromHelpers, logStorageEvent } = require('./helpers');
+const { consumeComponentTracked } = require('./kitConsumo');
 const { apiErrorHandler } = require('./errorHandler');
 const authRouter = require('./routes/auth');
 const notificationsRouter = require('./routes/notifications');
@@ -40,6 +41,7 @@ const feedbackRouter = require('./routes/feedback');
 const manufacturersRouter = require('./routes/manufacturers');
 const substitutesRouter = require('./routes/substitutes');
 const insumosRouter = require('./routes/insumos');
+const kittingRouter = require('./routes/kitting');
 const {
   JWT_SECRET,
   requireAuth,
@@ -267,6 +269,7 @@ app.use('/api', feedbackRouter);       // /feedback (sugerencias del staff)
 app.use('/api', manufacturersRouter);  // /manufacturers (CRUD)
 app.use('/api', substitutesRouter);    // /skus/:sku/substitutes + /skus/substitutes
 app.use('/api', insumosRouter);        // /insumos (maestro), /insumos/* (movimientos, consumo)
+app.use('/api', kittingRouter);        // /kitting/receta, /kitting/recetas, /kitting/ordenes (v2)
 
 // /api/stats (genérico) sigue inline.
 app.get('/api/stats', requireAuth, async (req, res) => { try { const stock = await pool.query('SELECT COUNT(id) as total_lpns, COALESCE(SUM(qty), 0) as total_units FROM inventory_lpns WHERE qty > 0'); const skus = await pool.query('SELECT COUNT(*) as total_skus FROM master_skus'); res.json({ lpns: parseInt(stock.rows[0].total_lpns), units: parseFloat(stock.rows[0].total_units), skus: parseInt(skus.rows[0].total_skus) }); } catch (err) { sendDbError(res, err); }});
@@ -692,6 +695,9 @@ app.post('/api/receive_batch', stockWriteLimiter, requireStockWrite, checkClient
   } finally { client.release(); }
 });
 
+// El consumo de componentes de kit (Modo A) usa consumeComponentTracked de
+// ./kitConsumo, compartido con el armado de órdenes (routes/kitting.js, Modo B).
+
 app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   const { items, docNum, glosa, docType, username, usePickConfirmations, allow_substitutes: allowSubstFlag } = req.body;
   if (!docNum) return res.status(400).json({ error: 'docNum es requerido para trazabilidad.' });
@@ -703,6 +709,7 @@ app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClien
   if (!allowSubstFlag) {
     const skuTotals = {};
     items.forEach(it => {
+      if (it.isKit) return; // los kits no se sustituyen: se validan por componente en la transacción
       const s = String(it.sku || '').toUpperCase();
       const q = parseFloat(it.qtyToPick || it.qty || 0) || 0;
       if (!s) return;
@@ -739,9 +746,19 @@ app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClien
   try {
     await client.query('BEGIN');
 
-    // Derivar client_id del primer LPN para aislar la unicidad por cliente
-    const firstLpnRow = await client.query('SELECT client_id FROM inventory_lpns WHERE id=$1 LIMIT 1', [String(items[0].lpnId)]);
-    const dispClientId = (firstLpnRow.rows[0]?.client_id || '').toUpperCase();
+    // Derivar client_id del primer LPN para aislar la unicidad por cliente.
+    // Si el despacho es 100% de kits (líneas sin lpnId), tomar el client_id de la
+    // primera línea de kit (el kit pertenece a un cliente).
+    let dispClientId = '';
+    const firstNormal = items.find(it => !it.isKit && it.lpnId);
+    if (firstNormal) {
+      const firstLpnRow = await client.query('SELECT client_id FROM inventory_lpns WHERE id=$1 LIMIT 1', [String(firstNormal.lpnId)]);
+      dispClientId = (firstLpnRow.rows[0]?.client_id || '').toUpperCase();
+    }
+    if (!dispClientId) {
+      const firstKit = items.find(it => it.isKit && it.client_id);
+      if (firstKit) dispClientId = String(firstKit.client_id).toUpperCase();
+    }
     // Idempotencia: evitar doble despacho del mismo documento para este cliente
     const alreadyDisp = await client.query('SELECT doc_num FROM processed_docs WHERE doc_num=$1 AND doc_type=$2 AND client_id=$3', [docNum.toUpperCase(), (docType||'DIS').toUpperCase(), dispClientId]);
     if (alreadyDisp.rows.length > 0) {
@@ -764,10 +781,58 @@ app.post('/api/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClien
     }
 
     for (let it of items) {
-      const sku = String(it.sku);
-      const lpnId = String(it.lpnId);
       const docGlosa = glosa || '';
       const user = username || (req.user?.username) || 'SYSTEM';
+
+      // ── KITTING Modo A: línea de kit explotada al vuelo ──────────────────────
+      // El kit es VIRTUAL: no genera stock propio. Se descuenta cada componente de
+      // la receta (FEFO 'auto' o LPN elegidos 'manual'), se registra trazabilidad en
+      // kit_componente_consumido (origen_tipo='despacho') y un Kardex OUTBOUND por
+      // componente. Todo en la MISMA transacción del despacho.
+      if (it.isKit) {
+        const kitSku = String(it.sku || '').toUpperCase();
+        const kitClient = String(it.client_id || dispClientId || '').toUpperCase();
+        const qtyKits = parseInt(it.qtyKits ?? it.qty ?? it.qtyToPick);
+        if (!kitSku || !kitClient) throw new Error('Línea de kit sin SKU o cliente.');
+        if (isNaN(qtyKits) || qtyKits < 1) throw new Error(`Cantidad de kits inválida para ${kitSku}.`);
+        const receta = (await client.query(
+          `SELECT kc.component_sku, kc.qty,
+                  COALESCE(cm.requires_serial,false) AS rs, COALESCE(cm.requires_lot,false) AS rl
+             FROM kit_components kc
+             LEFT JOIN master_skus cm ON cm.sku=kc.component_sku AND cm.client_id=$2
+            WHERE kc.kit_sku=$1 AND kc.kit_client_id=$2`,
+          [kitSku, kitClient])).rows;
+        if (!receta.length) throw new Error(`El kit ${kitSku} no tiene receta definida para este cliente.`);
+        const compInput = {};
+        (Array.isArray(it.components) ? it.components : []).forEach(c => { compInput[String(c.component_sku || '').toUpperCase()] = c; });
+        for (const comp of receta) {
+          const needed = parseFloat(comp.qty) * qtyKits;
+          const ci = compInput[comp.component_sku];
+          const isManual = !!(ci && ci.mode === 'manual' && Array.isArray(ci.sources) && ci.sources.length);
+          const { touched, consumed } = await consumeComponentTracked(client, {
+            compSku: comp.component_sku, needed, clientId: kitClient,
+            picks: isManual ? ci.sources : null, requiresSerial: comp.rs, requiresLot: comp.rl,
+          });
+          lpnsToDelete.push(...touched);
+          for (const cc of consumed) {
+            await client.query(
+              `INSERT INTO kit_componente_consumido
+                 (componente_sku, cantidad, ubicacion, lote, serie, lpn_origen, origen_tipo, origen_id, modo_origen, client_id)
+               VALUES ($1,$2,$3,$4,$5,$6,'despacho',$7,$8,$9)`,
+              [comp.component_sku, cc.cantidad, cc.ubicacion, cc.lote, cc.serie, cc.lpn_id, docNum.toUpperCase(), isManual ? 'manual' : 'auto', kitClient]);
+            await client.query(
+              `INSERT INTO audit_log (type, sku, qty, glosa, username) VALUES ('OUTBOUND', $1, $2, $3, $4)`,
+              [comp.component_sku, cc.cantidad,
+               `[KIT] Componente de ${qtyKits}x ${kitSku}. Doc: [${docType || 'N/A'}] ${docNum}. LPN origen: ${cc.lpn_id}.${cc.lote ? ` Lote: ${cc.lote}.` : ''}${cc.serie ? ` Serie: ${cc.serie}.` : ''} ${docGlosa}`,
+               user]);
+            await logStorageEvent(client, { client_id: kitClient || null, event_type: 'MOVIMIENTO_OUT', sku: comp.component_sku, lpn_id: cc.lpn_id, qty: cc.cantidad });
+          }
+        }
+        continue; // el kit no descuenta como SKU normal ni genera stock propio
+      }
+
+      const sku = String(it.sku);
+      const lpnId = String(it.lpnId);
 
       // Si hay confirmación del picker para este LPN, usar su cantidad confirmada
       const pickConf = pickConfirmMap[lpnId];
@@ -972,14 +1037,34 @@ app.post('/api/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess(
 
 app.get('/api/export/skus', requireAuth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM master_skus ORDER BY sku ASC');
+    // Columnas explícitas que coinciden con la plantilla de importación (round-trip):
+    // export → editar → import. Se excluyen los SKU borrados (soft-delete) y columnas internas.
+    const result = await pool.query(`
+      SELECT sku, client_id, "desc", category, uom, weight, length, width, height, abc_class,
+             requires_lot, requires_serial, barcode, manufacturer_code, manufacturer_sku, brand
+        FROM master_skus
+       WHERE deleted_at IS NULL
+       ORDER BY client_id, sku ASC
+    `);
     const rows = result.rows;
     if (rows.length === 0) return res.status(404).json({ error: 'Sin datos' });
-    const headers = Object.keys(rows[0]).join(',');
-    const csv = rows.map(r => Object.values(r).map(v => `"${v ?? ''}"`).join(',')).join('\n');
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename=skus.csv');
-    res.send(headers + '\n' + csv);
+    const headers = Object.keys(rows[0]);
+    const dataRows = rows.map(r => headers.map(h => {
+      const v = r[h];
+      if (typeof v === 'boolean') return v ? 'TRUE' : 'FALSE';
+      return v ?? '';
+    }));
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...dataRows]);
+    ws['!cols'] = headers.map(() => ({ wch: 18 }));
+    applyRowStyles(ws, 0, headers, xlsxHeaderStyle);
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    XLSX.utils.book_append_sheet(wb, ws, 'SKUs');
+    const date = new Date().toISOString().slice(0, 10);
+    const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=skus_${date}.xlsx`);
+    res.send(buf);
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
@@ -1153,9 +1238,9 @@ async function validateStockRows(db, rows, { forceClient = null, defaultClient =
 // Plantillas descargables con fila de descripciones
 const TEMPLATES = {
   skus: {
-    headers: ['sku','client_id','desc','category','uom','weight','length','width','height','abc_class','requires_lot','requires_serial','barcode'],
-    desc:    ['Código único del producto (ej: PROD-001)','Código del cliente dueño del SKU (ej: CLI-001)','Descripción o nombre del producto','Categoría (ej: Electrónica, Alimentos)','Unidad de medida: UN=unidad, KG=kilogramo, LT=litro','Peso en kilogramos (ej: 1.5)','Largo en centímetros','Ancho en centímetros','Alto en centímetros','Clasificación ABC: A=alta rotación, B=media, C=baja','¿Requiere lote? TRUE o FALSE','¿Requiere número de serie? TRUE o FALSE','Código de barras del producto (opcional)'],
-    example: ['PROD-001','CLI-001','Ejemplo Producto','General','UN','1.5','30','20','15','A','FALSE','FALSE','7891234567890'],
+    headers: ['sku','client_id','desc','category','uom','weight','length','width','height','abc_class','requires_lot','requires_serial','barcode','manufacturer_code','manufacturer_sku','brand'],
+    desc:    ['Código único del producto (ej: PROD-001)','Código del cliente dueño del SKU (ej: CLI-001)','Descripción o nombre del producto','Categoría (ej: Electrónica, Alimentos)','Unidad de medida: UN=unidad, KG=kilogramo, LT=litro','Peso en kilogramos (ej: 1.5)','Largo en centímetros','Ancho en centímetros','Alto en centímetros','Clasificación ABC: A=alta rotación, B=media, C=baja','¿Requiere lote? TRUE o FALSE','¿Requiere número de serie? TRUE o FALSE','Código de barras del producto (opcional)','Código del fabricante (debe existir en el maestro de fabricantes; opcional)','SKU del fabricante / nº de parte (opcional)','Marca del producto (opcional)'],
+    example: ['PROD-001','CLI-001','Ejemplo Producto','General','UN','1.5','30','20','15','A','FALSE','FALSE','7891234567890','MFR-001','MP-9988','Marca Ejemplo'],
   },
   clients: {
     headers: ['id','name','contact','email'],
@@ -1315,6 +1400,9 @@ app.post('/api/import/skus', requireStockWrite, async (req, res) => {
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
+    // Mapa código de fabricante (mayúsculas) → id, para resolver manufacturer_code de cada fila.
+    const mfMap = new Map();
+    (await dbClient.query(`SELECT id, code FROM manufacturers`)).rows.forEach(m => mfMap.set(String(m.code).toUpperCase(), m.id));
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
       if (!r.sku || !r.desc) { results.errors.push(`Fila ${i+2}: SKU y descripción son obligatorios`); continue; }
@@ -1325,6 +1413,12 @@ app.post('/api/import/skus', requireStockWrite, async (req, res) => {
       seenKeys.add(key);
       const newLot = truthy(r.requires_lot);
       const newSerial = truthy(r.requires_serial);
+      // Fabricante / marca: el código se resuelve a manufacturer_id si existe en el maestro.
+      const mfCode = (r.manufacturer_code != null && String(r.manufacturer_code).trim() !== '') ? String(r.manufacturer_code).trim() : null;
+      const mfId = mfCode ? (mfMap.get(mfCode.toUpperCase()) ?? null) : null;
+      if (mfCode && mfId === null) results.errors.push(`Fila ${i+2}: fabricante '${mfCode}' no existe en el maestro — se guardó el código sin vincular`);
+      const mfSku = (r.manufacturer_sku != null && String(r.manufacturer_sku).trim() !== '') ? String(r.manufacturer_sku).trim() : null;
+      const brandN = (r.brand != null && String(r.brand).trim() !== '') ? String(r.brand).trim() : null;
       const baseParams = [
         r.desc, r.category || 'General', r.uom || 'UN',
         parseFloat(r.weight) || 0, parseFloat(r.length) || 0,
@@ -1337,17 +1431,17 @@ app.post('/api/import/skus', requireStockWrite, async (req, res) => {
       if (!exists.rows.length) {
         // Nuevo SKU
         await dbClient.query(`
-          INSERT INTO master_skus (sku, client_id, "desc", category, uom, weight, length, width, height, abc_class, requires_lot, requires_serial, barcode)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-        `, [skuNorm, clientNorm, ...baseParams.slice(0, 8), newLot, newSerial, baseParams[8]]);
+          INSERT INTO master_skus (sku, client_id, "desc", category, uom, weight, length, width, height, abc_class, requires_lot, requires_serial, barcode, manufacturer_id, manufacturer_code, manufacturer_sku, brand)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        `, [skuNorm, clientNorm, ...baseParams.slice(0, 8), newLot, newSerial, baseParams[8], mfId, mfCode, mfSku, brandN]);
         results.inserted++;
       } else {
         const cur = exists.rows[0];
         // Actualizar siempre los campos no versionados.
         await dbClient.query(`
-          UPDATE master_skus SET "desc"=$1, category=$2, uom=$3, weight=$4, length=$5, width=$6, height=$7, abc_class=$8, barcode=$9
+          UPDATE master_skus SET "desc"=$1, category=$2, uom=$3, weight=$4, length=$5, width=$6, height=$7, abc_class=$8, barcode=$9, manufacturer_id=$12, manufacturer_code=$13, manufacturer_sku=$14, brand=$15
           WHERE sku=$10 AND client_id=$11
-        `, [...baseParams, skuNorm, clientNorm]);
+        `, [...baseParams, skuNorm, clientNorm, mfId, mfCode, mfSku, brandN]);
 
         const criticalChange = (newLot !== cur.requires_lot) || (newSerial !== cur.requires_serial);
         if (criticalChange) {

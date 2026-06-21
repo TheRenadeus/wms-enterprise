@@ -4,7 +4,7 @@ import {
   ArrowUpRight, Search, CheckCircle2, X, FileText,
   Calendar, Tag, Sliders, MessageSquare, ArrowRightLeft, History, ClipboardCheck,
   Trash2, Plus, ListPlus, MinusCircle, FolderOpen, ArrowLeft, Pause, PlaySquare, Database, Warehouse, ShieldCheck, Truck, Loader2, Users, Building2, Pencil, Activity, RefreshCcw, ShieldAlert, FileType, UserCog, ArrowDownUp, LogOut, Eye, EyeOff, Settings2, Globe, Combine, Split, Edit, Layers, Scan, XCircle, PieChart, ChevronRight, BarChart3, Printer, Download, Upload, Menu, Bell, Key, Info, Lightbulb, ChevronDown, ChevronUp, Play,
-  ClipboardList, UserCheck, AlertTriangle, SkipForward, CheckCheck, ListTodo, CalendarClock, Clock, Send,
+  ClipboardList, UserCheck, UserX, AlertTriangle, SkipForward, CheckCheck, ListTodo, CalendarClock, Clock, Send,
   HardHat, Wrench, Timer, Moon, Sun, BookOpen
 } from 'lucide-react';
 import { useAutoSaveState, apiFetch, setDemoMode, timeAgo, exportToExcel } from './utils';
@@ -88,9 +88,29 @@ export default function App() {
   const [kitOrders, setKitOrders] = useState([]);
   const [kitBuildForm, setKitBuildForm] = useState({ kit_sku:'', client_id:'', qty:1, location:'PISO-RECEPCION' });
   const [kitAvailability, setKitAvailability] = useState(null);
+  // Origen de cada componente: { [compSku]: { mode:'auto'|'manual', picks:{ [lpnId]: qtyStr } } }
+  const [kitSources, setKitSources] = useState({});
   const [kitDispatchForm, setKitDispatchForm] = useState({ kit_sku:'', client_id:'', qty:1, doc_num:'', glosa:'' });
   const [kitDispatchAvail, setKitDispatchAvail] = useState(null);
+  const [kitDispSources, setKitDispSources] = useState({});
+  // Modo A — kit explotado al vuelo DENTRO de un despacho normal.
+  const [dispKitForm, setDispKitForm] = useState({ kit_sku: '', qty: 1 });
+  const [dispKitAvail, setDispKitAvail] = useState(null);
+  const [dispKitSources, setDispKitSources] = useState({});
   const [kittingTab, setKittingTab] = useState('definitions');
+  // Kitting v2 — órdenes de armado
+  const [ordForm, setOrdForm] = useState({ client_id:'', kit_sku:'', cantidad_kits:1, notas:'' });
+  const [ordSugeridos, setOrdSugeridos] = useState({}); // { compSku: { ubicacion, lote, serie } }
+  const [ordenesV2, setOrdenesV2] = useState([]);
+  const [creatingOrden, setCreatingOrden] = useState(false);
+  const [armOrden, setArmOrden] = useState(null);      // detalle de la orden a armar | null
+  const [armSources, setArmSources] = useState({});     // origen por componente (reusa el picker)
+  const [armDest, setArmDest] = useState({ ubicacion:'PISO-RECEPCION', lote:'', serie:'' });
+  const [armBusy, setArmBusy] = useState(false);
+  const [desarmOrden, setDesarmOrden] = useState(null); // detalle de la orden a desarmar | null
+  const [desarmDest, setDesarmDest] = useState('');      // ubicación destino opcional
+  const [desarmBusy, setDesarmBusy] = useState(false);
+  const [traceOrden, setTraceOrden] = useState(null); // detalle para ver trazabilidad | null
   // Portal de clientes
   const [portalUser, setPortalUser] = useState(() => { try { return JSON.parse(localStorage.getItem('wms_portal_user')||'null'); } catch{return null;} });
   const [portalToken] = useState(() => localStorage.getItem('wms_portal_token')||'');
@@ -194,7 +214,9 @@ export default function App() {
   const [manufacturers, setManufacturers] = useState([]);
   const [manufacturerForm, setManufacturerForm] = useState({ code:'', name:'', country:'', contact:'', email:'', phone:'', website:'', notes:'' });
   const [editingMfrId, setEditingMfrId] = useState(null);
-  const [mfrSearchTerm, setMfrSearchTerm] = useState('');
+  // Filtros individuales combinables (AND) para fabricantes.
+  const [mfrCodeFilter, setMfrCodeFilter] = useState('');
+  const [mfrNameFilter, setMfrNameFilter] = useState('');
   const [showMfrQuickForm, setShowMfrQuickForm] = useState(false);
   const [skuMfrFilter, setSkuMfrFilter] = useState('');
   const [mfrDetail, setMfrDetail] = useState(null);
@@ -568,7 +590,7 @@ export default function App() {
   // ── Módulo INSUMOS (materiales de bodega) ──
   const [insumos, setInsumos] = useState([]);
   const [insumosTab, setInsumosTab] = useState('materiales');
-  const [insumoForm, setInsumoForm] = useState({ codigo:'', nombre:'', categoria:'embalaje', unidad:'UN', costo_unitario:'', stock_minimo:'' });
+  const [insumoForm, setInsumoForm] = useState({ codigo:'', nombre:'', categoria:'embalaje', unidad:'UN', costo_unitario:'', stock_minimo:'', lead_time_dias:'' });
   const [isEditingInsumo, setIsEditingInsumo] = useState(false);
   const [isSavingInsumo, setIsSavingInsumo] = useState(false);
   const [docSearch, setDocSearch] = useState({ tipo:'', q:'' });
@@ -586,6 +608,18 @@ export default function App() {
   const [insumoMoveQty, setInsumoMoveQty] = useState('');
   const [insumoMoveResult, setInsumoMoveResult] = useState(null);
   const [isMovingInsumo, setIsMovingInsumo] = useState(false);
+  // Análisis de inventario (solo lectura)
+  const [anDias, setAnDias] = useState(30);
+  const [anClient, setAnClient] = useState('');
+  const [anData, setAnData] = useState(null);       // { periodo, kpis, items } | null
+  const [anLoading, setAnLoading] = useState(false);
+  const [anSelected, setAnSelected] = useState(null); // insumo seleccionado para desglose
+  const [anClientes, setAnClientes] = useState([]);   // desglose por cliente del seleccionado
+  const [anClientesLoading, setAnClientesLoading] = useState(false);
+  const [insumoMoveFecha, setInsumoMoveFecha] = useState(''); // fecha de ingreso opcional (entrada)
+  const [histInsumo, setHistInsumo] = useState(null); // insumo cuyo histórico se ve | null
+  const [histRows, setHistRows] = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
   const [newDocDate, setNewDocDate] = useState('');
   const [newDocRef, setNewDocRef] = useState('');
   const [newDocEnteredAt, setNewDocEnteredAt] = useState(() => new Date().toISOString().slice(0,16));
@@ -618,7 +652,10 @@ export default function App() {
   const openConfirm = (opts) => setConfirmDialog(opts);
   const closeConfirm = () => setConfirmDialog(null);
 
-  const [relSearchTerm, setRelSearchTerm] = useState('');
+  // Filtros individuales combinables (AND) para reubicación y cambio de estado.
+  const [relLpnFilter, setRelLpnFilter] = useState('');
+  const [relSkuFilter, setRelSkuFilter] = useState('');
+  const [relLocFilter, setRelLocFilter] = useState('');
   // Filtro "trabajar por cliente" para reubicación y cambio de estado (operan sobre LPN existentes).
   const [relClientFilter, setRelClientFilter] = useState('');
   const [destinations, setDestinations] = useState({});
@@ -634,10 +671,15 @@ export default function App() {
   const [skuForm, setSkuForm] = useState(initialSkuForm);
   const [skuSearchTerm, setSkuSearchTerm] = useState('');
   const [isEditingSku, setIsEditingSku] = useState(false);
-  const [locSearchTerm, setLocSearchTerm] = useState('');
+  // Filtros individuales combinables (AND) para ubicaciones.
+  const [locCodeFilter, setLocCodeFilter] = useState('');
+  const [locZoneFilter, setLocZoneFilter] = useState('');
 
   const [clientForm, setClientForm] = useState({ id: '', name: '', contact: '', email: '' });
-  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  // Filtros individuales combinables (AND) para la lista de clientes.
+  const [clientIdFilter, setClientIdFilter] = useState('');
+  const [clientNameFilter, setClientNameFilter] = useState('');
+  const [clientContactFilter, setClientContactFilter] = useState('');
 
   const [invSearchTerm, setInvSearchTerm] = useState('');
   const [invStatusFilter, setInvStatusFilter] = useState('');
@@ -694,6 +736,9 @@ export default function App() {
   const [resTab, setResTab] = useState('config');
   const [resSku, setResSku] = useState('');
   const [resSkuFilter, setResSkuFilter] = useState('');
+  // Filtros individuales combinables (AND) para el selector de SKU por recurso.
+  const [resDescFilter, setResDescFilter] = useState('');
+  const [resCliFilter, setResCliFilter] = useState('');
   const [resClientId, setResClientId] = useState('');
   const [resResources, setResResources] = useState([]);
   const [resForm, setResForm] = useState({ resource_type:'MATERIAL', resource_name:'', qty_per_unit:'1', unit:'UN', hours_per_unit:'0', time_unit:'HORAS', personnel_count:'1', notes:'' });
@@ -985,11 +1030,13 @@ export default function App() {
       if (!res.ok) throw new Error('Error de conexión');
       const latestInventory = await res.json();
       for (const item of itemsToValidate) {
+        if (item.isKit) continue; // los kits se validan por componente en el backend (transacción)
         const currentLpn = latestInventory.find(i => i.id === item.lpnId);
         if (!currentLpn) { showMsg(`❌ Error: El LPN ${item.lpnId} ya no existe.`, true); return false; }
-        const inThisCart = activeDoc?.items.filter(it => it.lpnId === item.lpnId).reduce((sum, it) => sum + parseFloat(it.qtyToPick || it.qty), 0) || 0;
-        const effectiveAvailable = parseFloat(currentLpn.qty) - inThisCart;
-        if (effectiveAvailable < item.qtyToPick) { showMsg(`❌ Stock Insuficiente: LPN ${item.lpnId} solo tiene ${effectiveAvailable}.`, true); return false; }
+        // Total que este despacho saca de ESTE LPN (suma de todas sus líneas en el carrito).
+        // Se compara UNA vez contra el stock físico; restar el propio carrito lo contaba doble.
+        const inThisCart = itemsToValidate.filter(it => it.lpnId === item.lpnId).reduce((sum, it) => sum + parseFloat(it.qtyToPick || it.qty), 0) || 0;
+        if (parseFloat(currentLpn.qty) < inThisCart) { showMsg(`❌ Stock Insuficiente: LPN ${item.lpnId} solo tiene ${currentLpn.qty}, requerido ${inThisCart}.`, true); return false; }
       }
       return true;
     } catch (error) { showMsg(`⛔ Error al validar stock`, true); return false; } finally { setIsValidating(false); }
@@ -997,7 +1044,8 @@ export default function App() {
 
   const handleCommitDispatchPartial = async () => {
     if (!activeDoc || activeDoc.items.length === 0) return;
-    const itemsToShip = activeDoc.items.map((it, idx) => ({ ...it, qtyToPick: shipQtys[idx] || 0 })).filter(it => it.qtyToPick > 0);
+    // Las líneas de kit van completas (no admiten parcial por LPN); las normales usan shipQtys.
+    const itemsToShip = activeDoc.items.map((it, idx) => it.isKit ? it : ({ ...it, qtyToPick: shipQtys[idx] || 0 })).filter(it => it.isKit || it.qtyToPick > 0);
     if (itemsToShip.length === 0) return showMsg('⚠️ Ingrese cantidad mayor a 0', true);
     if (isCommitting) return;
     const reauthPw = ''; // cierre de despacho sin re-clave
@@ -1009,13 +1057,14 @@ export default function App() {
       if (res.ok) {
         // Guardar en historial de documentos con client_id del primer LPN
         try {
-          const firstLpn = (Array.isArray(data) ? data : []).find(i => i.id === itemsToShip[0]?.lpnId);
-          const dispClientId = firstLpn?.client_id || '';
+          const firstNormal = itemsToShip.find(it => !it.isKit && it.lpnId);
+          const firstLpn = (Array.isArray(data) ? data : []).find(i => i.id === firstNormal?.lpnId);
+          const dispClientId = firstLpn?.client_id || activeDoc.client || '';
           await apiFetch(`${host}/api/document-history`, { method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ id: activeDoc.id, module: 'dispatch', doc_num: activeDoc.docNum, doc_type: activeDoc.docType, glosa: activeDoc.glosa, username: currentUser.username, items: itemsToShip, client_id: dispClientId }) });
         } catch(e) {}
         let remainingItems = [];
-        activeDoc.items.forEach((it, idx) => { const shipped = shipQtys[idx] || 0; const remaining = parseFloat(it.qtyToPick) - parseFloat(shipped); if (remaining > 0) remainingItems.push({ ...it, qtyToPick: remaining }); });
+        activeDoc.items.forEach((it, idx) => { if (it.isKit) return; const shipped = shipQtys[idx] || 0; const remaining = parseFloat(it.qtyToPick) - parseFloat(shipped); if (remaining > 0) remainingItems.push({ ...it, qtyToPick: remaining }); });
         if (remainingItems.length === 0) { showMsg('✅ Pedido despachado completo'); removeDoc('dispatch', activeDocId); setActiveDocId(null); }
         else { showMsg('⚠️ Despacho Parcial completado.'); setWorkspaces(prev => ({ ...prev, dispatch: prev.dispatch.map(d => d.id === activeDocId ? { ...d, items: remainingItems } : d) })); }
         setShowDispatchConfirm(false); fetchData();
@@ -1287,6 +1336,24 @@ export default function App() {
   };
   const handleEditUser = (u) => { const isAllCl = u.allowed_clients === 'ALL'; const isAllMod = u.allowed_modules === 'ALL' || !u.allowed_modules; setUserForm({ username: u.username, full_name: u.full_name, password: '', role: u.role, status: u.status || 'ACTIVE', allowed_clients: isAllCl ? 'ALL' : 'RESTRICTED', clientSelection: isAllCl ? [] : JSON.parse(u.allowed_clients || '[]'), allowed_modules_type: isAllMod ? 'ROLE' : 'CUSTOM', moduleSelection: isAllMod ? [] : JSON.parse(u.allowed_modules || '[]'), client_scope: u.client_scope || 'all', assigned_clients: Array.isArray(u.assigned_clients) ? u.assigned_clients : [] }); setIsEditingUser(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const handleDeleteUser = async (id) => { if(!(await confirm({ message: `¿Eliminar al usuario ${id}?`, danger: true }))) return; try { const res = await apiFetch(`${host}/api/users/${id}`, { method: 'DELETE' }); if (res.ok) { showMsg('✅ Usuario eliminado'); fetchData(); } else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); } } catch(e) { showMsg('⛔ Error de red', true); } };
+  // Inhabilitar/activar usuario. Inhabilitar libera un cupo de licencia; activar lo
+  // consume y el backend (POST /api/users) rechaza con 403 si no hay cupo disponible.
+  const handleToggleUserStatus = async (u) => {
+    const newStatus = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+    const enabling = newStatus === 'ACTIVE';
+    const ok = await confirm({
+      message: enabling
+        ? `¿Activar al usuario ${u.username}? Ocupará un cupo de licencia (debe haber uno disponible).`
+        : `¿Inhabilitar al usuario ${u.username}? No podrá iniciar sesión y se liberará su cupo de licencia.`,
+      danger: !enabling,
+    });
+    if (!ok) return;
+    try {
+      const res = await apiFetch(`${host}/api/users`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u.username, full_name: u.full_name, role: u.role, status: newStatus, allowed_clients: u.allowed_clients, allowed_modules: u.allowed_modules }) });
+      if (res.ok) { showMsg(enabling ? '✅ Usuario activado' : '✅ Usuario inhabilitado'); fetchData(); }
+      else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
+    } catch (e) { showMsg('⛔ Error de red', true); }
+  };
 
   const addKitComponent = () => {
     if (!kitComponentLine.sku || !kitComponentLine.qty || parseFloat(kitComponentLine.qty) <= 0) return;
@@ -1310,13 +1377,13 @@ export default function App() {
       const res = await apiFetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(insumoForm) });
       if (res.ok) {
         showMsg(isEditingInsumo ? '✅ Insumo actualizado' : '✅ Insumo creado');
-        setInsumoForm({ codigo:'', nombre:'', categoria:'embalaje', unidad:'UN', costo_unitario:'', stock_minimo:'' });
+        setInsumoForm({ codigo:'', nombre:'', categoria:'embalaje', unidad:'UN', costo_unitario:'', stock_minimo:'', lead_time_dias:'' });
         setIsEditingInsumo(false); fetchInsumos();
       } else { const err = await res.json().catch(()=>({})); showMsg(`⛔ ${err.error||'Error'}`, true); }
     } catch(e) { showMsg('⛔ Error de red', true); } finally { setIsSavingInsumo(false); }
   };
   const handleEditInsumo = (i) => {
-    setInsumoForm({ codigo:i.codigo, nombre:i.nombre, categoria:i.categoria, unidad:i.unidad, costo_unitario:i.costo_unitario, stock_minimo:i.stock_minimo });
+    setInsumoForm({ codigo:i.codigo, nombre:i.nombre, categoria:i.categoria, unidad:i.unidad, costo_unitario:i.costo_unitario, stock_minimo:i.stock_minimo, lead_time_dias: i.lead_time_dias ?? '' });
     setIsEditingInsumo(i.id); window.scrollTo({ top:0, behavior:'smooth' });
   };
   const loadInsumoReport = async () => {
@@ -1333,7 +1400,9 @@ export default function App() {
   const repGrouped = useMemo(() => {
     const acc = {};
     for (const x of repRows) {
-      const key = repGroup === 'cliente' ? (x.client_name || x.client_id || 'Sin cliente') : `${x.codigo} — ${x.nombre}`;
+      const key = repGroup === 'cliente' ? (x.client_name || x.client_id || 'Sin cliente')
+                : repGroup === 'documento' ? (x.doc_num ? `[${(x.doc_type || x.documento_tipo || '').toString().toUpperCase()}] ${x.doc_num}` : 'Consumo directo (sin documento)')
+                : `${x.codigo} — ${x.nombre}`;
       if (!acc[key]) acc[key] = { key, cantidad: 0, costo: 0, unidad: x.unidad };
       acc[key].cantidad += parseFloat(x.cantidad) || 0;
       acc[key].costo += parseFloat(x.costo) || 0;
@@ -1343,11 +1412,51 @@ export default function App() {
   const exportInsumoReport = () => {
     const rows = repGrouped.map(g => ({ grupo: g.key, cantidad: g.cantidad, costo: Math.round(g.costo) }));
     exportToExcel(rows, [
-      { key:'grupo', header: repGroup==='cliente'?'Cliente':'Insumo', format:'text' },
+      { key:'grupo', header: repGroup==='cliente'?'Cliente':repGroup==='documento'?'Documento':'Insumo', format:'text' },
       { key:'cantidad', header:'Cantidad', format:'number' },
       { key:'costo', header:'Costo total', format:'number' },
     ], `consumo_insumos_${repGroup}_${repRange.from||'inicio'}_${repRange.to||'hoy'}`, 'Consumo insumos');
   };
+  // ── Análisis de inventario (solo lectura) ──
+  const loadAnalisis = async () => {
+    setAnLoading(true); setAnSelected(null); setAnClientes([]);
+    try {
+      const qs = new URLSearchParams({ dias: String(anDias) });
+      if (anClient) qs.set('client_id', anClient);
+      const r = await apiFetch(`${host}/api/insumos/analisis?${qs.toString()}`);
+      setAnData(r.ok ? await r.json() : null);
+      if (!r.ok) { const e = await r.json().catch(()=>({})); showMsg(`⛔ ${e.error || 'Error al cargar análisis'}`, true); }
+    } catch(e) { setAnData(null); showMsg('⛔ Error de red', true); } finally { setAnLoading(false); }
+  };
+  const loadAnalisisClientes = async (insumo) => {
+    setAnSelected(insumo); setAnClientes([]); setAnClientesLoading(true);
+    try {
+      const r = await apiFetch(`${host}/api/insumos/${insumo.id}/consumo-clientes?dias=${anDias}`);
+      setAnClientes(r.ok ? await r.json() : []);
+    } catch(e) { setAnClientes([]); } finally { setAnClientesLoading(false); }
+  };
+  const exportAnalisis = () => {
+    const rows = (anData?.items || []).map(i => ({
+      codigo: i.codigo, nombre: i.nombre, stock: parseFloat(i.stock_actual),
+      prom_dia: parseFloat(i.consumo_prom_diario), cobertura: i.dias_cobertura != null ? parseFloat(i.dias_cobertura) : '',
+      quiebre: i.quiebre_estimado ? String(i.quiebre_estimado).slice(0,10) : '', estado: i.estado,
+    }));
+    exportToExcel(rows, [
+      { key:'codigo', header:'Código', format:'text' },
+      { key:'nombre', header:'Insumo', format:'text' },
+      { key:'stock', header:'Stock', format:'number' },
+      { key:'prom_dia', header:'Prom./día', format:'number' },
+      { key:'cobertura', header:'Días cobertura', format:'number' },
+      { key:'quiebre', header:'Quiebre estimado', format:'text' },
+      { key:'estado', header:'Estado', format:'text' },
+    ], `analisis_insumos_${anDias}d${anClient?'_'+anClient:''}`, 'Análisis insumos');
+  };
+  const ESTADO_INSUMO = {
+    critico:     { label:'Crítico',     badge:'bg-red-100 text-red-700 border-red-200',       dot:'bg-red-500' },
+    por_quebrar: { label:'Por quebrar', badge:'bg-amber-100 text-amber-700 border-amber-200', dot:'bg-amber-500' },
+    ok:          { label:'OK',          badge:'bg-emerald-100 text-emerald-700 border-emerald-200', dot:'bg-emerald-500' },
+  };
+
   const lowStockInsumos = insumos.filter(i => i.activo && parseFloat(i.stock_actual) < parseFloat(i.stock_minimo));
 
   const fetchDocInsumos = async (doc) => {
@@ -1401,11 +1510,21 @@ export default function App() {
     try {
       const path = tipo === 'entrada' ? 'entrada' : tipo === 'consumo' ? 'consumo' : 'ajuste';
       const body = tipo === 'ajuste' ? { nueva_cantidad: qty } : { cantidad: qty };
+      // Fecha de ingreso opcional, solo aplica a entradas.
+      if (tipo === 'entrada' && insumoMoveFecha) body.fecha = insumoMoveFecha;
       const res = await apiFetch(`${host}/api/insumos/${insumo.id}/${path}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
       const d = await res.json().catch(()=>({}));
-      if (res.ok) { setInsumoMoveResult(d.resumen); setInsumoMove(null); setInsumoMoveQty(''); fetchInsumos(); }
+      if (res.ok) { setInsumoMoveResult(d.resumen); setInsumoMove(null); setInsumoMoveQty(''); setInsumoMoveFecha(''); fetchInsumos(); if (histInsumo?.id === insumo.id) loadHistorial(insumo); }
       else showMsg(`⛔ ${d.error||'Error'}`, true);
     } catch(e) { showMsg('⛔ Error de red', true); } finally { setIsMovingInsumo(false); }
+  };
+  // Histórico de movimientos de un insumo (entrada/consumo/ajuste), incluye anulados.
+  const loadHistorial = async (insumo) => {
+    setHistInsumo(insumo); setHistLoading(true);
+    try {
+      const r = await apiFetch(`${host}/api/insumos/${insumo.id}/movimientos`);
+      setHistRows(r.ok ? await r.json() : []);
+    } catch(e) { setHistRows([]); } finally { setHistLoading(false); }
   };
 
   const handleToggleInsumo = async (i) => {
@@ -1425,10 +1544,83 @@ export default function App() {
     try {
       const kitPayload = { ...kitForm };
       if ((!is3PLMode || isHybridMode) && !kitPayload.client_id) kitPayload.client_id = systemConfig.own_client_id || 'PROPIO';
-      const res = await apiFetch(`${host}/api/kits`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(kitPayload) });
+      // Receta vía kitting v2: marca es_kit y valida que kit y componentes existan en el maestro del cliente.
+      const res = await apiFetch(`${host}/api/kitting/receta`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(kitPayload) });
       if (res.ok) { showMsg('✅ Kit guardado'); setKitForm({ kit_sku: '', client_id: '', description: '', components: [] }); setKitComponentLine({ sku: '', qty: '' }); fetchData(); }
       else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
     } catch (e) { showMsg('⛔ Error de red', true); }
+  };
+  // ── Kitting v2: órdenes de armado ──
+  const loadOrdenesV2 = useCallback(async () => {
+    try { const r = await apiFetch(`${host}/api/kitting/ordenes`); setOrdenesV2(r.ok ? await r.json() : []); } catch(e) { setOrdenesV2([]); }
+  }, [host]);
+  // Receta seleccionada para la orden (de la lista de kits ya cargada, por cliente).
+  const ordKit = (kits || []).find(k => k.kit_sku === ordForm.kit_sku && k.client_id === ordForm.client_id);
+  const handleCreateOrden = async () => {
+    if (creatingOrden) return;
+    if (!ordForm.client_id || !ordForm.kit_sku) return showMsg('⚠️ Elige cliente y kit', true);
+    const n = parseInt(ordForm.cantidad_kits);
+    if (!(n >= 1)) return showMsg('⚠️ Cantidad de kits inválida', true);
+    setCreatingOrden(true);
+    try {
+      const sugeridos = Object.entries(ordSugeridos).map(([componente_sku, v]) => ({ componente_sku, ...v }))
+        .filter(s => s.ubicacion || s.lote || s.serie);
+      const res = await apiFetch(`${host}/api/kitting/ordenes`, { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ kit_sku: ordForm.kit_sku, client_id: ordForm.client_id, cantidad_kits: n, notas: ordForm.notas || '', sugeridos }) });
+      if (res.ok) { const d = await res.json(); showMsg(`✅ Orden creada: ${d.id}`); setOrdForm({ client_id:'', kit_sku:'', cantidad_kits:1, notas:'' }); setOrdSugeridos({}); loadOrdenesV2(); }
+      else { const e = await res.json(); showMsg(`⛔ ${e.error}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setCreatingOrden(false); }
+  };
+  useEffect(() => { if (kittingTab === 'ordenes') loadOrdenesV2(); }, [kittingTab, loadOrdenesV2]);
+  // Abrir la pantalla de armado: trae el detalle (receta + LPN disponibles + sugeridos).
+  const openArmar = async (orderId) => {
+    try {
+      const r = await apiFetch(`${host}/api/kitting/ordenes/${orderId}`);
+      if (!r.ok) { const e = await r.json().catch(()=>({})); return showMsg(`⛔ ${e.error||'No se pudo abrir la orden'}`, true); }
+      const d = await r.json();
+      const init = {}; (d.receta||[]).forEach(c => { init[c.component_sku] = { mode:'auto', picks:{} }; });
+      setArmOrden(d); setArmSources(init); setArmDest({ ubicacion:'PISO-RECEPCION', lote:'', serie:'' });
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+  const handleArmar = async () => {
+    if (!armOrden || armBusy) return;
+    // Reusa la validación del picker de origen (suma exacta por componente en modo manual).
+    const avail = { components: (armOrden.receta||[]).map(r => ({ component_sku: r.component_sku, needed: parseFloat(r.qty_necesaria) })) };
+    const { ok, sources } = buildKitSourcesPayload(avail, armSources);
+    if (!ok) return;
+    setArmBusy(true);
+    try {
+      const res = await apiFetch(`${host}/api/kitting/ordenes/${armOrden.orden.id}/armar`, { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ consumos: sources, kit_ubicacion: armDest.ubicacion || null, kit_lote: armDest.lote || null, kit_serie: armDest.serie || null }) });
+      if (res.ok) { const d = await res.json(); showMsg(`✅ Kit armado — kit_stock ${d.kit_stock_id}`); setArmOrden(null); setArmSources({}); loadOrdenesV2(); fetchData(); }
+      else { const e = await res.json(); showMsg(`⛔ ${e.error}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setArmBusy(false); }
+  };
+  // Trazabilidad: dado un kit, ver sus componentes con ubicación/lote/serie de origen.
+  const openTrace = async (orderId) => {
+    try {
+      const r = await apiFetch(`${host}/api/kitting/ordenes/${orderId}`);
+      if (!r.ok) { const e = await r.json().catch(()=>({})); return showMsg(`⛔ ${e.error||'No se pudo abrir'}`, true); }
+      setTraceOrden(await r.json());
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+  // Desarmar: abre el detalle para mostrar qué componentes se reintegran y a dónde.
+  const openDesarmar = async (orderId) => {
+    try {
+      const r = await apiFetch(`${host}/api/kitting/ordenes/${orderId}`);
+      if (!r.ok) { const e = await r.json().catch(()=>({})); return showMsg(`⛔ ${e.error||'No se pudo abrir'}`, true); }
+      setDesarmOrden(await r.json()); setDesarmDest('');
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+  const handleDesarmar = async () => {
+    if (!desarmOrden || desarmBusy) return;
+    setDesarmBusy(true);
+    try {
+      const res = await apiFetch(`${host}/api/kitting/ordenes/${desarmOrden.orden.id}/desarmar`, { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ destino_ubicacion: desarmDest || null }) });
+      if (res.ok) { showMsg('✅ Kit desarmado — componentes reintegrados'); setDesarmOrden(null); loadOrdenesV2(); fetchData(); }
+      else { const e = await res.json(); showMsg(`⛔ ${e.error}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setDesarmBusy(false); }
   };
   const handleDeleteKit = async (kit_sku, client_id) => {
     if (!(await confirm({ message: `¿Eliminar kit ${kit_sku}?`, danger: true }))) return;
@@ -1503,6 +1695,13 @@ export default function App() {
   const docClient = activeDoc?.client || null;
   const docSkus = docClient ? permittedSkus.filter(s => (s.client_id || '') === docClient) : permittedSkus;
   const docInventory = docClient ? permittedInventory.filter(i => (i.client_id || '') === docClient) : permittedInventory;
+
+  // SKUs elegibles como componentes de un kit: acotados al cliente seleccionado del
+  // kit (en 3PL). El armado busca el stock del componente por client_id del kit, así
+  // que un componente de otro cliente haría el kit inarmable.
+  const kitClientSkus = (is3PLMode && kitForm.client_id)
+    ? permittedSkus.filter(s => (s.client_id || '') === kitForm.client_id)
+    : permittedSkus;
 
   const selSku = permittedSkus.find(s => s.sku === lineItem.sku) || {};
 
@@ -1585,11 +1784,22 @@ export default function App() {
 
   const addAdjustLine = () => { if (!lineItem.sku || !lineItem.qty) return; addLineToDoc({ ...lineItem, desc: selSku.desc }); };
 
+  // Lista de clientes con filtros individuales combinables (AND).
+  const filteredClients = useMemo(() => permittedClients.filter(c => {
+    const matchesId = clientIdFilter ? (c.id || '').toLowerCase().includes(clientIdFilter.toLowerCase()) : true;
+    const matchesName = clientNameFilter ? (c.name || '').toLowerCase().includes(clientNameFilter.toLowerCase()) : true;
+    const matchesContact = clientContactFilter
+      ? ((c.contact || '').toLowerCase().includes(clientContactFilter.toLowerCase()) || (c.email || '').toLowerCase().includes(clientContactFilter.toLowerCase()))
+      : true;
+    return matchesId && matchesName && matchesContact;
+  }), [permittedClients, clientIdFilter, clientNameFilter, clientContactFilter]);
+
   const filteredRelData = permittedInventory.filter(i => {
-    const term = relSearchTerm.toLowerCase();
-    const matchesSearch = i.id.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term) || (i.location_id || '').toLowerCase().includes(term);
+    const matchesLpn = relLpnFilter ? i.id.toLowerCase().includes(relLpnFilter.toLowerCase()) : true;
+    const matchesSku = relSkuFilter ? i.sku.toLowerCase().includes(relSkuFilter.toLowerCase()) : true;
+    const matchesLoc = relLocFilter ? (i.location_id || '').toLowerCase().includes(relLocFilter.toLowerCase()) : true;
     const matchesClient = relClientFilter ? (i.client_id || '') === relClientFilter : true;
-    return matchesSearch && matchesClient;
+    return matchesLpn && matchesSku && matchesLoc && matchesClient;
   });
   
   const filteredSkusList = useMemo(() => permittedSkus.filter(s => {
@@ -1602,8 +1812,8 @@ export default function App() {
   }), [permittedSkus, skuSearchTerm, skuClientFilter, skuCategoryFilter, skuAbcFilter]);
   
   const filteredLocs = safeLocs.filter(l => {
-    const term = locSearchTerm.toLowerCase();
-    if (term && !l.location_id.toLowerCase().includes(term) && !(l.zone_code || '').toLowerCase().includes(term)) return false;
+    if (locCodeFilter && !l.location_id.toLowerCase().includes(locCodeFilter.toLowerCase())) return false;
+    if (locZoneFilter && !(l.zone_code || '').toLowerCase().includes(locZoneFilter.toLowerCase())) return false;
     if (whZoneFilter && (l.zone_code || '') !== whZoneFilter) return false;
     if (whBodegaFilter && !l.location_id.startsWith(whBodegaFilter)) return false;
     return true;
@@ -1770,18 +1980,110 @@ export default function App() {
     if (!kitBuildForm.kit_sku || !buildClientId) return showMsg('⛔ Selecciona un Kit', true);
     try {
       const res = await apiFetch(`${host}/api/kit-availability?kit_sku=${encodeURIComponent(kitBuildForm.kit_sku)}&client_id=${encodeURIComponent(buildClientId)}&qty=${kitBuildForm.qty}`);
-      if (res.ok) setKitAvailability(await res.json());
+      if (res.ok) { const d = await res.json(); setKitAvailability(d); setKitSources(initKitSources(d)); }
       else showMsg('⛔ No se pudo verificar disponibilidad', true);
     } catch(e) { showMsg('⛔ Error de red', true); }
   };
+  // Inicializa el origen de cada componente en modo automático (FEFO).
+  const initKitSources = (avail) => {
+    const o = {}; (avail?.components || []).forEach(c => { o[c.component_sku] = { mode: 'auto', picks: {} }; }); return o;
+  };
+  // Construye el payload `sources` (solo componentes en manual) validando que cada uno
+  // sume exactamente lo necesario. Devuelve { ok, sources }.
+  const buildKitSourcesPayload = (avail, srcState) => {
+    const sources = {};
+    for (const c of (avail?.components || [])) {
+      const st = srcState[c.component_sku];
+      if (st?.mode !== 'manual') continue;
+      const picks = Object.entries(st.picks || {}).map(([lpn_id, q]) => ({ lpn_id, qty: parseFloat(q) || 0 })).filter(p => p.qty > 0);
+      const sum = picks.reduce((s, p) => s + p.qty, 0);
+      if (Math.abs(sum - c.needed) > 1e-6) { showMsg(`⛔ ${c.component_sku}: selecciona exactamente ${c.needed} (llevas ${sum})`, true); return { ok: false }; }
+      sources[c.component_sku] = picks;
+    }
+    return { ok: true, sources };
+  };
+  // Selector de origen de UN componente: toggle Automático(FEFO)/Elegir, y en manual
+  // la lista de LPN con ubicación, lote y serie + cuánto tomar de cada uno.
+  const renderKitSourcePicker = (c, srcState, setSrcState) => {
+    const st = srcState[c.component_sku] || { mode: 'auto', picks: {} };
+    const setMode = (mode) => setSrcState(prev => ({ ...prev, [c.component_sku]: { ...(prev[c.component_sku] || { picks: {} }), mode } }));
+    const setPick = (lpnId, val) => setSrcState(prev => { const cur = prev[c.component_sku] || { mode: 'manual', picks: {} }; return { ...prev, [c.component_sku]: { ...cur, picks: { ...cur.picks, [lpnId]: val } } }; });
+    const sum = Object.values(st.picks || {}).reduce((s, q) => s + (parseFloat(q) || 0), 0);
+    const ok = Math.abs(sum - c.needed) < 1e-6;
+    const tBtn = (active) => `text-[9px] font-black uppercase px-2 py-1 rounded-lg border ${active ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}`;
+    return (
+      <div className="mt-2 border-t border-slate-100 pt-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <span className="text-[9px] font-black text-slate-400 uppercase">Origen:</span>
+          <button type="button" onClick={()=>setMode('auto')} className={tBtn(st.mode !== 'manual')}>Automático (FEFO)</button>
+          <button type="button" onClick={()=>setMode('manual')} className={tBtn(st.mode === 'manual')}>Elegir origen</button>
+          {st.mode === 'manual' && <span className={`text-[10px] font-black ml-auto ${ok ? 'text-emerald-600' : 'text-red-500'}`}>{sum} / {c.needed}</span>}
+        </div>
+        {st.mode === 'manual' && (
+          <div className="space-y-1">
+            {(c.lpns || []).map(l => (
+              <div key={l.id} className="flex items-center gap-2 text-[10px] bg-slate-50 rounded-lg px-2 py-1">
+                <span className="font-mono font-bold text-slate-600 truncate max-w-[90px]" title={l.id}>{l.id}</span>
+                <span className="text-slate-500">📍 {l.location_id || '—'}</span>
+                {l.batch_number && <span className="text-amber-600 font-bold">Lote {l.batch_number}</span>}
+                {l.serial_number && <span className="text-violet-600 font-bold">S/N {l.serial_number}</span>}
+                <span className="text-slate-400 ml-auto">disp {parseFloat(l.qty)}</span>
+                <input type="number" min="0" max={parseFloat(l.qty)} step="0.01" value={st.picks[l.id] || ''} onChange={e=>setPick(l.id, e.target.value)} placeholder="0" className="w-16 border border-slate-200 rounded px-1.5 py-1 text-center font-black outline-none focus:border-slate-500"/>
+              </div>
+            ))}
+            {(c.lpns || []).length === 0 && <p className="text-[10px] text-slate-400">Sin LPN disponibles para este componente.</p>}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ── Modo A: verificar disponibilidad de un kit para agregarlo al despacho ──
+  const checkDispKitAvail = async () => {
+    if (!activeDoc) return;
+    const client_id = activeDoc.client;
+    if (!dispKitForm.kit_sku || !client_id) return showMsg('⚠️ Selecciona un kit', true);
+    const n = parseInt(dispKitForm.qty);
+    if (!(n >= 1)) return showMsg('⚠️ Cantidad de kits inválida', true);
+    try {
+      const r = await apiFetch(`${host}/api/kit-availability?kit_sku=${encodeURIComponent(dispKitForm.kit_sku)}&client_id=${encodeURIComponent(client_id)}&qty=${n}`);
+      if (r.ok) { const d = await r.json(); setDispKitAvail(d); setDispKitSources(initKitSources(d)); }
+      else { const e = await r.json(); showMsg(`⛔ ${e.error}`, true); }
+    } catch (e) { showMsg('⛔ Error al verificar disponibilidad', true); }
+  };
+
+  // ── Modo A: agregar la línea de kit (con orígenes por componente) al carro ──
+  const addKitLineToDispatch = () => {
+    if (!dispKitAvail?.can_build) return showMsg('⛔ Stock insuficiente para este kit', true);
+    const { ok, sources } = buildKitSourcesPayload(dispKitAvail, dispKitSources);
+    if (!ok) return;
+    const components = (dispKitAvail.components || []).map(c => {
+      const st = dispKitSources[c.component_sku] || { mode: 'auto' };
+      return st.mode === 'manual'
+        ? { component_sku: c.component_sku, mode: 'manual', sources: sources[c.component_sku] || [] }
+        : { component_sku: c.component_sku, mode: 'auto' };
+    });
+    const kitInfo = (kits || []).find(k => k.kit_sku === dispKitForm.kit_sku && k.client_id === activeDoc.client);
+    addLineToDoc({
+      isKit: true, sku: dispKitForm.kit_sku, desc: kitInfo?.description || 'Kit',
+      client_id: activeDoc.client, qtyKits: parseInt(dispKitForm.qty), components,
+      _compSummary: (dispKitAvail.components || []).map(c => `${c.needed}× ${c.component_sku}`).join(', '),
+    });
+    setDispKitForm({ kit_sku: '', qty: 1 }); setDispKitAvail(null); setDispKitSources({});
+    showMsg('✅ Kit agregado al carro de despacho');
+  };
+
   const handleBuildKit = async () => {
     if (!kitAvailability?.can_build) return;
+    const { ok, sources } = buildKitSourcesPayload(kitAvailability, kitSources);
+    if (!ok) return;
     if (!(await confirm({ message: `¿Armar ${kitBuildForm.qty} unidades de ${kitBuildForm.kit_sku}?`, danger: true }))) return;
     try {
       const buildPayload = { ...kitBuildForm, username: currentUser.username };
       if ((!is3PLMode || isHybridMode) && !buildPayload.client_id) buildPayload.client_id = systemConfig.own_client_id || 'PROPIO';
+      if (Object.keys(sources).length) buildPayload.sources = sources;
       const res = await apiFetch(`${host}/api/kit-build`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload) });
-      if (res.ok) { const d = await res.json(); showMsg(`✅ Kit armado — LPN: ${d.lpn}`); setKitBuildForm({ kit_sku:'', client_id:'', qty:1, location:'PISO-RECEPCION' }); setKitAvailability(null); fetchData(); }
+      if (res.ok) { const d = await res.json(); showMsg(`✅ Kit armado — LPN: ${d.lpn}`); setKitBuildForm({ kit_sku:'', client_id:'', qty:1, location:'PISO-RECEPCION' }); setKitAvailability(null); setKitSources({}); fetchData(); }
       else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
     } catch(e) { showMsg('⛔ Error de red', true); }
   };
@@ -1791,23 +2093,27 @@ export default function App() {
     if (!kitDispatchForm.kit_sku || !dispClientId) return showMsg('⛔ Selecciona un Kit', true);
     try {
       const r = await apiFetch(`${host}/api/kit-availability?kit_sku=${encodeURIComponent(kitDispatchForm.kit_sku)}&client_id=${encodeURIComponent(dispClientId)}&qty=${kitDispatchForm.qty}`);
-      if (r.ok) setKitDispatchAvail(await r.json());
+      if (r.ok) { const d = await r.json(); setKitDispatchAvail(d); setKitDispSources(initKitSources(d)); }
       else showMsg('⛔ No se pudo verificar disponibilidad', true);
     } catch(e) { showMsg('⛔ Error de red', true); }
   };
 
   const handleDirectKitDispatch = async () => {
     if (!kitDispatchAvail?.can_build) return;
+    const { ok, sources } = buildKitSourcesPayload(kitDispatchAvail, kitDispSources);
+    if (!ok) return;
     if (!(await confirm({ message: `¿Despachar directamente ${kitDispatchForm.qty}x ${kitDispatchForm.kit_sku}? Se consumirán los componentes ahora.`, danger: true }))) return;
     try {
       const dispPayload = { ...kitDispatchForm, username: currentUser.username };
       if ((!is3PLMode || isHybridMode) && !dispPayload.client_id) dispPayload.client_id = systemConfig.own_client_id || 'PROPIO';
+      if (Object.keys(sources).length) dispPayload.sources = sources;
       const r = await apiFetch(`${host}/api/kits/direct-dispatch`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(dispPayload) });
       if (r.ok) {
         const d = await r.json();
         showMsg(`✅ Despacho directo completado — Orden: ${d.order_id}`);
         setKitDispatchForm({ kit_sku:'', client_id:'', qty:1, doc_num:'', glosa:'' });
         setKitDispatchAvail(null);
+        setKitDispSources({});
         fetchData();
       } else { const err = await r.json(); showMsg(`⛔ ${err.error}`, true); }
     } catch(e) { showMsg('⛔ Error de red', true); }
@@ -2846,6 +3152,7 @@ export default function App() {
                   zones={zones}
                   getStatusBadge={getStatusBadge}
                   clients={clients}
+                  userRole={currentUser?.role}
                 />
               </Suspense>
             )}
@@ -3010,7 +3317,7 @@ export default function App() {
                              <label className="text-[10px] font-black text-slate-400 uppercase">Estado de la Cuenta</label>
                              <select value={userForm.status} onChange={e=>setUserForm({...userForm, status: e.target.value})} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white ${userForm.status === 'SUSPENDED' ? 'text-red-600' : 'text-emerald-600'}`}>
                                <option value="ACTIVE">🟢 Activa (Permitir Acceso)</option>
-                               <option value="SUSPENDED">🔴 Suspendida (Bloqueado)</option>
+                               <option value="SUSPENDED">🔴 Inhabilitada (Bloqueado)</option>
                              </select>
                           </div>
                         </div>
@@ -3132,6 +3439,13 @@ export default function App() {
                   <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
                     <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Usuarios del Sistema ({users.length})</p>
+                      {(() => {
+                        const max = parseInt(systemConfig?.license_max_users, 10);
+                        const active = users.filter(u => (u.status || 'ACTIVE') !== 'SUSPENDED' && u.role !== 'SUPERADMIN').length;
+                        if (!Number.isFinite(max) || max <= 0) return <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cupos: sin límite</span>;
+                        const full = active >= max;
+                        return <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${full ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`} title="Usuarios activos que ocupan cupo de licencia (SUPERADMIN no cuenta)">Cupos: {active} / {max}{full ? ' · lleno' : ''}</span>;
+                      })()}
                     </div>
                     <div className="space-y-3">
                       {users.map(u => (
@@ -3140,12 +3454,13 @@ export default function App() {
                             <div>
                               <p className="text-sm font-black text-slate-800 flex items-center gap-2">
                                 {u.full_name} 
-                                {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase">Suspendido</span>}
+                                {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase">Inhabilitado</span>}
                               </p>
                               <p className="text-[10px] font-mono text-slate-500 mt-1">@{u.username}</p>
                             </div>
                             <div className="flex items-center gap-1">
                               <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${u.role === 'ADMIN' || u.role === 'SUPERADMIN' ? 'bg-red-50 text-red-600 border-red-200' : u.role === 'EJECUTIVO_CUENTA' ? 'bg-teal-50 text-teal-600 border-teal-200' : u.role === 'AUDITOR' ? 'bg-blue-50 text-blue-600 border-blue-200' : u.role === 'PICKER' ? 'bg-violet-50 text-violet-600 border-violet-200' : u.role === 'CLIENTE' ? 'bg-cyan-50 text-cyan-600 border-cyan-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{u.role === 'EJECUTIVO_CUENTA' ? 'EJECUTIVO' : u.role}</span>
+                              <button onClick={() => handleToggleUserStatus(u)} disabled={u.username === 'admin' || u.username === currentUser?.username} className={`p-1.5 rounded-full border shadow-sm transition-all ml-2 disabled:opacity-30 ${u.status === 'SUSPENDED' ? 'bg-white border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-300' : 'bg-white border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300'}`} title={u.status === 'SUSPENDED' ? 'Activar (ocupa un cupo)' : 'Inhabilitar (libera el cupo)'}>{u.status === 'SUSPENDED' ? <UserCheck size={14}/> : <UserX size={14}/>}</button>
                               <button onClick={() => handleEditUser(u)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all ml-2" title="Editar Usuario"><Pencil size={14}/></button>
                               <button onClick={() => handleDeleteUser(u.username)} disabled={u.username === 'admin'} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 shadow-sm transition-all ml-1 disabled:opacity-30"><Trash2 size={14}/></button>
                             </div>
@@ -3287,7 +3602,7 @@ export default function App() {
               <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
                 {/* Sub-tabs kitting */}
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit flex-wrap">
-                  {[['definitions','Definiciones'],['build','Armar Kit'],['dispatch','Despacho Directo'],['orders','Historial']].map(([id,label])=>(
+                  {[['definitions','Definiciones'],['build','Armar Kit'],['dispatch','Despacho Directo'],['ordenes','Órdenes (armado)'],['orders','Historial']].map(([id,label])=>(
                     <button key={id} onClick={()=>setKittingTab(id)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${kittingTab===id?(id==='dispatch'?'bg-emerald-600 text-white shadow-sm':'bg-white text-indigo-700 shadow-sm'):'text-slate-500 hover:text-slate-700'}`}>{label}</button>
                   ))}
                 </div>
@@ -3309,7 +3624,7 @@ export default function App() {
                       <div className="space-y-1">
                         <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
                         {is3PLMode ? (
-                          <select value={kitForm.client_id} onChange={e=>setKitForm({...kitForm, client_id: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
+                          <select value={kitForm.client_id} onChange={e=>{setKitForm({...kitForm, client_id: e.target.value, components: []}); setKitComponentLine({ sku:'', qty:'' });}} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
                             <option value="">-- Seleccionar --</option>
                             {permittedClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
@@ -3328,9 +3643,9 @@ export default function App() {
                       <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-200">
                         <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Agregar Componente</p>
                         <div className="flex gap-2">
-                          <select value={kitComponentLine.sku} onChange={e=>setKitComponentLine({...kitComponentLine, sku: e.target.value})} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                            <option value="">-- SKU --</option>
-                            {permittedSkus.map(s => <option key={s.sku} value={s.sku}>{s.sku} — {s.desc}</option>)}
+                          <select value={kitComponentLine.sku} onChange={e=>setKitComponentLine({...kitComponentLine, sku: e.target.value})} disabled={is3PLMode && !kitForm.client_id} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 bg-white disabled:bg-slate-100 disabled:cursor-not-allowed">
+                            <option value="">{is3PLMode && !kitForm.client_id ? '-- Elige un cliente primero --' : '-- SKU --'}</option>
+                            {kitClientSkus.map(s => <option key={s.sku} value={s.sku}>{s.sku} — {s.desc}</option>)}
                           </select>
                           <input type="number" min="0.01" step="0.01" value={kitComponentLine.qty} onChange={e=>setKitComponentLine({...kitComponentLine, qty: e.target.value})} className="w-20 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-indigo-500 text-center" placeholder="Qty"/>
                           <button type="button" onClick={addKitComponent} className="bg-indigo-600 text-white px-3 py-2 rounded-xl hover:bg-indigo-700 transition-colors"><Plus size={16}/></button>
@@ -3442,10 +3757,13 @@ export default function App() {
                         <p className={`text-sm font-black uppercase tracking-tighter mb-3 ${kitAvailability.can_build?'text-emerald-700':'text-red-700'}`}>{kitAvailability.can_build?'✅ Stock suficiente para armar':'⛔ Stock insuficiente'}</p>
                         <div className="space-y-2">
                           {(kitAvailability.components||[]).map(c=>(
-                            <div key={c.component_sku} className="flex items-center justify-between text-[11px] bg-white rounded-xl px-4 py-2 border border-slate-100">
-                              <span className="font-black uppercase text-slate-700">{c.component_sku}</span>
-                              <span className="text-slate-500">Necesario: <strong>{c.needed}</strong></span>
-                              <span className={`font-black ${c.available>=c.needed?'text-emerald-600':'text-red-600'}`}>Disponible: {c.available}</span>
+                            <div key={c.component_sku} className="text-[11px] bg-white rounded-xl px-4 py-2 border border-slate-100">
+                              <div className="flex items-center justify-between">
+                                <span className="font-black uppercase text-slate-700">{c.component_sku}</span>
+                                <span className="text-slate-500">Necesario: <strong>{c.needed}</strong></span>
+                                <span className={`font-black ${c.available>=c.needed?'text-emerald-600':'text-red-600'}`}>Disponible: {c.available}</span>
+                              </div>
+                              {renderKitSourcePicker(c, kitSources, setKitSources)}
                             </div>
                           ))}
                         </div>
@@ -3534,13 +3852,16 @@ export default function App() {
                           {(kitDispatchAvail.components || []).map(c => {
                             const ok = c.available >= c.needed;
                             return (
-                              <div key={c.component_sku} className="flex items-center justify-between text-[11px] bg-white rounded-xl px-4 py-2.5 border border-slate-100 gap-3">
-                                <span className="font-black uppercase text-slate-700 flex-1 truncate">{c.component_sku}</span>
-                                <span className="text-slate-400 shrink-0">×{c.required_per_kit} por kit</span>
-                                <span className="text-slate-500 shrink-0">Requerido: <strong>{c.needed}</strong></span>
-                                <span className={`font-black shrink-0 ${ok ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {ok ? '✓' : '✗'} Disp: {c.available}
-                                </span>
+                              <div key={c.component_sku} className="text-[11px] bg-white rounded-xl px-4 py-2.5 border border-slate-100">
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="font-black uppercase text-slate-700 flex-1 truncate">{c.component_sku}</span>
+                                  <span className="text-slate-400 shrink-0">×{c.required_per_kit} por kit</span>
+                                  <span className="text-slate-500 shrink-0">Requerido: <strong>{c.needed}</strong></span>
+                                  <span className={`font-black shrink-0 ${ok ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {ok ? '✓' : '✗'} Disp: {c.available}
+                                  </span>
+                                </div>
+                                {renderKitSourcePicker(c, kitDispSources, setKitDispSources)}
                               </div>
                             );
                           })}
@@ -3570,6 +3891,246 @@ export default function App() {
                     )}
                   </div>
                 </div>
+                )}
+
+                {/* SUB-TAB ÓRDENES DE ARMADO (v2) */}
+                {kittingTab === 'ordenes' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Crear orden */}
+                  <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8">
+                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center mb-1"><ClipboardCheck className="w-5 h-5 mr-2 text-indigo-500"/> Nueva orden de armado</h2>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-5">El ejecutivo crea la orden; el picker la arma</p>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
+                          <select value={ordForm.client_id} onChange={e=>{ setOrdForm({...ordForm, client_id:e.target.value, kit_sku:''}); setOrdSugeridos({}); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
+                            <option value="">-- Seleccionar --</option>
+                            {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase">Kit (receta) *</label>
+                          <select value={ordForm.kit_sku} disabled={!ordForm.client_id} onChange={e=>{ setOrdForm({...ordForm, kit_sku:e.target.value}); setOrdSugeridos({}); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white disabled:bg-slate-100">
+                            <option value="">{ordForm.client_id ? '-- Seleccionar --' : '-- Elige cliente --'}</option>
+                            {(kits||[]).filter(k=>k.client_id===ordForm.client_id && (k.components||[]).length>0).map(k=><option key={k.kit_sku} value={k.kit_sku}>{k.kit_sku}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad de kits *</label>
+                          <input type="number" min="1" value={ordForm.cantidad_kits} onChange={e=>setOrdForm({...ordForm, cantidad_kits:parseInt(e.target.value)||1})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500"/>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-400 uppercase">Notas</label>
+                          <input type="text" value={ordForm.notas} onChange={e=>setOrdForm({...ordForm, notas:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Opcional"/>
+                        </div>
+                      </div>
+                      {/* Componentes + origen sugerido (opcional) */}
+                      {ordKit && (
+                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
+                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Componentes · origen sugerido <span className="text-slate-300 normal-case">(opcional, el picker confirma o ajusta)</span></p>
+                          <div className="space-y-2">
+                            {(ordKit.components||[]).map(c=>{
+                              const sug = ordSugeridos[c.component_sku] || {};
+                              const setSug = (k,v)=>setOrdSugeridos(prev=>({...prev, [c.component_sku]: { ...(prev[c.component_sku]||{}), [k]:v }}));
+                              return (
+                                <div key={c.component_sku} className="flex items-center gap-2 flex-wrap text-[11px]">
+                                  <span className="font-black text-slate-700 w-32 truncate">{c.component_sku}</span>
+                                  <span className="text-slate-400">×{parseFloat(c.qty)} → {parseFloat(c.qty)*(parseInt(ordForm.cantidad_kits)||1)}</span>
+                                  <input value={sug.ubicacion||''} onChange={e=>setSug('ubicacion',e.target.value.toUpperCase())} placeholder="Ubicación" className="flex-1 min-w-[90px] border border-slate-200 rounded-lg px-2 py-1 font-bold outline-none focus:border-indigo-400 uppercase"/>
+                                  <input value={sug.lote||''} onChange={e=>setSug('lote',e.target.value)} placeholder="Lote" className="w-20 border border-slate-200 rounded-lg px-2 py-1 font-bold outline-none focus:border-indigo-400"/>
+                                  <input value={sug.serie||''} onChange={e=>setSug('serie',e.target.value)} placeholder="Serie" className="w-24 border border-slate-200 rounded-lg px-2 py-1 font-bold outline-none focus:border-indigo-400"/>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                      <button onClick={handleCreateOrden} disabled={creatingOrden || !ordForm.kit_sku} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-indigo-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">{creatingOrden ? <Loader2 size={16} className="animate-spin"/> : <Plus size={16}/>} Crear orden (pendiente)</button>
+                    </div>
+                  </div>
+                  {/* Lista de órdenes */}
+                  <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Órdenes ({ordenesV2.length})</h3>
+                      <button onClick={loadOrdenesV2} className="text-slate-400 hover:text-indigo-600" title="Refrescar"><RefreshCcw size={14}/></button>
+                    </div>
+                    <div className="overflow-x-auto max-h-[60vh]">
+                      <table className="w-full text-left">
+                        <thead className="bg-slate-100 border-b border-slate-200 sticky top-0"><tr>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Orden / Kit</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Cliente</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cant.</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Estado</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center pr-5">Acción</th>
+                        </tr></thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {ordenesV2.map(o=>{
+                            const est = o.estado==='pendiente' ? 'bg-amber-100 text-amber-700' : o.estado==='armado' ? 'bg-emerald-100 text-emerald-700' : o.estado==='desarmado' ? 'bg-slate-200 text-slate-600' : 'bg-red-100 text-red-700';
+                            return (
+                              <tr key={o.id} className="hover:bg-slate-50">
+                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{o.kit_sku}</p><p className="text-[9px] font-mono text-slate-400">{o.id}</p></td>
+                                <td className="p-3 text-[10px] font-bold text-slate-500">{o.client_name||o.client_id}</td>
+                                <td className="p-3 text-center text-sm font-black text-slate-700">{o.cantidad_kits}</td>
+                                <td className="p-3 text-center"><span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${est}`}>{o.estado}</span></td>
+                                <td className="p-3 text-center pr-5 whitespace-nowrap">
+                                  {o.estado==='pendiente' && <button onClick={()=>openArmar(o.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg mr-1">Armar</button>}
+                                  {o.estado==='armado' && <button onClick={()=>openDesarmar(o.id)} className="bg-rose-600 hover:bg-rose-700 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg mr-1">Desarmar</button>}
+                                  <button onClick={()=>openTrace(o.id)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[9px] font-black uppercase px-3 py-1.5 rounded-lg">Ver</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {ordenesV2.length===0 && <tr><td colSpan={5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin órdenes</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+                )}
+
+                {/* Modal de ARMADO (picker) */}
+                {armOrden && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>setArmOrden(null)}>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+                      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Package size={18} className="text-indigo-500"/> Armar {armOrden.orden.cantidad_kits}× {armOrden.orden.kit_sku}</h3>
+                          <p className="text-[11px] font-bold text-slate-500">{armOrden.orden.client_name||armOrden.orden.client_id} · orden {armOrden.orden.id}</p>
+                        </div>
+                        <button onClick={()=>setArmOrden(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                      </div>
+                      <div className="overflow-auto p-5 space-y-3">
+                        {(armOrden.receta||[]).map(r => {
+                          const c = { component_sku: r.component_sku, needed: parseFloat(r.qty_necesaria), lpns: r.lpns||[] };
+                          const sug = (armOrden.sugeridos||[]).filter(s => s.componente_sku === r.component_sku);
+                          const falta = parseFloat(r.disponible) < parseFloat(r.qty_necesaria);
+                          return (
+                            <div key={r.component_sku} className="bg-slate-50 rounded-2xl p-3 border border-slate-200">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <span className="text-xs font-black text-slate-700">{r.component_sku} <span className="text-slate-400 font-bold">{r.desc||''}</span></span>
+                                <span className="text-[11px] font-bold text-slate-500">Necesario: <strong>{parseFloat(r.qty_necesaria)}</strong> · Disp: <strong className={falta?'text-red-600':'text-emerald-600'}>{parseFloat(r.disponible)}</strong></span>
+                              </div>
+                              {(r.requires_serial || r.requires_lot) && <p className="text-[9px] font-black uppercase mt-1 text-violet-600">{r.requires_serial?'requiere serie':''}{r.requires_serial&&r.requires_lot?' · ':''}{r.requires_lot?'requiere lote':''}</p>}
+                              {sug.length>0 && <div className="flex flex-wrap gap-1 mt-1.5">{sug.map((s,i)=><span key={i} className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5">Sugerido: {s.ubicacion||'—'}{s.lote?` · L:${s.lote}`:''}{s.serie?` · S/N:${s.serie}`:''}</span>)}</div>}
+                              {renderKitSourcePicker(c, armSources, setArmSources)}
+                            </div>
+                          );
+                        })}
+                        {/* Destino del kit */}
+                        <div className="bg-white rounded-2xl border border-slate-200 p-3">
+                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Destino del kit armado</p>
+                          <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                            <input value={armDest.ubicacion} onChange={e=>setArmDest({...armDest, ubicacion:e.target.value.toUpperCase()})} placeholder="Ubicación" className="flex-1 min-w-[110px] border border-slate-200 rounded-lg px-2 py-1.5 font-bold outline-none focus:border-indigo-400 uppercase"/>
+                            <input value={armDest.lote} onChange={e=>setArmDest({...armDest, lote:e.target.value})} placeholder="Lote (si aplica)" className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 font-bold outline-none focus:border-indigo-400"/>
+                            <input value={armDest.serie} onChange={e=>setArmDest({...armDest, serie:e.target.value})} placeholder="Serie (si aplica)" className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 font-bold outline-none focus:border-indigo-400"/>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-4 border-t border-slate-100 flex gap-2">
+                        <button onClick={()=>setArmOrden(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
+                        <button onClick={handleArmar} disabled={armBusy} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">{armBusy ? <Loader2 size={14} className="animate-spin"/> : <Package size={14}/>} Confirmar armado</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal de TRAZABILIDAD */}
+                {traceOrden && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>setTraceOrden(null)}>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+                      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ClipboardCheck size={18} className="text-indigo-500"/> Trazabilidad · {traceOrden.orden.kit_sku}</h3>
+                          <p className="text-[11px] font-bold text-slate-500">{traceOrden.orden.client_name||traceOrden.orden.client_id} · {traceOrden.orden.cantidad_kits} kit(s) · estado <strong>{traceOrden.orden.estado}</strong> · orden {traceOrden.orden.id}</p>
+                        </div>
+                        <button onClick={()=>setTraceOrden(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                      </div>
+                      <div className="overflow-auto p-5 space-y-4">
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-[10px] font-bold text-slate-500">
+                          <span>Creó: <strong className="text-slate-700">{traceOrden.orden.usuario_creador||'—'}</strong></span>
+                          {traceOrden.orden.armado_por && <span>Armó: <strong className="text-slate-700">{traceOrden.orden.armado_por}</strong></span>}
+                          {traceOrden.orden.desarmado_por && <span>Desarmó: <strong className="text-slate-700">{traceOrden.orden.desarmado_por}</strong></span>}
+                          {(traceOrden.kit_stock||[]).map(k=><span key={k.id}>kit_stock: <strong className="text-slate-700">{k.estado}</strong> @ {k.ubicacion}</span>)}
+                        </div>
+                        {/* Origen FINAL consumido */}
+                        <div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Componentes · origen de cada pieza</p>
+                          {(traceOrden.consumidos||[]).length===0 ? <p className="text-[11px] text-slate-400">Aún no armado (sin consumo registrado).</p> : (
+                            <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+                              <table className="w-full text-left">
+                                <thead className="bg-slate-100 border-b border-slate-200"><tr>
+                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase pl-4">Componente</th>
+                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase text-center">Cant.</th>
+                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">Ubicación</th>
+                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">Lote</th>
+                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">Serie</th>
+                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">LPN origen</th>
+                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase text-center pr-4">vs sug.</th>
+                                </tr></thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {traceOrden.consumidos.map(cc=>(
+                                    <tr key={cc.id} className="hover:bg-slate-50">
+                                      <td className="p-2.5 pl-4 text-[11px] font-black text-slate-700">{cc.componente_sku}</td>
+                                      <td className="p-2.5 text-center text-[11px] font-bold text-slate-600">{parseFloat(cc.cantidad)}</td>
+                                      <td className="p-2.5 text-[11px] text-slate-600">{cc.ubicacion||'—'}</td>
+                                      <td className="p-2.5 text-[11px] text-amber-600 font-bold">{cc.lote||'—'}</td>
+                                      <td className="p-2.5 text-[11px] text-violet-600 font-bold">{cc.serie||'—'}</td>
+                                      <td className="p-2.5 text-[10px] font-mono text-slate-400">{cc.lpn_origen||'—'}</td>
+                                      <td className="p-2.5 text-center pr-4">{cc.difiere_de_sugerido ? <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase">Difiere</span> : <span className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase">OK</span>}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                        {/* Origen sugerido (referencia) */}
+                        {(traceOrden.sugeridos||[]).length>0 && (
+                          <div>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Origen sugerido (referencia del ejecutivo)</p>
+                            <div className="flex flex-wrap gap-1">
+                              {traceOrden.sugeridos.map((s,i)=><span key={i} className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5">{s.componente_sku}: {s.ubicacion||'—'}{s.lote?` · L:${s.lote}`:''}{s.serie?` · S/N:${s.serie}`:''}</span>)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Modal de DESARMADO (ejecutivo) */}
+                {desarmOrden && (
+                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>setDesarmOrden(null)}>
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+                      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><AlertTriangle size={18} className="text-rose-500"/> Desarmar {desarmOrden.orden.kit_sku}</h3>
+                          <p className="text-[11px] font-bold text-slate-500">Se reintegran estos componentes a stock:</p>
+                        </div>
+                        <button onClick={()=>setDesarmOrden(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                      </div>
+                      <div className="overflow-auto p-5 space-y-2">
+                        {(desarmOrden.consumidos||[]).map(cc => (
+                          <div key={cc.id} className="flex items-center justify-between text-[11px] bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
+                            <span className="font-black text-slate-700">{cc.componente_sku}</span>
+                            <span className="text-slate-500">{parseFloat(cc.cantidad)} → <strong>{desarmDest || cc.ubicacion || 'PISO-RECEPCION'}</strong>{cc.lote?` · L:${cc.lote}`:''}{cc.serie?` · S/N:${cc.serie}`:''}</span>
+                          </div>
+                        ))}
+                        {(desarmOrden.consumidos||[]).length===0 && <p className="text-center text-slate-400 text-xs font-bold py-4">Sin componentes consumidos.</p>}
+                        <div className="pt-2">
+                          <label className="text-[9px] font-black text-slate-400 uppercase">Ubicación destino (opcional — si se omite, vuelve a su origen)</label>
+                          <input value={desarmDest} onChange={e=>setDesarmDest(e.target.value.toUpperCase())} placeholder="Ej: RACK-A (vacío = ubicación de origen)" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-rose-400 uppercase mt-1"/>
+                        </div>
+                      </div>
+                      <div className="p-4 border-t border-slate-100 flex gap-2">
+                        <button onClick={()=>setDesarmOrden(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
+                        <button onClick={handleDesarmar} disabled={desarmBusy} className="flex-[2] bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">{desarmBusy ? <Loader2 size={14} className="animate-spin"/> : <AlertTriangle size={14}/>} Confirmar desarmado</button>
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {/* SUB-TAB ÓRDENES DE KIT */}
@@ -3650,15 +4211,20 @@ export default function App() {
                     <div className="sticky top-0 bg-white pt-2 pb-3 z-10 border-b border-slate-100 space-y-2 mb-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clientes ({permittedClients.filter(c=>(c.id||'').toLowerCase().includes(clientSearchTerm.toLowerCase())||(c.name||'').toLowerCase().includes(clientSearchTerm.toLowerCase())).length})</p>
-                          <button onClick={() => { const filtered = permittedClients.filter(c=>(c.id||'').toLowerCase().includes(clientSearchTerm.toLowerCase())||(c.name||'').toLowerCase().includes(clientSearchTerm.toLowerCase())); const headers='id,name,contact,email'; const csv=filtered.map(c=>`"${c.id}","${c.name}","${c.contact||''}","${c.email||''}"`).join('\n'); const blob=new Blob([headers+'\n'+csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='clientes_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clientes ({filteredClients.length})</p>
+                          <button onClick={() => { const headers='id,name,contact,email'; const csv=filteredClients.map(c=>`"${c.id}","${c.name}","${c.contact||''}","${c.email||''}"`).join('\n'); const blob=new Blob([headers+'\n'+csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='clientes_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
                           <button onClick={() => setImportModal({ type: 'clients' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Upload size={10}/> Importar</button>
                         </div>
                       </div>
-                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><Search size={11} className="text-slate-400 mr-1 shrink-0"/><input type="text" placeholder="Buscar por ID o nombre..." value={clientSearchTerm} onChange={(e) => setClientSearchTerm(e.target.value)} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700"/></div>
+                      <div className="grid grid-cols-3 gap-1">
+                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><Search size={11} className="text-slate-400 mr-1 shrink-0"/><input type="text" placeholder="ID..." value={clientIdFilter} onChange={(e) => setClientIdFilter(e.target.value)} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700"/></div>
+                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><Search size={11} className="text-slate-400 mr-1 shrink-0"/><input type="text" placeholder="Nombre..." value={clientNameFilter} onChange={(e) => setClientNameFilter(e.target.value)} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700"/></div>
+                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><Search size={11} className="text-slate-400 mr-1 shrink-0"/><input type="text" placeholder="Contacto / email..." value={clientContactFilter} onChange={(e) => setClientContactFilter(e.target.value)} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700"/></div>
+                      </div>
+                      {(clientIdFilter||clientNameFilter||clientContactFilter) && <button onClick={()=>{setClientIdFilter('');setClientNameFilter('');setClientContactFilter('');}} className="mt-1 bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[9px] font-black uppercase flex items-center gap-1 w-max"><X size={9}/> Limpiar</button>}
                     </div>
                     <div className="space-y-3">
-                      {permittedClients.filter(c => (c.id || '').toLowerCase().includes(clientSearchTerm.toLowerCase()) || (c.name || '').toLowerCase().includes(clientSearchTerm.toLowerCase())).map(c => (
+                      {filteredClients.map(c => (
                         <div key={c.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col hover:bg-white transition-colors shadow-sm">
                           <div className="flex justify-between items-start mb-2">
                             <div>
@@ -4478,10 +5044,15 @@ export default function App() {
                            <option value="">Todas las zonas</option>
                            {[...new Set(safeLocs.map(l=>l.zone_code||'SIN ZONA'))].sort().map(z=><option key={z} value={z}>{z}</option>)}
                          </select>
-                         <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm w-56 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
+                         <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm w-36 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
                            <Search size={12} className="text-slate-400 mr-2" />
-                           <input type="text" placeholder="Buscar..." value={locSearchTerm} onChange={(e) => { setLocSearchTerm(e.target.value); setLocPage(0); }} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700" />
+                           <input type="text" placeholder="Ubicación..." value={locCodeFilter} onChange={(e) => { setLocCodeFilter(e.target.value); setLocPage(0); }} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700" />
                          </div>
+                         <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm w-36 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
+                           <Search size={12} className="text-slate-400 mr-2" />
+                           <input type="text" placeholder="Zona..." value={locZoneFilter} onChange={(e) => { setLocZoneFilter(e.target.value); setLocPage(0); }} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700" />
+                         </div>
+                         {(locCodeFilter||locZoneFilter) && <button onClick={()=>{setLocCodeFilter('');setLocZoneFilter('');setLocPage(0);}} className="bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1.5 text-[9px] font-black uppercase flex items-center gap-1"><X size={9}/> Limpiar</button>}
                        </div>
                      </div>
 
@@ -4896,12 +5467,12 @@ export default function App() {
                       </div>
                     </form>
                   </div>}
-                  <div className={`${currentUser?.role === 'CLIENTE' ? 'w-full' : 'flex-[1.5]'} overflow-y-auto max-h-[500px] custom-scrollbar pr-2`}>
+                  <div className={`${currentUser?.role === 'CLIENTE' ? 'w-full' : 'flex-[1.5]'} overflow-y-auto h-[calc(100vh-180px)] custom-scrollbar pr-2`}>
                     <div className="sticky top-0 bg-white pt-2 pb-3 z-10 border-b border-slate-100 space-y-2 mb-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Catálogo ({filteredSkusList.length})</p>
-                          <button onClick={() => { const headers = 'sku,client_id,desc,category,uom,weight,length,width,height,abc_class,requires_lot,requires_serial,barcode'; const csv = filteredSkusList.map(s => Object.values({sku:s.sku,client_id:s.client_id||'',desc:s.desc||'',category:s.category||'',uom:s.uom||'',weight:s.weight||0,length:s.length||0,width:s.width||0,height:s.height||0,abc_class:s.abc_class||'',requires_lot:s.requires_lot||false,requires_serial:s.requires_serial||false,barcode:s.barcode||''}).map(v=>`"${v}"`).join(',')).join('\n'); const blob = new Blob([headers+'\n'+csv],{type:'text/csv'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='skus_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
+                          <button onClick={() => { const headers = 'sku,client_id,desc,category,uom,weight,length,width,height,abc_class,requires_lot,requires_serial,barcode,manufacturer_code,manufacturer_sku,brand'; const csv = filteredSkusList.map(s => Object.values({sku:s.sku,client_id:s.client_id||'',desc:s.desc||'',category:s.category||'',uom:s.uom||'',weight:s.weight||0,length:s.length||0,width:s.width||0,height:s.height||0,abc_class:s.abc_class||'',requires_lot:s.requires_lot||false,requires_serial:s.requires_serial||false,barcode:s.barcode||'',manufacturer_code:s.manufacturer_code||s.manufacturer?.code||'',manufacturer_sku:s.manufacturer_sku||'',brand:s.brand||''}).map(v=>`"${v}"`).join(',')).join('\n'); const blob = new Blob([headers+'\n'+csv],{type:'text/csv'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='skus_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
                           {currentUser?.role !== 'CLIENTE' && <button onClick={() => setImportModal({ type: 'skus' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Upload size={10}/> Importar</button>}
                         </div>
                         {(skuSearchTerm||skuClientFilter||skuCategoryFilter||skuAbcFilter) && <button onClick={() => { setSkuSearchTerm(''); setSkuClientFilter(''); setSkuCategoryFilter(''); setSkuAbcFilter(''); }} className="bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[9px] font-black uppercase flex items-center gap-1"><X size={9}/> Limpiar</button>}
@@ -4930,12 +5501,12 @@ export default function App() {
                         </select>
                       </div>
                     </div>
-                    <div className="space-y-3">
+                    <div className="space-y-1.5">
                       {filteredSkusList.slice(skuPage * PAGE_SIZE, (skuPage + 1) * PAGE_SIZE).map(s => (
-                        <div key={s.sku} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col hover:bg-white transition-colors shadow-sm group">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="text-sm font-black text-slate-800 flex items-center gap-2">
+                        <div key={s.sku} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl flex flex-col hover:bg-white transition-colors shadow-sm group">
+                          <div className="flex justify-between items-start">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black text-slate-800 flex items-center gap-2 flex-wrap">
                                 {s.sku}
                                 {(() => {
                                   const ver = parseInt(s.current_version) || 1;
@@ -4949,27 +5520,24 @@ export default function App() {
                                 })()}
                                 {s.barcode && <span className="text-[9px] bg-slate-200 text-slate-600 px-1 rounded font-mono">UPC: {s.barcode}</span>}
                               </p>
-                              <p className="text-[10px] text-slate-500 truncate w-48 md:w-64">{s.desc}</p>
-                              {s.client_id && <p className="text-[9px] text-indigo-600 font-bold mt-1"><Building2 size={10} className="inline mr-1"/>Cliente: {clients.find(c=>c.id===s.client_id)?.name || s.client_id}</p>}
+                              <p className="text-[10px] text-slate-500 truncate w-48 md:w-72">
+                                {s.desc}
+                                {s.client_id && <span className="text-indigo-600 font-bold"> · {clients.find(c=>c.id===s.client_id)?.name || s.client_id}</span>}
+                                {(s.weight || s.length || s.width || s.height) && <span className="text-slate-400"> · {s.weight ? `${s.weight}kg ` : ''}{(s.length || s.width || s.height) ? `${s.length||0}×${s.width||0}×${s.height||0}cm` : ''}</span>}
+                              </p>
                             </div>
-                            <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              {(s.requires_lot || s.requires_serial) && <span className="text-[9px] font-black bg-amber-100 border border-amber-200 px-2 py-1 rounded uppercase text-amber-800 mr-2">{s.requires_lot ? 'LOTE' : 'SERIE'}</span>}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {(s.requires_lot || s.requires_serial) && <span className="text-[9px] font-black bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded uppercase text-amber-800 mr-1">{s.requires_lot ? 'LOTE' : 'SERIE'}</span>}
 
-                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleEditSku(s)} className="bg-white p-2 rounded-full border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all" title="Editar Producto">
-                                <Pencil size={14}/>
+                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleEditSku(s)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all" title="Editar Producto">
+                                <Pencil size={13}/>
                               </button>}
 
-                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleDeleteSku(s.sku, s.client_id)} className="bg-white p-2 rounded-full border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 shadow-sm transition-all ml-1" title="Eliminar Producto">
-                                <Trash2 size={14}/>
+                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleDeleteSku(s.sku, s.client_id)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 shadow-sm transition-all" title="Eliminar Producto">
+                                <Trash2 size={13}/>
                               </button>}
                             </div>
                           </div>
-                          {(s.weight || s.length || s.width || s.height) && (
-                            <div className="mt-2 pt-2 border-t border-slate-100 flex gap-4 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                              {s.weight && <span>Peso: {s.weight}kg</span>}
-                              {(s.length || s.width || s.height) && <span>Dim: {s.length||0}x{s.width||0}x{s.height||0}cm</span>}
-                            </div>
-                          )}
                         </div>
                       ))}
                       {filteredSkusList.length > PAGE_SIZE && (
@@ -5261,16 +5829,77 @@ export default function App() {
                       )}
                     </div>
 
+                    {/* ── Modo A: despachar un KIT explotando componentes al vuelo ── */}
+                    {activeDoc.client && (
+                      <div className="bg-white rounded-3xl border-2 border-violet-100 shadow-sm overflow-hidden mb-6">
+                        <div className="bg-violet-50 border-b border-violet-100 p-4">
+                          <h3 className="text-[10px] font-black text-violet-600 uppercase tracking-widest">📦 Despachar kit (explota componentes)</h3>
+                          <p className="text-[9px] text-violet-400 mt-0.5">El kit no genera stock propio: se descuentan sus componentes con trazabilidad de origen.</p>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          {(() => {
+                            const availKits = (kits || []).filter(k => k.client_id === activeDoc.client && (k.components || []).length > 0);
+                            if (availKits.length === 0) return <p className="text-[10px] text-slate-400">No hay kits con receta para este cliente.</p>;
+                            return (
+                              <div className="flex flex-wrap items-end gap-2">
+                                <div className="flex-1 min-w-[180px]">
+                                  <label className="text-[9px] font-black text-slate-400 uppercase">Kit</label>
+                                  <select value={dispKitForm.kit_sku} onChange={e => { setDispKitForm(f => ({ ...f, kit_sku: e.target.value })); setDispKitAvail(null); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-violet-500">
+                                    <option value="">— Selecciona —</option>
+                                    {availKits.map(k => <option key={k.kit_sku} value={k.kit_sku}>{k.kit_sku}{k.description ? ` · ${k.description}` : ''}</option>)}
+                                  </select>
+                                </div>
+                                <div className="w-24">
+                                  <label className="text-[9px] font-black text-slate-400 uppercase">Cant. kits</label>
+                                  <input type="number" min="1" value={dispKitForm.qty} onChange={e => { setDispKitForm(f => ({ ...f, qty: e.target.value })); setDispKitAvail(null); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-center font-black outline-none focus:border-violet-500"/>
+                                </div>
+                                <button type="button" onClick={checkDispKitAvail} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">Verificar</button>
+                              </div>
+                            );
+                          })()}
+                          {dispKitAvail && (
+                            <div className={`rounded-2xl p-4 border-2 ${dispKitAvail.can_build ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                              <p className={`text-xs font-black uppercase mb-2 ${dispKitAvail.can_build ? 'text-emerald-700' : 'text-red-700'}`}>{dispKitAvail.can_build ? '✅ Stock suficiente' : '⛔ Stock insuficiente'}</p>
+                              <div className="space-y-2">
+                                {(dispKitAvail.components || []).map(c => (
+                                  <div key={c.component_sku} className="bg-white rounded-xl px-3 py-2 border border-slate-100">
+                                    <div className="flex items-center gap-2 text-[11px]">
+                                      <span className="font-black uppercase text-slate-700 flex-1 truncate">{c.component_sku}</span>
+                                      <span className="text-slate-400">necesita {c.needed}</span>
+                                      <span className={`font-black ${c.available >= c.needed ? 'text-emerald-600' : 'text-red-600'}`}>disp {c.available}</span>
+                                    </div>
+                                    {renderKitSourcePicker(c, dispKitSources, setDispKitSources)}
+                                  </div>
+                                ))}
+                              </div>
+                              {dispKitAvail.can_build && (
+                                <button type="button" onClick={addKitLineToDispatch} className="mt-3 w-full bg-violet-600 hover:bg-violet-700 text-white font-black py-2.5 rounded-xl uppercase text-[10px] tracking-widest">+ Agregar kit al carro</button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {activeDoc.items.length > 0 && (
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-                        <div className="bg-slate-50 border-b border-slate-200 p-4 flex justify-between items-center"><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Carro de Extracción ({activeDoc.items.length} posiciones)</h3><span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-1 rounded font-black uppercase">Total: {activeDoc.items.reduce((sum, it) => sum + parseFloat(it.qtyToPick), 0)} Unds.</span></div>
+                        <div className="bg-slate-50 border-b border-slate-200 p-4 flex justify-between items-center"><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Carro de Extracción ({activeDoc.items.length} posiciones)</h3><span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-1 rounded font-black uppercase">Total: {activeDoc.items.reduce((sum, it) => sum + (parseFloat(it.qtyToPick) || 0), 0)} Unds.</span></div>
                         <table className="w-full text-left">
                           <thead className="bg-slate-100 border-b border-slate-200"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Origen LPN / SKU</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Sacar</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Eliminar</th></tr></thead>
                           <tbody className="divide-y divide-slate-100">
                             {activeDoc.items.map((it, idx) => (
                               <tr key={idx} className="hover:bg-slate-50">
-                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}</p></td>
-                                <td className="p-3 text-center text-lg font-black text-blue-600">-{it.qtyToPick}</td>
+                                {it.isKit ? (
+                                  <>
+                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku} <span className="ml-1 bg-violet-100 text-violet-700 px-1.5 rounded font-black text-[9px] uppercase">KIT</span></p><p className="text-[9px] text-slate-500">{it._compSummary}</p><p className="text-[8px] text-slate-400 uppercase">{(it.components||[]).every(c=>c.mode!=='manual') ? 'Origen automático (FEFO)' : 'Origen mixto / seleccionado'}</p></td>
+                                    <td className="p-3 text-center text-lg font-black text-violet-600">{it.qtyKits} kit{it.qtyKits>1?'s':''}</td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}</p></td>
+                                    <td className="p-3 text-center text-lg font-black text-blue-600">-{it.qtyToPick}</td>
+                                  </>
+                                )}
                                 <td className="p-3 text-center"><button onClick={() => removeLineFromDoc(idx)} className="text-red-400 hover:text-red-600"><MinusCircle size={16}/></button></td>
                               </tr>
                             ))}
@@ -5370,23 +5999,36 @@ export default function App() {
                       <tbody className="divide-y divide-slate-100">
                         {activeDoc.items.map((it, idx) => (
                           <tr key={idx} className="hover:bg-slate-50">
-                            <td className="p-3 pl-4">
-                              <p className="text-xs font-black text-slate-800">{it.sku}</p>
-                              <p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}</p>
-                            </td>
-                            <td className="p-3 text-center text-sm font-black text-slate-500">{it.qtyToPick}</td>
-                            <td className="p-3 text-center pr-4">
-                              <input 
-                                type="number" 
-                                min="0" 
-                                max={it.qtyToPick} 
-                                value={shipQtys[idx] === 0 ? '' : shipQtys[idx]} 
-                                onChange={(e) => setShipQtys({...shipQtys, [idx]: parseFloat(e.target.value) || 0})}
-                                disabled={!!it.serial} 
-                                className="w-24 border-2 border-blue-200 rounded-xl px-3 py-2 text-center font-black outline-none focus:border-blue-600 text-blue-700 bg-blue-50"
-                                placeholder="0"
-                              />
-                            </td>
+                            {it.isKit ? (
+                              <>
+                                <td className="p-3 pl-4">
+                                  <p className="text-xs font-black text-slate-800">{it.sku} <span className="ml-1 bg-violet-100 text-violet-700 px-1.5 rounded font-black text-[9px] uppercase">KIT</span></p>
+                                  <p className="text-[9px] text-slate-500">{it._compSummary}</p>
+                                </td>
+                                <td className="p-3 text-center text-sm font-black text-slate-500">{it.qtyKits} kit{it.qtyKits>1?'s':''}</td>
+                                <td className="p-3 text-center pr-4"><span className="text-[9px] font-black text-violet-600 uppercase">Completo</span></td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="p-3 pl-4">
+                                  <p className="text-xs font-black text-slate-800">{it.sku}</p>
+                                  <p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}</p>
+                                </td>
+                                <td className="p-3 text-center text-sm font-black text-slate-500">{it.qtyToPick}</td>
+                                <td className="p-3 text-center pr-4">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={it.qtyToPick}
+                                    value={shipQtys[idx] === 0 ? '' : shipQtys[idx]}
+                                    onChange={(e) => setShipQtys({...shipQtys, [idx]: parseFloat(e.target.value) || 0})}
+                                    disabled={!!it.serial}
+                                    className="w-24 border-2 border-blue-200 rounded-xl px-3 py-2 text-center font-black outline-none focus:border-blue-600 text-blue-700 bg-blue-50"
+                                    placeholder="0"
+                                  />
+                                </td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -5713,12 +6355,20 @@ export default function App() {
                         </select>
                       </div>
                     )}
-                    {/* Búsqueda */}
-                    <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-56">
+                    {/* Filtros individuales combinables */}
+                    <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
                       <Search size={14} className="text-slate-400 mr-2"/>
-                      <input type="text" placeholder="Buscar producto o código..." value={relSearchTerm} onChange={e=>setRelSearchTerm(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                      <input type="text" placeholder="LPN..." value={relLpnFilter} onChange={e=>setRelLpnFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
                     </div>
-                    {relSearchTerm && <button onClick={()=>setRelSearchTerm('')} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
+                    <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
+                      <Search size={14} className="text-slate-400 mr-2"/>
+                      <input type="text" placeholder="SKU / producto..." value={relSkuFilter} onChange={e=>setRelSkuFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                    </div>
+                    <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
+                      <Search size={14} className="text-slate-400 mr-2"/>
+                      <input type="text" placeholder="Ubicación..." value={relLocFilter} onChange={e=>setRelLocFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                    </div>
+                    {(relLpnFilter||relSkuFilter||relLocFilter) && <button onClick={()=>{setRelLpnFilter('');setRelSkuFilter('');setRelLocFilter('');}} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
                     <span className="text-[10px] font-black text-slate-400 uppercase">{filteredRelData.length} LPNs</span>
                   </div>
                 </div>
@@ -7011,36 +7661,38 @@ export default function App() {
                       <h3 className="text-sm font-black text-slate-700 uppercase mb-4 flex items-center gap-2"><Package size={16}/> Buscar y Seleccionar SKU</h3>
                       <div className="flex gap-3 flex-wrap items-start">
                         <div className="flex-1 min-w-[260px] space-y-2">
-                          <div className="relative">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
-                            <input
-                              type="text"
-                              placeholder="Buscar por SKU, descripción o cliente..."
-                              value={resSkuFilter}
-                              onChange={e => setResSkuFilter(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500 uppercase"
-                            />
-                            {resSkuFilter && <button onClick={()=>setResSkuFilter('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={12}/></button>}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="relative">
+                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                              <input type="text" placeholder="SKU..." value={resSkuFilter} onChange={e => setResSkuFilter(e.target.value)} className="w-full pl-7 pr-2 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500 uppercase"/>
+                            </div>
+                            <div className="relative">
+                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                              <input type="text" placeholder="Descripción..." value={resDescFilter} onChange={e => setResDescFilter(e.target.value)} className="w-full pl-7 pr-2 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500"/>
+                            </div>
+                            <div className="relative">
+                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                              <input type="text" placeholder="Cliente..." value={resCliFilter} onChange={e => setResCliFilter(e.target.value)} className="w-full pl-7 pr-2 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500 uppercase"/>
+                            </div>
                           </div>
+                          {(resSkuFilter||resDescFilter||resCliFilter) && <button onClick={()=>{setResSkuFilter('');setResDescFilter('');setResCliFilter('');}} className="mt-1 text-[9px] font-black text-red-500 uppercase flex items-center gap-1 hover:text-red-600"><X size={10}/> Limpiar filtros</button>}
                           {(() => {
-                            const q = resSkuFilter.toLowerCase();
                             const filtered = safeSkus.filter(s =>
-                              !q ||
-                              s.sku.toLowerCase().includes(q) ||
-                              (s.desc||'').toLowerCase().includes(q) ||
-                              (s.client_id||'').toLowerCase().includes(q)
+                              (!resSkuFilter || s.sku.toLowerCase().includes(resSkuFilter.toLowerCase())) &&
+                              (!resDescFilter || (s.desc||'').toLowerCase().includes(resDescFilter.toLowerCase())) &&
+                              (!resCliFilter || (s.client_id||'').toLowerCase().includes(resCliFilter.toLowerCase()))
                             );
-                            if (!resSkuFilter && !resSku) return (
+                            if (!resSkuFilter && !resDescFilter && !resCliFilter && !resSku) return (
                               <p className="text-[10px] text-slate-400 font-bold px-1">Escribe para filtrar los {safeSkus.length} SKUs disponibles</p>
                             );
                             if (filtered.length === 0) return (
-                              <p className="text-[10px] text-red-400 font-bold px-1">Sin resultados para "{resSkuFilter}"</p>
+                              <p className="text-[10px] text-red-400 font-bold px-1">Sin resultados para los filtros aplicados</p>
                             );
                             return (
                               <div className="border-2 border-amber-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto custom-scrollbar bg-white shadow-sm">
                                 {filtered.slice(0,80).map(s => (
                                   <button key={s.sku+s.client_id} onClick={async () => {
-                                    setResSku(s.sku); setResClientId(s.client_id||''); setResResources([]); setResSkuFilter('');
+                                    setResSku(s.sku); setResClientId(s.client_id||''); setResResources([]); setResSkuFilter(''); setResDescFilter(''); setResCliFilter('');
                                     if (s.sku && s.client_id) {
                                       const r = await apiFetch(`${host}/api/sku-resources?sku=${encodeURIComponent(s.sku)}&client_id=${encodeURIComponent(s.client_id)}`);
                                       const d = await r.json(); setResResources(Array.isArray(d)?d:[]);
@@ -8203,7 +8855,7 @@ export default function App() {
                               <div>
                                 <p className="text-sm font-black text-slate-800 flex items-center gap-2">
                                   {u.full_name}
-                                  {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase">Suspendido</span>}
+                                  {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase">Inhabilitado</span>}
                                 </p>
                                 <p className="text-[10px] font-mono text-slate-500 mt-0.5">@{u.username}</p>
                               </div>
@@ -8220,12 +8872,8 @@ export default function App() {
                                   <option value="ADMIN">ADMIN</option>
                                   {u.username !== 'admin' && <option value="SUPERADMIN">SUPERADMIN</option>}
                                 </select>
-                                <button onClick={async () => {
-                                  const newStatus = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
-                                  const res = await apiFetch(`${host}/api/users`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.username,full_name:u.full_name,role:u.role,status:newStatus,allowed_clients:u.allowed_clients,allowed_modules:u.allowed_modules})});
-                                  if(res.ok){showMsg(`✅ Usuario ${newStatus==='SUSPENDED'?'suspendido':'activado'}`);fetchData();}
-                                }} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-colors ${u.status==='SUSPENDED'?'bg-emerald-100 text-emerald-700 hover:bg-emerald-200':'bg-red-100 text-red-700 hover:bg-red-200'}`}>
-                                  {u.status === 'SUSPENDED' ? '✓ Activar' : '✗ Suspender'}
+                                <button onClick={() => handleToggleUserStatus(u)} disabled={u.username === currentUser?.username} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-colors disabled:opacity-30 ${u.status==='SUSPENDED'?'bg-emerald-100 text-emerald-700 hover:bg-emerald-200':'bg-red-100 text-red-700 hover:bg-red-200'}`}>
+                                  {u.status === 'SUSPENDED' ? '✓ Activar' : '✗ Inhabilitar'}
                                 </button>
                               </div>
                             </div>
@@ -8653,8 +9301,12 @@ export default function App() {
             {activeTab === 'change-status' && (
               <Suspense fallback={<TabLoader />}>
                 <ChangeStatusTab
-                  relSearchTerm={relSearchTerm}
-                  setRelSearchTerm={setRelSearchTerm}
+                  relLpnFilter={relLpnFilter}
+                  setRelLpnFilter={setRelLpnFilter}
+                  relSkuFilter={relSkuFilter}
+                  setRelSkuFilter={setRelSkuFilter}
+                  relLocFilter={relLocFilter}
+                  setRelLocFilter={setRelLocFilter}
                   filteredRelData={filteredRelData}
                   is3PLMode={is3PLMode}
                   opsClients={opsClients}
@@ -9680,9 +10332,16 @@ export default function App() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quién produce cada SKU</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-72">
-                  <Search size={14} className="text-slate-400"/>
-                  <input type="text" placeholder="Buscar por código o nombre…" value={mfrSearchTerm} onChange={e=>setMfrSearchTerm(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
+                    <Search size={14} className="text-slate-400"/>
+                    <input type="text" placeholder="Código..." value={mfrCodeFilter} onChange={e=>setMfrCodeFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-44">
+                    <Search size={14} className="text-slate-400"/>
+                    <input type="text" placeholder="Nombre..." value={mfrNameFilter} onChange={e=>setMfrNameFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                  </div>
+                  {(mfrCodeFilter||mfrNameFilter) && <button onClick={()=>{setMfrCodeFilter('');setMfrNameFilter('');}} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
                 </div>
               </div>
 
@@ -9744,7 +10403,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {manufacturers.filter(m => !mfrSearchTerm || m.name.toLowerCase().includes(mfrSearchTerm.toLowerCase()) || m.code.toLowerCase().includes(mfrSearchTerm.toLowerCase())).map(m => (
+                        {manufacturers.filter(m => (!mfrCodeFilter || m.code.toLowerCase().includes(mfrCodeFilter.toLowerCase())) && (!mfrNameFilter || m.name.toLowerCase().includes(mfrNameFilter.toLowerCase()))).map(m => (
                           <tr key={m.id} className={`hover:bg-indigo-50/30 ${!m.active ? 'opacity-50' : ''}`}>
                             <td className="px-4 py-3 font-mono text-xs font-black text-indigo-700">{m.code}</td>
                             <td className="px-4 py-3"><button onClick={()=>handleOpenMfrDetail(m.id)} className="text-xs font-black text-slate-800 hover:text-indigo-600 text-left">{m.name}</button>{!m.active && <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-black uppercase">Inactivo</span>}</td>
@@ -10010,7 +10669,7 @@ export default function App() {
               </div>
               {/* Sub-pestañas (Materiales; las demás se agregan en fases siguientes) */}
               <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 w-fit">
-                {[{id:'materiales',label:'Materiales'}, ...(canConsumeInsumos ? [{id:'asociar',label:'Asociar consumo'}] : []), {id:'reportes',label:'Reportes'}].map(t => (
+                {[{id:'materiales',label:'Materiales'}, ...(canConsumeInsumos ? [{id:'asociar',label:'Asociar consumo'}] : []), {id:'analisis',label:'Análisis'}, {id:'reportes',label:'Reportes'}].map(t => (
                   <button key={t.id} onClick={()=>setInsumosTab(t.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${insumosTab===t.id ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}>{t.label}{t.id==='materiales' && lowStockInsumos.length>0 && <span className="ml-1.5 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">{lowStockInsumos.length}</span>}</button>
                 ))}
               </div>
@@ -10043,9 +10702,10 @@ export default function App() {
                           <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Costo unit.</label><input type="number" min="0" step="0.01" value={insumoForm.costo_unitario} onChange={e=>setInsumoForm({...insumoForm,costo_unitario:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
                           <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Stock mínimo</label><input type="number" min="0" step="0.001" value={insumoForm.stock_minimo} onChange={e=>setInsumoForm({...insumoForm,stock_minimo:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
                         </div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Tiempo de reposición (días) <span className="text-slate-300 normal-case">· opcional</span></label><input type="number" min="0" step="1" value={insumoForm.lead_time_dias} onChange={e=>setInsumoForm({...insumoForm,lead_time_dias:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="Ej: 7"/></div>
                         <div className="flex gap-2 pt-2">
                           <button type="submit" disabled={isSavingInsumo} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isSavingInsumo ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}{isEditingInsumo ? 'Guardar' : 'Crear'}</button>
-                          {isEditingInsumo && <button type="button" onClick={()=>{setIsEditingInsumo(false);setInsumoForm({codigo:'',nombre:'',categoria:'embalaje',unidad:'UN',costo_unitario:'',stock_minimo:''});}} className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black px-4 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>}
+                          {isEditingInsumo && <button type="button" onClick={()=>{setIsEditingInsumo(false);setInsumoForm({codigo:'',nombre:'',categoria:'embalaje',unidad:'UN',costo_unitario:'',stock_minimo:'',lead_time_dias:''});}} className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black px-4 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>}
                         </div>
                       </form>
                     </div>
@@ -10077,9 +10737,10 @@ export default function App() {
                                 <td className="p-3 text-center text-[10px] font-bold text-slate-500">{parseFloat(i.stock_minimo)}</td>
                                 <td className="p-3 text-right text-[10px] font-bold text-slate-500">${Number(i.costo_unitario||0).toLocaleString('es-CL')}</td>
                                 {(canManageInsumos || canConsumeInsumos) && <td className="p-3 text-center whitespace-nowrap">
-                                  {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'entrada'});setInsumoMoveQty('');}} className="text-emerald-500 hover:text-emerald-700 mr-2 font-black text-sm" title="Entrada (+)">＋</button>}
+                                  {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'entrada'});setInsumoMoveQty('');setInsumoMoveFecha('');}} className="text-emerald-500 hover:text-emerald-700 mr-2 font-black text-sm" title="Entrada (+)">＋</button>}
                                   {i.activo && canConsumeInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'consumo'});setInsumoMoveQty('');}} className="text-amber-500 hover:text-amber-700 mr-2 font-black text-sm" title="Consumo (−)">－</button>}
                                   {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'ajuste'});setInsumoMoveQty(String(parseFloat(i.stock_actual)));}} className="text-slate-400 hover:text-cyan-600 mr-2" title="Ajustar (recuento)"><Sliders size={14}/></button>}
+                                  <button onClick={()=>loadHistorial(i)} className="text-slate-400 hover:text-orange-600 mr-2" title="Histórico de movimientos"><History size={15}/></button>
                                   {canManageInsumos && <button onClick={()=>handleEditInsumo(i)} className="text-slate-400 hover:text-indigo-600 mr-2" title="Editar"><Pencil size={15}/></button>}
                                   {canManageInsumos && <button onClick={()=>handleToggleInsumo(i)} className={`${i.activo ? 'text-slate-400 hover:text-red-500' : 'text-emerald-500 hover:text-emerald-700'}`} title={i.activo ? 'Desactivar' : 'Reactivar'}>{i.activo ? <Trash2 size={15}/> : <RefreshCcw size={15}/>}</button>}
                                 </td>}
@@ -10182,6 +10843,124 @@ export default function App() {
                 </div>
               )}
 
+              {insumosTab === 'analisis' && (
+                <div className="space-y-4">
+                  {/* Controles: período + cliente */}
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-end gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase">Período</label>
+                      <select value={anDias} onChange={e=>setAnDias(parseInt(e.target.value))} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
+                        {[30,60,90].map(d=><option key={d} value={d}>Últimos {d} días</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase">Cliente</label>
+                      <select value={anClient} onChange={e=>setAnClient(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white min-w-[180px]">
+                        <option value="">Todos los clientes</option>
+                        {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <button onClick={loadAnalisis} disabled={anLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{anLoading ? <Loader2 size={14} className="animate-spin"/> : <BarChart3 size={14}/>} Analizar</button>
+                    {anData?.items?.length > 0 && <button onClick={exportAnalisis} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
+                    <span className="text-[10px] font-bold text-slate-400 ml-auto self-center">Vista de solo lectura · basada en consumos registrados</span>
+                  </div>
+
+                  {!anData && <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">{anLoading ? 'Analizando…' : 'Selecciona período y cliente, luego pulsa Analizar'}</div>}
+
+                  {anData && (<>
+                    {/* KPIs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">En riesgo de quiebre</p>
+                        <p className={`text-3xl font-black mt-1 ${anData.kpis.en_riesgo>0?'text-red-600':'text-emerald-600'}`}>{anData.kpis.en_riesgo}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">crítico + por quebrar</p>
+                      </div>
+                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Consumo del período</p>
+                        <p className="text-3xl font-black mt-1 text-slate-800">{Math.round(parseFloat(anData.kpis.consumo_total_periodo)).toLocaleString('es-CL')}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">unidades · últimos {anData.periodo.dias} días</p>
+                      </div>
+                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Más consumido</p>
+                        {anData.kpis.insumo_mas_consumido ? (<>
+                          <p className="text-base font-black mt-1 text-slate-800 truncate">{anData.kpis.insumo_mas_consumido.codigo}</p>
+                          <p className="text-[10px] font-bold text-slate-400 mt-1 truncate">{anData.kpis.insumo_mas_consumido.nombre} · {parseFloat(anData.kpis.insumo_mas_consumido.consumo_total_periodo)} {anData.kpis.insumo_mas_consumido.unidad}</p>
+                        </>) : <p className="text-base font-black mt-1 text-slate-300">— sin consumo —</p>}
+                      </div>
+                    </div>
+
+                    {/* Tabla por insumo */}
+                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Análisis por insumo ({anData.items.length})</h3>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Click en una fila para ver consumo por cliente</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 border-b border-slate-200"><tr>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Insumo</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Prom./día</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Días cobertura</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Quiebre estimado</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center pr-5">Estado</th>
+                          </tr></thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {anData.items.map(i => {
+                              const est = ESTADO_INSUMO[i.estado] || ESTADO_INSUMO.ok;
+                              const sel = anSelected?.id === i.id;
+                              return (
+                                <tr key={i.id} onClick={()=>loadAnalisisClientes(i)} className={`cursor-pointer ${sel?'bg-orange-50':'hover:bg-slate-50'}`}>
+                                  <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{i.codigo}</p><p className="text-[10px] text-slate-500">{i.nombre}</p></td>
+                                  <td className="p-3 text-center text-sm font-black text-slate-700">{parseFloat(i.stock_actual)} <span className="text-[9px] text-slate-400">{i.unidad}</span></td>
+                                  <td className="p-3 text-center text-xs font-bold text-slate-600">{parseFloat(i.consumo_prom_diario)}</td>
+                                  <td className="p-3 text-center text-xs font-black text-slate-700">{i.dias_cobertura != null ? `${parseFloat(i.dias_cobertura)} d` : <span className="text-slate-300">∞ sin consumo</span>}</td>
+                                  <td className="p-3 text-center text-[11px] font-bold text-slate-600">{i.quiebre_estimado ? String(i.quiebre_estimado).slice(0,10) : <span className="text-slate-300">—</span>}</td>
+                                  <td className="p-3 text-center pr-5"><span className={`inline-flex items-center gap-1.5 text-[9px] font-black uppercase px-2 py-1 rounded-full border ${est.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${est.dot}`}/>{est.label}</span></td>
+                                </tr>
+                              );
+                            })}
+                            {anData.items.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin insumos activos para analizar</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Desglose: consumo por cliente del insumo seleccionado */}
+                    {anSelected && (
+                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+                          <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Consumo por cliente · {anSelected.codigo} — {anSelected.nombre}</h3>
+                          <button onClick={()=>{setAnSelected(null);setAnClientes([]);}} className="text-slate-400 hover:text-slate-700"><X size={16}/></button>
+                        </div>
+                        <div className="p-4">
+                          {anClientesLoading ? <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest py-6">Cargando…</p>
+                          : anClientes.length === 0 ? <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest py-6">Sin consumo de este insumo en el período</p>
+                          : (() => {
+                              const max = Math.max(...anClientes.map(c=>parseFloat(c.consumo_total)||0), 1);
+                              return (
+                                <div className="space-y-2">
+                                  {anClientes.map((c,idx) => (
+                                    <div key={(c.client_id||'null')+idx} className="flex items-center gap-3">
+                                      <span className="text-[11px] font-bold text-slate-600 w-40 truncate shrink-0">{c.client_name}</span>
+                                      <div className="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+                                        <div className="bg-orange-400 h-5 rounded-full flex items-center justify-end pr-2" style={{ width: `${Math.max((parseFloat(c.consumo_total)/max)*100, 6)}%` }}>
+                                          <span className="text-[10px] font-black text-white">{parseFloat(c.consumo_total)}</span>
+                                        </div>
+                                      </div>
+                                      <span className="text-[10px] font-bold text-slate-400 w-20 text-right shrink-0">${Math.round(parseFloat(c.costo)||0).toLocaleString('es-CL')}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                        </div>
+                      </div>
+                    )}
+                  </>)}
+                </div>
+              )}
+
               {insumosTab === 'reportes' && (
                 <div className="space-y-4">
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-end gap-3">
@@ -10191,6 +10970,7 @@ export default function App() {
                       <select value={repGroup} onChange={e=>setRepGroup(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
                         <option value="insumo">Insumo</option>
                         <option value="cliente">Cliente</option>
+                        <option value="documento">Documento</option>
                       </select>
                     </div>
                     <button onClick={loadInsumoReport} disabled={repLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{repLoading ? <Loader2 size={14} className="animate-spin"/> : <BarChart3 size={14}/>} Generar</button>
@@ -10203,7 +10983,7 @@ export default function App() {
                     </div>
                     <table className="w-full text-left">
                       <thead className="bg-slate-100 border-b border-slate-200"><tr>
-                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">{repGroup==='cliente'?'Cliente':'Insumo'}</th>
+                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">{repGroup==='cliente'?'Cliente':repGroup==='documento'?'Documento':'Insumo'}</th>
                         <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cantidad</th>
                         <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-right pr-5">Costo</th>
                       </tr></thead>
@@ -10238,6 +11018,7 @@ export default function App() {
                       <div>
                         <p className="text-xs font-black text-slate-800 uppercase">{r.tipo} · {r.insumo.codigo} — {r.insumo.nombre}</p>
                         <p className="text-[11px] font-bold text-slate-500">Stock: <span className="font-mono">{r.stock_antes}</span> → <span className={`font-mono font-black ${cls.strong}`}>{r.stock_despues}</span> {r.insumo.unidad}</p>
+                        {r.fecha && <p className="text-[10px] font-bold text-slate-400 mt-0.5">Ingresado: {new Date(r.fecha).toLocaleDateString('es-CL')}</p>}
                       </div>
                     </div>
                     <button onClick={()=>setInsumoMoveResult(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
@@ -10256,12 +11037,68 @@ export default function App() {
                 </h3>
                 <p className="text-xs font-bold text-slate-500 mt-1">{insumoMove.insumo.codigo} — {insumoMove.insumo.nombre}</p>
                 <p className="text-[11px] text-slate-400 mt-1">Stock actual: <span className="font-mono font-black text-slate-700">{parseFloat(insumoMove.insumo.stock_actual)}</span> {insumoMove.insumo.unidad}</p>
+                {insumoMove.tipo === 'entrada' && (
+                  <div className="mt-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase block">Fecha de ingreso <span className="text-slate-300 normal-case">· opcional (por defecto hoy)</span></label>
+                    <input type="date" max={new Date().toISOString().slice(0,10)} value={insumoMoveFecha} onChange={e=>setInsumoMoveFecha(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 mt-1"/>
+                  </div>
+                )}
                 <label className="text-[10px] font-black text-slate-400 uppercase mt-4 block">{insumoMove.tipo === 'ajuste' ? 'Nueva cantidad (recuento)' : 'Cantidad'}</label>
                 <input autoFocus type="number" min="0" step="0.001" value={insumoMoveQty} onChange={e=>setInsumoMoveQty(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitInsumoMove();}} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none focus:border-slate-500 mt-1"/>
                 <div className="flex gap-2 mt-5">
                   <button onClick={()=>setInsumoMove(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
                   <button onClick={submitInsumoMove} disabled={isMovingInsumo} className="flex-1 bg-slate-900 hover:bg-black text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isMovingInsumo ? <Loader2 size={14} className="animate-spin"/> : 'Confirmar'}</button>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de histórico de movimientos de un insumo */}
+          {histInsumo && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>{setHistInsumo(null);setHistRows([]);}}>
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <History size={18} className="text-orange-500"/>
+                    <div>
+                      <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter">Histórico de movimientos</h3>
+                      <p className="text-[11px] font-bold text-slate-500">{histInsumo.codigo} — {histInsumo.nombre}</p>
+                    </div>
+                  </div>
+                  <button onClick={()=>{setHistInsumo(null);setHistRows([]);}} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-100 border-b border-slate-200 sticky top-0"><tr>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Fecha</th>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Tipo</th>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cantidad</th>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Documento / Usuario</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {histLoading ? <tr><td colSpan={5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Cargando…</td></tr>
+                      : histRows.length === 0 ? <tr><td colSpan={5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin movimientos registrados</td></tr>
+                      : histRows.map(m => {
+                          const tc = m.tipo==='entrada'?'text-emerald-600':m.tipo==='consumo'?'text-amber-600':'text-cyan-600';
+                          const sig = m.tipo==='entrada'?'+':m.tipo==='consumo'?'−':'Δ';
+                          return (
+                            <tr key={m.id} className={`${m.anulado?'opacity-50 line-through':''} hover:bg-slate-50`}>
+                              <td className="p-3 pl-5 text-[11px] font-bold text-slate-600 whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-CL')}<span className="text-slate-400 ml-1">{new Date(m.fecha).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</span></td>
+                              <td className="p-3"><span className={`text-[10px] font-black uppercase ${tc}`}>{m.tipo}</span>{m.anulado && <span className="ml-1.5 text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase no-underline inline-block">Anulado</span>}</td>
+                              <td className={`p-3 text-center text-sm font-black ${tc}`}>{sig}{parseFloat(m.cantidad)}</td>
+                              <td className="p-3 text-center text-[11px] font-mono text-slate-500 whitespace-nowrap">{parseFloat(m.stock_antes)}→{parseFloat(m.stock_despues)}</td>
+                              <td className="p-3 text-[10px] text-slate-500">
+                                {m.documento_id ? <span className="font-bold text-slate-600">[{(m.documento_tipo||'').toUpperCase()}] {m.documento_id}</span> : <span className="text-slate-400">—</span>}
+                                <span className="block text-slate-400">{m.usuario||'SYSTEM'}{m.anulado && m.anulado_by ? ` · anuló: ${m.anulado_by}` : ''}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-3 border-t border-slate-100 text-[10px] font-bold text-slate-400 text-center">Últimos {histRows.length} movimientos · los anulados se conservan para trazabilidad</div>
               </div>
             </div>
           )}

@@ -285,7 +285,9 @@ export function getPosition(loc) {
   return { x: 0, y: 0, z: 0, width: w, depth: d, height: h };
 }
 
-function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBadge, clients }) {
+function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBadge, clients, userRole }) {
+  // Editar el layout (unir/bloquear casillas) solo desde JEFE_BODEGA o superior.
+  const canEditLayout = ['JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'].includes(userRole);
   const [hoveredLoc, setHoveredLoc] = useState(null);
   const [selectedLoc, setSelectedLoc] = useState(null);
 
@@ -567,14 +569,16 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
              </select>
            </div>
 
-          <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-            <button onClick={() => {setEditMode(false); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${!editMode ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
-              <Eye size={12} className="mr-1"/> Vista
-            </button>
-            <button onClick={() => {setEditMode(true); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${editMode ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
-              <Edit size={12} className="mr-1"/> Editar
-            </button>
-          </div>
+          {canEditLayout && (
+            <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+              <button onClick={() => {setEditMode(false); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${!editMode ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <Eye size={12} className="mr-1"/> Vista
+              </button>
+              <button onClick={() => {setEditMode(true); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${editMode ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <Edit size={12} className="mr-1"/> Editar
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1663,7 +1667,7 @@ const IMPORT_SCHEMAS = {
   },
   skus: {
     title: 'Importar productos (SKUs)', template: 'skus',
-    columns: ['sku','desc','client_id','category','uom','requires_lot','requires_serial','barcode','weight','abc_class'],
+    columns: ['sku','desc','client_id','category','uom','requires_lot','requires_serial','barcode','weight','length','width','height','abc_class','manufacturer_code','manufacturer_sku','brand'],
     required: ['sku','desc'], duplicateCheck: false,
     booleans: ['requires_lot','requires_serial'],
     hint: 'Marca la casilla para activar control de lote / serie',

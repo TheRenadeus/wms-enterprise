@@ -6,11 +6,76 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 
 const { pool, mapDbError } = require('../db');
-const { requireAuth, requireJefe, requireJefeOrAbove, checkClientAccess } = require('../middleware');
+const { requireAuth, requireStockWrite, checkClientAccess } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
+
+// Consume `comp.qty * qtyN` del componente, dentro de una transacción YA ABIERTA.
+//  - manualSources = [{ lpn_id, qty }]  → toma exactamente de esos LPN (el operador
+//    eligió ubicación/lote/serie, porque el LPN ya las lleva). La suma debe ser exacta.
+//  - sin manualSources → FEFO automático (expiry ASC, created ASC), como siempre.
+// Bloquea filas con FOR UPDATE, nunca deja negativos y devuelve los ids de LPN que
+// quedaron en 0 (para borrarlos de forma acotada). Lanza Error con .status si falla.
+async function consumeComponent(client, { comp, qtyN, clientId, manualSources, auditType, glosaFor, username }) {
+  const needed = parseFloat(comp.qty) * qtyN;
+  const touched = [];
+
+  if (Array.isArray(manualSources) && manualSources.length) {
+    const sumSel = manualSources.reduce((s, x) => s + (parseFloat(x.qty) || 0), 0);
+    if (Math.abs(sumSel - needed) > 1e-6) {
+      const e = new Error(`Selección de origen inválida para ${comp.component_sku}: debe sumar exactamente ${needed} (seleccionaste ${sumSel}).`); e.status = 400; throw e;
+    }
+    for (const src of manualSources) {
+      const take = parseFloat(src.qty);
+      if (!(take > 0)) continue;
+      const lock = await client.query(
+        `SELECT i.id, i.qty, i.sku, i.client_id, COALESCE(st.blocks_outbound, FALSE) AS blocked
+           FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
+          WHERE i.id = $1 FOR UPDATE OF i`, [src.lpn_id]);
+      if (!lock.rows.length) { const e = new Error(`LPN ${src.lpn_id} no encontrado.`); e.status = 404; throw e; }
+      const row = lock.rows[0];
+      if (row.sku !== comp.component_sku || (row.client_id || '') !== clientId) {
+        const e = new Error(`LPN ${src.lpn_id} no corresponde al componente ${comp.component_sku} de este cliente.`); e.status = 400; throw e;
+      }
+      if (row.blocked) { const e = new Error(`LPN ${src.lpn_id} está en un estado que bloquea la salida.`); e.status = 400; throw e; }
+      if (parseFloat(row.qty) < take) { const e = new Error(`LPN ${src.lpn_id}: stock insuficiente (${row.qty} < ${take}).`); e.status = 400; throw e; }
+      const upd = await client.query('UPDATE inventory_lpns SET qty=qty-$1 WHERE id=$2 RETURNING qty', [take, src.lpn_id]);
+      if (parseFloat(upd.rows[0].qty) <= 0) touched.push(src.lpn_id);
+      await client.query('INSERT INTO audit_log(type,sku,qty,glosa,username) VALUES($1,$2,$3,$4,$5)',
+        [auditType, comp.component_sku, take, glosaFor(src.lpn_id), username]);
+    }
+    return touched;
+  }
+
+  // Auto FEFO
+  let remaining = needed;
+  const eligibleIds = (await client.query(
+    `SELECT i.id FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
+      WHERE i.sku=$1 AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
+      ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC`,
+    [comp.component_sku, clientId]
+  )).rows.map(r => r.id);
+  const lpns = eligibleIds.length === 0 ? { rows: [] } : await client.query(
+    `SELECT id, qty FROM inventory_lpns WHERE id = ANY($1::varchar[])
+      ORDER BY expiry_date ASC NULLS LAST, created_at ASC FOR UPDATE`,
+    [eligibleIds]
+  );
+  for (const lpn of lpns.rows) {
+    if (remaining <= 0) break;
+    const take = Math.min(parseFloat(lpn.qty), remaining);
+    const upd = await client.query('UPDATE inventory_lpns SET qty=qty-$1 WHERE id=$2 RETURNING qty', [take, lpn.id]);
+    if (parseFloat(upd.rows[0].qty) <= 0) touched.push(lpn.id);
+    await client.query('INSERT INTO audit_log(type,sku,qty,glosa,username) VALUES($1,$2,$3,$4,$5)',
+      [auditType, comp.component_sku, take, glosaFor(lpn.id), username]);
+    remaining -= take;
+  }
+  if (remaining > 0) {
+    const e = new Error(`Stock insuficiente para ${comp.component_sku} al confirmar (condición de carrera). Reintente.`); e.status = 409; throw e;
+  }
+  return touched;
+}
 
 // ── CRUD básico de kits ─────────────────────────────────────────────────────
 router.get('/kits', requireAuth, async (req, res) => {
@@ -27,7 +92,7 @@ router.get('/kits', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.post('/kits', requireJefe, checkClientAccess('write', { required: true }), async (req, res) => {
+router.post('/kits', requireStockWrite, checkClientAccess('write', { required: true }), async (req, res) => {
   const { kit_sku, client_id, description, components } = req.body;
   if (!kit_sku || !client_id) return res.status(400).json({ error: 'kit_sku y client_id son requeridos' });
   if (!components || components.length === 0) return res.status(400).json({ error: 'El kit debe tener al menos un componente' });
@@ -50,7 +115,7 @@ router.post('/kits', requireJefe, checkClientAccess('write', { required: true })
   finally { client.release(); }
 });
 
-router.delete('/kits/:kit_sku/:client_id', requireJefe, async (req, res) => {
+router.delete('/kits/:kit_sku/:client_id', requireStockWrite, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -73,17 +138,20 @@ router.get('/kit-availability', requireAuth, async (req, res) => {
     let maxKits = Infinity;
     const result = [];
     for (const comp of components.rows) {
-      const s = await pool.query(
-        `SELECT COALESCE(SUM(i.qty),0) as total FROM inventory_lpns i
-         LEFT JOIN statuses st ON i.status = st.id
-         WHERE i.sku=$1 AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE`,
+      // Detalle por LPN (FEFO) para poder elegir origen: cada LPN lleva ubicación,
+      // lote y serie. El SUM de disponibilidad se deriva de aquí.
+      const lpnRows = (await pool.query(
+        `SELECT i.id, i.location_id, i.batch_number, i.serial_number, i.expiry_date, i.qty
+           FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
+          WHERE i.sku=$1 AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
+          ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC`,
         [comp.component_sku, client_id]
-      );
-      const available = parseFloat(s.rows[0].total);
+      )).rows;
+      const available = lpnRows.reduce((s, r) => s + parseFloat(r.qty), 0);
       const needed = parseFloat(comp.qty) * qtyN;
       const possible = comp.qty > 0 ? Math.floor(available / comp.qty) : 0;
       maxKits = Math.min(maxKits, possible);
-      result.push({ component_sku: comp.component_sku, required_per_kit: parseFloat(comp.qty), needed, available, kits_possible: possible });
+      result.push({ component_sku: comp.component_sku, required_per_kit: parseFloat(comp.qty), needed, available, kits_possible: possible, lpns: lpnRows });
     }
     const canBuild = result.length > 0 && result.every(c => c.available >= c.needed);
     res.json({ components: result, max_kits: maxKits === Infinity ? 0 : maxKits, can_build: canBuild });
@@ -96,7 +164,7 @@ router.get('/kit-orders', requireAuth, async (req, res) => {
 });
 
 // ── Armado de kits ──────────────────────────────────────────────────────────
-router.post('/kit-build', requireJefeOrAbove, checkClientAccess('write'), validateBody(schemas.kitBuild), async (req, res) => {
+router.post('/kit-build', requireStockWrite, checkClientAccess('write'), validateBody(schemas.kitBuild), async (req, res) => {
   const { kit_sku, client_id, qty, location, username } = req.body;
   if (!kit_sku || !client_id || !qty || !username) return res.status(400).json({ error: 'Faltan parámetros' });
   const qtyN = parseInt(qty);
@@ -120,30 +188,21 @@ router.post('/kit-build', requireJefeOrAbove, checkClientAccess('write'), valida
         return res.status(400).json({ error: `Stock insuficiente: ${comp.component_sku} (disponible: ${s.rows[0].total}, requerido: ${needed})` });
       }
     }
+    // sources: { [component_sku]: [{ lpn_id, qty }] } — opcional, por componente.
+    // El que no venga en sources se arma por FEFO automático (mezcla permitida).
+    const sources = (req.body && typeof req.body.sources === 'object' && req.body.sources) || {};
+    const touchedLpns = [];
     for (const comp of components.rows) {
-      let remaining = comp.qty * qtyN;
-      const eligibleIds = (await client.query(
-        `SELECT i.id FROM inventory_lpns i
-         LEFT JOIN statuses st ON i.status = st.id
-         WHERE i.sku=$1 AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
-         ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC`,
-        [comp.component_sku, client_id]
-      )).rows.map(r => r.id);
-      const lpns = eligibleIds.length === 0 ? { rows: [] } : await client.query(
-        `SELECT id, qty FROM inventory_lpns WHERE id = ANY($1::varchar[]) FOR UPDATE
-         ORDER BY expiry_date ASC NULLS LAST, created_at ASC`,
-        [eligibleIds]
-      );
-      for (const lpn of lpns.rows) {
-        if (remaining <= 0) break;
-        const take = Math.min(parseFloat(lpn.qty), remaining);
-        await client.query('UPDATE inventory_lpns SET qty=qty-$1 WHERE id=$2', [take, lpn.id]);
-        await client.query('INSERT INTO audit_log(type,sku,qty,glosa,username) VALUES($1,$2,$3,$4,$5)',
-          ['ADJUST_OUT', comp.component_sku, take, `[KIT] Componente para armar ${qtyN}x ${kit_sku}`, username]);
-        remaining -= take;
-      }
+      const t = await consumeComponent(client, {
+        comp, qtyN, clientId: client_id, manualSources: sources[comp.component_sku],
+        auditType: 'ADJUST_OUT',
+        glosaFor: (lpnId) => `[KIT] Componente para armar ${qtyN}x ${kit_sku} | LPN origen: ${lpnId}`,
+        username,
+      });
+      touchedLpns.push(...t);
     }
-    await client.query('DELETE FROM inventory_lpns WHERE qty <= 0');
+    // Borrar SOLO los LPN que este armado dejó en 0 (no un DELETE global).
+    if (touchedLpns.length > 0) await client.query('DELETE FROM inventory_lpns WHERE id = ANY($1::varchar[]) AND qty <= 0', [touchedLpns]);
     const newLpn = genLpnId('KIT');
     const loc = location || 'PISO-RECEPCION';
     await client.query('INSERT INTO inventory_lpns(id,client_id,sku,qty,status,location_id,glosa) VALUES($1,$2,$3,$4,$5,$6,$7)',
@@ -155,11 +214,11 @@ router.post('/kit-build', requireJefeOrAbove, checkClientAccess('write'), valida
       [orderId, kit_sku, client_id, qtyN, 'COMPLETED', loc, username, 'BUILT', newLpn]);
     await client.query('COMMIT');
     res.json({ success: true, lpn: newLpn, order_id: orderId });
-  } catch(e) { await client.query('ROLLBACK'); res.status(500).json({ error: mapDbError(e) }); }
+  } catch(e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.status ? e.message : mapDbError(e) }); }
   finally { client.release(); }
 });
 
-router.post('/kits/direct-dispatch', requireJefeOrAbove, checkClientAccess('write', { required: true }), async (req, res) => {
+router.post('/kits/direct-dispatch', requireStockWrite, checkClientAccess('write', { required: true }), async (req, res) => {
   const { kit_sku, client_id, qty, doc_num, doc_type, glosa, username } = req.body;
   if (!kit_sku || !client_id || !qty || !username) return res.status(400).json({ error: 'Faltan parámetros' });
   const qtyN = parseInt(qty);
@@ -186,38 +245,27 @@ router.post('/kits/direct-dispatch', requireJefeOrAbove, checkClientAccess('writ
       }
     }
 
+    // sources opcional por componente (igual que el armado): elegir LPN de origen o FEFO.
+    const sources = (req.body && typeof req.body.sources === 'object' && req.body.sources) || {};
     const consumed = [];
+    const touchedLpns = [];
     for (const comp of components.rows) {
-      let remaining = comp.qty * qtyN;
-      const eligibleIds = (await client.query(
-        `SELECT i.id FROM inventory_lpns i
-         LEFT JOIN statuses st ON i.status = st.id
-         WHERE i.sku=$1 AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
-         ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC`,
-        [comp.component_sku, client_id]
-      )).rows.map(r => r.id);
-      const lpns = eligibleIds.length === 0 ? { rows: [] } : await client.query(
-        `SELECT id, qty FROM inventory_lpns WHERE id = ANY($1::varchar[]) FOR UPDATE
-         ORDER BY expiry_date ASC NULLS LAST, created_at ASC`,
-        [eligibleIds]
-      );
-      for (const lpn of lpns.rows) {
-        if (remaining <= 0) break;
-        const take = Math.min(parseFloat(lpn.qty), remaining);
-        await client.query('UPDATE inventory_lpns SET qty=qty-$1 WHERE id=$2', [take, lpn.id]);
-        await client.query('INSERT INTO audit_log(type,sku,qty,glosa,username) VALUES($1,$2,$3,$4,$5)',
-          ['OUTBOUND', comp.component_sku, take,
-           `[KIT DIRECTO] ${qtyN}x ${kit_sku} | Doc: ${doc_num || 'S/N'} | ${glosa || ''}`, username]);
-        remaining -= take;
-      }
-      consumed.push({ sku: comp.component_sku, qty_consumed: comp.qty * qtyN });
+      const t = await consumeComponent(client, {
+        comp, qtyN, clientId: client_id, manualSources: sources[comp.component_sku],
+        auditType: 'OUTBOUND',
+        glosaFor: (lpnId) => `[KIT DIRECTO] ${qtyN}x ${kit_sku} | Doc: ${doc_num || 'S/N'} | LPN origen: ${lpnId} | ${glosa || ''}`,
+        username,
+      });
+      touchedLpns.push(...t);
+      consumed.push({ sku: comp.component_sku, qty_consumed: parseFloat(comp.qty) * qtyN });
     }
 
     await client.query('INSERT INTO audit_log(type,sku,qty,glosa,username) VALUES($1,$2,$3,$4,$5)',
       ['OUTBOUND', kit_sku, qtyN,
        `[KIT DIRECTO] ${doc_type || 'DESPACHO'} ${doc_num || 'S/N'} | ${glosa || ''}`, username]);
 
-    await client.query('DELETE FROM inventory_lpns WHERE qty <= 0');
+    // Borrar SOLO los LPN que este despacho dejó en 0 (no global).
+    if (touchedLpns.length > 0) await client.query('DELETE FROM inventory_lpns WHERE id = ANY($1::varchar[]) AND qty <= 0', [touchedLpns]);
 
     const orderId = `KD-${uuidv4().slice(0,8).toUpperCase()}`;
     await client.query(
@@ -231,7 +279,7 @@ router.post('/kits/direct-dispatch', requireJefeOrAbove, checkClientAccess('writ
     res.json({ success: true, order_id: orderId, consumed });
   } catch(e) {
     await client.query('ROLLBACK');
-    res.status(400).json({ error: e.message || mapDbError(e) });
+    res.status(e.status || 400).json({ error: e.message || mapDbError(e) });
   } finally { client.release(); }
 });
 

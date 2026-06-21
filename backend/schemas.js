@@ -34,6 +34,15 @@ const kitBuildSchema = Joi.object({
   qty: Joi.number().integer().min(1).max(100000).required(),
   location: Joi.string().trim().max(50).allow('', null),
   username: Joi.string().trim().min(1).max(50).required(),
+  // Origen opcional por componente: { [component_sku]: [{ lpn_id, qty }] }.
+  // Si no viene un componente, se arma por FEFO automático.
+  sources: Joi.object().pattern(
+    Joi.string(),
+    Joi.array().items(Joi.object({
+      lpn_id: Joi.string().trim().min(1).max(100).required(),
+      qty: Joi.number().positive().required(),
+    }))
+  ).allow(null),
 });
 
 const returnsInspectSchema = Joi.object({

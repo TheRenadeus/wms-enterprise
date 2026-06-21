@@ -21,4 +21,6 @@ module.exports = [
   require('./020_insumo_movimientos'),
   require('./021_insumo_lead_time'),
   require('./022_insumo_mov_anulado'),
+  require('./023_kitting_ordenes'),
+  require('./024_kitting_traza_origen'),
 ];

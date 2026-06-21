@@ -6,7 +6,9 @@ import { Search, X, RefreshCcw, Scan, Building2 } from 'lucide-react';
 import { statusLabel } from '../constants';
 
 export default function ChangeStatusTab({
-  relSearchTerm, setRelSearchTerm,
+  relLpnFilter, setRelLpnFilter,
+  relSkuFilter, setRelSkuFilter,
+  relLocFilter, setRelLocFilter,
   filteredRelData,
   is3PLMode, opsClients = [], relClientFilter, setRelClientFilter,
   lpnStatuses, setLpnStatuses,
@@ -24,8 +26,8 @@ export default function ChangeStatusTab({
             <Scan size={14} className="text-pink-600 mr-2"/>
             <input
               type="text"
-              placeholder="Escanear código de bulto o producto..."
-              onKeyDown={(e)=>{ if(e.key==='Enter'){ const v=e.currentTarget.value.trim(); if(v){ setRelSearchTerm(v); e.currentTarget.value=''; } } }}
+              placeholder="Escanear bulto (LPN)..."
+              onKeyDown={(e)=>{ if(e.key==='Enter'){ const v=e.currentTarget.value.trim(); if(v){ setRelLpnFilter(v); e.currentTarget.value=''; } } }}
               className="bg-transparent text-xs font-bold outline-none w-48 text-slate-700 uppercase"
             />
           </div>
@@ -38,19 +40,22 @@ export default function ChangeStatusTab({
               </select>
             </div>
           )}
-          <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-72">
+          {/* Filtros individuales combinables (AND) */}
+          <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
             <Search size={14} className="text-slate-400 mr-2" />
-            <input
-              type="text"
-              placeholder="Buscar bulto, producto o ubicación..."
-              value={relSearchTerm}
-              onChange={(e) => setRelSearchTerm(e.target.value)}
-              className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"
-            />
+            <input type="text" placeholder="LPN..." value={relLpnFilter} onChange={(e) => setRelLpnFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
           </div>
-          {relSearchTerm && (
+          <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
+            <Search size={14} className="text-slate-400 mr-2" />
+            <input type="text" placeholder="SKU / producto..." value={relSkuFilter} onChange={(e) => setRelSkuFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+          </div>
+          <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
+            <Search size={14} className="text-slate-400 mr-2" />
+            <input type="text" placeholder="Ubicación..." value={relLocFilter} onChange={(e) => setRelLocFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+          </div>
+          {(relLpnFilter || relSkuFilter || relLocFilter) && (
             <button
-              onClick={() => setRelSearchTerm('')}
+              onClick={() => { setRelLpnFilter(''); setRelSkuFilter(''); setRelLocFilter(''); }}
               className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"
             >
               <X size={10}/> Limpiar
