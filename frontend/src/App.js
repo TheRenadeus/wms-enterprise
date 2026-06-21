@@ -330,7 +330,7 @@ export default function App() {
         apiFetch(`${host}/api/statuses`).catch(logFetchErr('statuses')),
         apiFetch(`${host}/api/document_types`).catch(logFetchErr('document_types')),
         apiFetch(`${host}/api/users`).catch(logFetchErr('users')),
-        apiFetch(`${host}/api/kits`).catch(logFetchErr('kits')),
+        apiFetch(`${host}/api/kitting/recetas`).catch(logFetchErr('recetas')),
       ]);
       if (resSku?.ok) {
         const arr = await resSku.json();
@@ -1625,7 +1625,7 @@ export default function App() {
   const handleDeleteKit = async (kit_sku, client_id) => {
     if (!(await confirm({ message: `¿Eliminar kit ${kit_sku}?`, danger: true }))) return;
     try {
-      const res = await apiFetch(`${host}/api/kits/${encodeURIComponent(kit_sku)}/${encodeURIComponent(client_id)}`, { method: 'DELETE' });
+      const res = await apiFetch(`${host}/api/kitting/receta/${encodeURIComponent(kit_sku)}/${encodeURIComponent(client_id)}`, { method: 'DELETE' });
       if (res.ok) { showMsg('✅ Kit eliminado'); fetchData(); }
       else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
     } catch (e) { showMsg('⛔ Error de red', true); }

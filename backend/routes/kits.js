@@ -1,6 +1,20 @@
 // Kits router: definición, disponibilidad, armado y despacho directo.
 // Las transacciones de armado/despacho usan BEGIN/COMMIT/ROLLBACK con finally release
 // (P2). NO descontar stock fuera de la transacción para no dejar saldos inconsistentes.
+//
+// ⚠️ DEPRECADO (consolidación Kitting → v2, Fase 1 · 2026-06-21).
+// Este router es el sistema "viejo" de kitting. El sistema vigente es routes/kitting.js
+// (recetas/órdenes con trazabilidad) + Modo A en server.js (kit explotado en el despacho).
+// Equivalencias y plan de retiro (Fase 2):
+//   GET  /kits             → GET  /kitting/recetas      (ya migrado el frontend)
+//   POST /kits             → POST /kitting/receta
+//   DELETE /kits/:k/:c     → DELETE /kitting/receta/:k/:c (ya migrado el frontend)
+//   GET  /kit-availability → (disponibilidad la calcula GET /kitting/ordenes/:id)
+//   POST /kit-build        → POST /kitting/ordenes + .../armar (arma a LPN real)
+//   POST /kits/direct-dispatch → línea de kit (isKit) en POST /dispatch_batch (Modo A)
+//   GET  /kit-orders       → GET  /kitting/ordenes
+// Se mantiene operativo solo mientras las sub-tabs viejas (Armar/Despacho directo/
+// Historial) sigan en la UI. Eliminar router + tablas kit_orders en Fase 2.
 
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');

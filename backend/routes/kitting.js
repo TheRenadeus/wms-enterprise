@@ -4,7 +4,7 @@
 //  - Listar órdenes/detalle: PICKER+ (requirePicking) — el picker necesita ver lo pendiente.
 const express = require('express');
 const { pool, mapDbError, isUniqueViolation } = require('../db');
-const { requireStockWrite, requirePicking, checkClientAccess, getClientesPermitidos } = require('../middleware');
+const { requireAuth, requireStockWrite, requirePicking, checkClientAccess, getClientesPermitidos } = require('../middleware');
 const { genLpnId } = require('../helpers');
 const { consumeComponentTracked } = require('../kitConsumo');
 
@@ -75,7 +75,7 @@ router.post('/kitting/receta', requireStockWrite, checkClientAccess('write', { r
 
 // ── GET /kitting/recetas ── lista de recetas (kits con componentes), con metadatos
 // de cada componente (requiere serie/lote) para el armado. Scope por cliente.
-router.get('/kitting/recetas', requireStockWrite, async (req, res) => {
+router.get('/kitting/recetas', requireAuth, async (req, res) => {
   try {
     const sc = await scopeFilter(req);
     if (sc.block) return res.json([]);
@@ -101,6 +101,27 @@ router.get('/kitting/recetas', requireStockWrite, async (req, res) => {
     )).rows;
     res.json(rows);
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+// ── DELETE /kitting/receta/:kit_sku/:client_id ── elimina la receta. Borra los
+// componentes y la fila de kits, y quita la marca es_kit del maestro (el SKU NO se
+// borra). Reemplaza al viejo DELETE /kits. No cascada sobre órdenes ya creadas.
+router.delete('/kitting/receta/:kit_sku/:client_id', requireStockWrite, async (req, res) => {
+  const kitU = String(req.params.kit_sku).trim().toUpperCase();
+  const clientId = String(req.params.client_id);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const sc = await scopeFilter(req);
+    if (sc.block || (sc.clients && !sc.clients.includes(clientId))) { await client.query('ROLLBACK'); return res.status(403).json({ error: 'Sin permiso sobre el cliente.' }); }
+    await client.query('DELETE FROM kit_components WHERE kit_sku=$1 AND kit_client_id=$2', [kitU, clientId]);
+    const del = await client.query('DELETE FROM kits WHERE kit_sku=$1 AND client_id=$2', [kitU, clientId]);
+    if (del.rowCount === 0) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Kit no encontrado.' }); }
+    await client.query('UPDATE master_skus SET es_kit=FALSE WHERE sku=$1 AND client_id=$2', [kitU, clientId]);
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (e) { await client.query('ROLLBACK'); res.status(500).json({ error: mapDbError(e) }); }
+  finally { client.release(); }
 });
 
 // ── POST /kitting/ordenes ── crea orden de armado 'pendiente' (+ origen sugerido).
