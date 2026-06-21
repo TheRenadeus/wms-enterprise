@@ -84,16 +84,8 @@ export default function App() {
   const [generatedKey, setGeneratedKey] = useState(null);
   const [loginHistory, setLoginHistory] = useState([]);
   const [showLoginHistory, setShowLoginHistory] = useState(false);
-  // Kit orders y build
-  const [kitOrders, setKitOrders] = useState([]);
-  const [kitBuildForm, setKitBuildForm] = useState({ kit_sku:'', client_id:'', qty:1, location:'PISO-RECEPCION' });
-  const [kitAvailability, setKitAvailability] = useState(null);
-  // Origen de cada componente: { [compSku]: { mode:'auto'|'manual', picks:{ [lpnId]: qtyStr } } }
-  const [kitSources, setKitSources] = useState({});
-  const [kitDispatchForm, setKitDispatchForm] = useState({ kit_sku:'', client_id:'', qty:1, doc_num:'', glosa:'' });
-  const [kitDispatchAvail, setKitDispatchAvail] = useState(null);
-  const [kitDispSources, setKitDispSources] = useState({});
   // Modo A — kit explotado al vuelo DENTRO de un despacho normal.
+  // Origen de cada componente: { [compSku]: { mode:'auto'|'manual', picks:{ [lpnId]: qtyStr } } }
   const [dispKitForm, setDispKitForm] = useState({ kit_sku: '', qty: 1 });
   const [dispKitAvail, setDispKitAvail] = useState(null);
   const [dispKitSources, setDispKitSources] = useState({});
@@ -363,16 +355,14 @@ export default function App() {
       } catch(e) {}
       try { const resMfr = await apiFetch(`${host}/api/manufacturers`).catch(()=>null); if (resMfr?.ok) setManufacturers(await resMfr.json()); } catch(e) {}
       try {
-        const [rC, rS, rK, rKO] = await Promise.all([
+        const [rC, rS, rK] = await Promise.all([
           apiFetch(`${host}/api/carriers`).catch(()=>null),
           apiFetch(`${host}/api/shipments`).catch(()=>null),
           apiFetch(`${host}/api/keys`).catch(()=>null),
-          apiFetch(`${host}/api/kit-orders`).catch(()=>null),
         ]);
         if (rC?.ok) setCarriers(await rC.json());
         if (rS?.ok) setShipments(await rS.json());
         if (rK?.ok) setApiKeys(await rK.json());
-        if (rKO?.ok) setKitOrders(await rKO.json());
       } catch(e) {}
       // Sistemas avanzados (solo supervisores+)
       try {
@@ -1974,16 +1964,6 @@ export default function App() {
     } catch(e) { showMsg('⛔ Error de red', true); }
   };
 
-  // HANDLERS KITTING BUILD
-  const handleCheckKitAvailability = async () => {
-    const buildClientId = (!is3PLMode || (isHybridMode && !kitBuildForm.client_id)) ? (systemConfig.own_client_id || 'PROPIO') : kitBuildForm.client_id;
-    if (!kitBuildForm.kit_sku || !buildClientId) return showMsg('⛔ Selecciona un Kit', true);
-    try {
-      const res = await apiFetch(`${host}/api/kit-availability?kit_sku=${encodeURIComponent(kitBuildForm.kit_sku)}&client_id=${encodeURIComponent(buildClientId)}&qty=${kitBuildForm.qty}`);
-      if (res.ok) { const d = await res.json(); setKitAvailability(d); setKitSources(initKitSources(d)); }
-      else showMsg('⛔ No se pudo verificar disponibilidad', true);
-    } catch(e) { showMsg('⛔ Error de red', true); }
-  };
   // Inicializa el origen de cada componente en modo automático (FEFO).
   const initKitSources = (avail) => {
     const o = {}; (avail?.components || []).forEach(c => { o[c.component_sku] = { mode: 'auto', picks: {} }; }); return o;
@@ -2046,7 +2026,7 @@ export default function App() {
     const n = parseInt(dispKitForm.qty);
     if (!(n >= 1)) return showMsg('⚠️ Cantidad de kits inválida', true);
     try {
-      const r = await apiFetch(`${host}/api/kit-availability?kit_sku=${encodeURIComponent(dispKitForm.kit_sku)}&client_id=${encodeURIComponent(client_id)}&qty=${n}`);
+      const r = await apiFetch(`${host}/api/kitting/disponibilidad?kit_sku=${encodeURIComponent(dispKitForm.kit_sku)}&client_id=${encodeURIComponent(client_id)}&qty=${n}`);
       if (r.ok) { const d = await r.json(); setDispKitAvail(d); setDispKitSources(initKitSources(d)); }
       else { const e = await r.json(); showMsg(`⛔ ${e.error}`, true); }
     } catch (e) { showMsg('⛔ Error al verificar disponibilidad', true); }
@@ -2073,51 +2053,6 @@ export default function App() {
     showMsg('✅ Kit agregado al carro de despacho');
   };
 
-  const handleBuildKit = async () => {
-    if (!kitAvailability?.can_build) return;
-    const { ok, sources } = buildKitSourcesPayload(kitAvailability, kitSources);
-    if (!ok) return;
-    if (!(await confirm({ message: `¿Armar ${kitBuildForm.qty} unidades de ${kitBuildForm.kit_sku}?`, danger: true }))) return;
-    try {
-      const buildPayload = { ...kitBuildForm, username: currentUser.username };
-      if ((!is3PLMode || isHybridMode) && !buildPayload.client_id) buildPayload.client_id = systemConfig.own_client_id || 'PROPIO';
-      if (Object.keys(sources).length) buildPayload.sources = sources;
-      const res = await apiFetch(`${host}/api/kit-build`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload) });
-      if (res.ok) { const d = await res.json(); showMsg(`✅ Kit armado — LPN: ${d.lpn}`); setKitBuildForm({ kit_sku:'', client_id:'', qty:1, location:'PISO-RECEPCION' }); setKitAvailability(null); setKitSources({}); fetchData(); }
-      else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
-    } catch(e) { showMsg('⛔ Error de red', true); }
-  };
-
-  const handleCheckKitDispatchAvail = async () => {
-    const dispClientId = (!is3PLMode || (isHybridMode && !kitDispatchForm.client_id)) ? (systemConfig.own_client_id || 'PROPIO') : kitDispatchForm.client_id;
-    if (!kitDispatchForm.kit_sku || !dispClientId) return showMsg('⛔ Selecciona un Kit', true);
-    try {
-      const r = await apiFetch(`${host}/api/kit-availability?kit_sku=${encodeURIComponent(kitDispatchForm.kit_sku)}&client_id=${encodeURIComponent(dispClientId)}&qty=${kitDispatchForm.qty}`);
-      if (r.ok) { const d = await r.json(); setKitDispatchAvail(d); setKitDispSources(initKitSources(d)); }
-      else showMsg('⛔ No se pudo verificar disponibilidad', true);
-    } catch(e) { showMsg('⛔ Error de red', true); }
-  };
-
-  const handleDirectKitDispatch = async () => {
-    if (!kitDispatchAvail?.can_build) return;
-    const { ok, sources } = buildKitSourcesPayload(kitDispatchAvail, kitDispSources);
-    if (!ok) return;
-    if (!(await confirm({ message: `¿Despachar directamente ${kitDispatchForm.qty}x ${kitDispatchForm.kit_sku}? Se consumirán los componentes ahora.`, danger: true }))) return;
-    try {
-      const dispPayload = { ...kitDispatchForm, username: currentUser.username };
-      if ((!is3PLMode || isHybridMode) && !dispPayload.client_id) dispPayload.client_id = systemConfig.own_client_id || 'PROPIO';
-      if (Object.keys(sources).length) dispPayload.sources = sources;
-      const r = await apiFetch(`${host}/api/kits/direct-dispatch`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(dispPayload) });
-      if (r.ok) {
-        const d = await r.json();
-        showMsg(`✅ Despacho directo completado — Orden: ${d.order_id}`);
-        setKitDispatchForm({ kit_sku:'', client_id:'', qty:1, doc_num:'', glosa:'' });
-        setKitDispatchAvail(null);
-        setKitDispSources({});
-        fetchData();
-      } else { const err = await r.json(); showMsg(`⛔ ${err.error}`, true); }
-    } catch(e) { showMsg('⛔ Error de red', true); }
-  };
 
   // VISTA MANTENIMIENTO (si está activo y no es superadmin)
   if (maintenanceMode && currentUser && currentUser.role !== 'SUPERADMIN') {
@@ -3602,8 +3537,8 @@ export default function App() {
               <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
                 {/* Sub-tabs kitting */}
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit flex-wrap">
-                  {[['definitions','Definiciones'],['build','Armar Kit'],['dispatch','Despacho Directo'],['ordenes','Órdenes (armado)'],['orders','Historial']].map(([id,label])=>(
-                    <button key={id} onClick={()=>setKittingTab(id)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${kittingTab===id?(id==='dispatch'?'bg-emerald-600 text-white shadow-sm':'bg-white text-indigo-700 shadow-sm'):'text-slate-500 hover:text-slate-700'}`}>{label}</button>
+                  {[['definitions','Definiciones'],['ordenes','Órdenes (armado)']].map(([id,label])=>(
+                    <button key={id} onClick={()=>setKittingTab(id)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${kittingTab===id?'bg-white text-indigo-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>{label}</button>
                   ))}
                 </div>
 
@@ -3710,185 +3645,6 @@ export default function App() {
                       ))}
                       {kits.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay kits definidos</p></div>}
                     </div>
-                  </div>
-                </div>
-                )}
-
-                {/* SUB-TAB ARMAR KIT */}
-                {kittingTab === 'build' && (
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 max-w-2xl">
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center mb-6"><Package className="w-5 h-5 mr-2 text-indigo-500"/> Armar Kit</h2>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Kit (SKU) *</label>
-                        <select value={kitBuildForm.kit_sku} onChange={e=>{ setKitBuildForm({...kitBuildForm,kit_sku:e.target.value}); setKitAvailability(null); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
-                          <option value="">-- Seleccionar --</option>
-                          {kits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
-                        {is3PLMode ? (
-                          <select value={kitBuildForm.client_id} onChange={e=>{ setKitBuildForm({...kitBuildForm,client_id:e.target.value}); setKitAvailability(null); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
-                            <option value="">-- Seleccionar --</option>
-                            {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        ) : (
-                          <div className="w-full border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                            <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad *</label>
-                        <input type="number" min="1" value={kitBuildForm.qty} onChange={e=>{ setKitBuildForm({...kitBuildForm,qty:parseInt(e.target.value)||1}); setKitAvailability(null); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500"/>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Ubicación Destino</label>
-                        <input type="text" value={kitBuildForm.location} onChange={e=>setKitBuildForm({...kitBuildForm,location:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase"/>
-                      </div>
-                    </div>
-                    <button onClick={handleCheckKitAvailability} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3 rounded-2xl uppercase text-xs tracking-widest transition-colors flex items-center justify-center gap-2"><RefreshCcw size={14}/> Verificar Disponibilidad</button>
-                    {kitAvailability && (
-                      <div className={`rounded-2xl p-5 border-2 ${kitAvailability.can_build?'bg-emerald-50 border-emerald-300':'bg-red-50 border-red-300'}`}>
-                        <p className={`text-sm font-black uppercase tracking-tighter mb-3 ${kitAvailability.can_build?'text-emerald-700':'text-red-700'}`}>{kitAvailability.can_build?'✅ Stock suficiente para armar':'⛔ Stock insuficiente'}</p>
-                        <div className="space-y-2">
-                          {(kitAvailability.components||[]).map(c=>(
-                            <div key={c.component_sku} className="text-[11px] bg-white rounded-xl px-4 py-2 border border-slate-100">
-                              <div className="flex items-center justify-between">
-                                <span className="font-black uppercase text-slate-700">{c.component_sku}</span>
-                                <span className="text-slate-500">Necesario: <strong>{c.needed}</strong></span>
-                                <span className={`font-black ${c.available>=c.needed?'text-emerald-600':'text-red-600'}`}>Disponible: {c.available}</span>
-                              </div>
-                              {renderKitSourcePicker(c, kitSources, setKitSources)}
-                            </div>
-                          ))}
-                        </div>
-                        {kitAvailability.can_build && (
-                          <button onClick={handleBuildKit} className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-indigo-200 transition-colors flex items-center justify-center gap-2"><Package size={16}/> Confirmar Armado</button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                )}
-
-                {/* SUB-TAB DESPACHO DIRECTO */}
-                {kittingTab === 'dispatch' && (
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 max-w-2xl">
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center mb-2">
-                    <ArrowRightLeft className="w-5 h-5 mr-2 text-emerald-500"/> Despacho Directo de Kit
-                  </h2>
-                  <p className="text-xs text-slate-400 font-bold mb-6">Consume los componentes directamente sin crear un LPN de kit previo.</p>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Kit (SKU) *</label>
-                        <select value={kitDispatchForm.kit_sku}
-                          onChange={e=>{ setKitDispatchForm({...kitDispatchForm, kit_sku:e.target.value}); setKitDispatchAvail(null); }}
-                          className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 bg-white">
-                          <option value="">-- Seleccionar --</option>
-                          {kits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
-                        {is3PLMode ? (
-                          <select value={kitDispatchForm.client_id}
-                            onChange={e=>{ setKitDispatchForm({...kitDispatchForm, client_id:e.target.value}); setKitDispatchAvail(null); }}
-                            className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 bg-white">
-                            <option value="">-- Seleccionar --</option>
-                            {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        ) : (
-                          <div className="w-full border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                            <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad *</label>
-                        <input type="number" min="1"
-                          value={kitDispatchForm.qty}
-                          onChange={e=>{ setKitDispatchForm({...kitDispatchForm, qty:parseInt(e.target.value)||1}); setKitDispatchAvail(null); }}
-                          className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500"/>
-                      </div>
-                      <div className="col-span-2 space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">N° Documento</label>
-                        <input type="text"
-                          value={kitDispatchForm.doc_num}
-                          onChange={e=>setKitDispatchForm({...kitDispatchForm, doc_num:e.target.value.toUpperCase()})}
-                          placeholder="Ej: GD-2024-001"
-                          className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 uppercase"/>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Glosa / Motivo</label>
-                      <input type="text"
-                        value={kitDispatchForm.glosa}
-                        onChange={e=>setKitDispatchForm({...kitDispatchForm, glosa:e.target.value})}
-                        placeholder="Ej: Pedido cliente, orden de producción, etc."
-                        className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"/>
-                    </div>
-
-                    <button onClick={handleCheckKitDispatchAvail}
-                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3 rounded-2xl uppercase text-xs tracking-widest transition-colors flex items-center justify-center gap-2">
-                      <RefreshCcw size={14}/> Verificar Stock de Componentes
-                    </button>
-
-                    {kitDispatchAvail && (
-                      <div className={`rounded-2xl p-5 border-2 ${kitDispatchAvail.can_build ? 'bg-emerald-50 border-emerald-300' : 'bg-red-50 border-red-300'}`}>
-                        <p className={`text-sm font-black uppercase tracking-tighter mb-3 ${kitDispatchAvail.can_build ? 'text-emerald-700' : 'text-red-700'}`}>
-                          {kitDispatchAvail.can_build ? '✅ Stock suficiente — listo para despachar' : '⛔ Stock insuficiente para despachar'}
-                        </p>
-
-                        {/* Tabla de componentes */}
-                        <div className="space-y-2 mb-4">
-                          {(kitDispatchAvail.components || []).map(c => {
-                            const ok = c.available >= c.needed;
-                            return (
-                              <div key={c.component_sku} className="text-[11px] bg-white rounded-xl px-4 py-2.5 border border-slate-100">
-                                <div className="flex items-center justify-between gap-3">
-                                  <span className="font-black uppercase text-slate-700 flex-1 truncate">{c.component_sku}</span>
-                                  <span className="text-slate-400 shrink-0">×{c.required_per_kit} por kit</span>
-                                  <span className="text-slate-500 shrink-0">Requerido: <strong>{c.needed}</strong></span>
-                                  <span className={`font-black shrink-0 ${ok ? 'text-emerald-600' : 'text-red-600'}`}>
-                                    {ok ? '✓' : '✗'} Disp: {c.available}
-                                  </span>
-                                </div>
-                                {renderKitSourcePicker(c, kitDispSources, setKitDispSources)}
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Resumen de qué se va a descontar */}
-                        {kitDispatchAvail.can_build && (
-                          <div className="bg-white rounded-xl border border-emerald-200 px-4 py-3 mb-4">
-                            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-2">Al confirmar se descuentan:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {(kitDispatchAvail.components || []).map(c => (
-                                <span key={c.component_sku} className="bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 text-[10px] font-black text-emerald-800">
-                                  {c.needed} × {c.component_sku}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {kitDispatchAvail.can_build && (
-                          <button onClick={handleDirectKitDispatch}
-                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-emerald-200 transition-colors flex items-center justify-center gap-2">
-                            <ArrowRightLeft size={16}/> Confirmar Despacho Directo {kitDispatchForm.qty}x {kitDispatchForm.kit_sku}
-                          </button>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
                 )}
@@ -4133,52 +3889,6 @@ export default function App() {
                   </div>
                 )}
 
-                {/* SUB-TAB ÓRDENES DE KIT */}
-                {kittingTab === 'orders' && (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ClipboardCheck className="text-indigo-500"/> Historial de Armados</h2>
-                  </div>
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 border-b">
-                        <tr>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Fecha</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Tipo</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Kit SKU</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Cliente</th>
-                          <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Qty</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">LPN / Notas</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Operador</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {kitOrders.map(o => {
-                          const isDispatch = o.type === 'DISPATCHED';
-                          return (
-                            <tr key={o.id} className={`hover:bg-slate-50 ${isDispatch ? 'bg-emerald-50/30' : ''}`}>
-                              <td className="p-4 text-[10px] text-slate-400">{new Date(o.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
-                              <td className="p-4">
-                                <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase ${isDispatch ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                                  {isDispatch ? '↗ Despacho Directo' : '🔧 Armado'}
-                                </span>
-                              </td>
-                              <td className="p-4 font-black text-xs uppercase text-slate-800">{o.kit_sku}</td>
-                              <td className="p-4 text-xs text-slate-600">{o.client_id}</td>
-                              <td className="p-4 text-center font-black text-slate-800">{o.qty_to_build}</td>
-                              <td className="p-4 font-mono text-[9px] text-slate-500">
-                                {isDispatch ? (o.notes || '—') : (o.result_lpn || '—')}
-                              </td>
-                              <td className="p-4 text-[10px] text-slate-400">{o.created_by}</td>
-                            </tr>
-                          );
-                        })}
-                        {kitOrders.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400 text-xs">Sin órdenes registradas</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                )}
               </div>
             )}
 

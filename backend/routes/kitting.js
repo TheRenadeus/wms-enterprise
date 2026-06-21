@@ -124,6 +124,35 @@ router.delete('/kitting/receta/:kit_sku/:client_id', requireStockWrite, async (r
   finally { client.release(); }
 });
 
+// ── GET /kitting/disponibilidad ── disponibilidad de un kit (Modo A: agregar una línea
+// de kit a un despacho normal). Por componente devuelve stock y LPN (FEFO) para elegir
+// origen. Reemplaza al viejo GET /kit-availability.
+router.get('/kitting/disponibilidad', requireAuth, async (req, res) => {
+  const { kit_sku, client_id, qty } = req.query;
+  if (!kit_sku || !client_id) return res.status(400).json({ error: 'kit_sku y client_id requeridos.' });
+  try {
+    const qtyN = parseInt(qty) || 1;
+    const components = await pool.query('SELECT * FROM kit_components WHERE kit_sku=$1 AND kit_client_id=$2', [kit_sku, client_id]);
+    let maxKits = Infinity;
+    const result = [];
+    for (const comp of components.rows) {
+      const lpnRows = (await pool.query(
+        `SELECT i.id, i.location_id, i.batch_number, i.serial_number, i.expiry_date, i.qty
+           FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
+          WHERE i.sku=$1 AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
+          ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC`,
+        [comp.component_sku, client_id])).rows;
+      const available = lpnRows.reduce((s, r) => s + parseFloat(r.qty), 0);
+      const needed = parseFloat(comp.qty) * qtyN;
+      const possible = comp.qty > 0 ? Math.floor(available / comp.qty) : 0;
+      maxKits = Math.min(maxKits, possible);
+      result.push({ component_sku: comp.component_sku, required_per_kit: parseFloat(comp.qty), needed, available, kits_possible: possible, lpns: lpnRows });
+    }
+    const canBuild = result.length > 0 && result.every(c => c.available >= c.needed);
+    res.json({ components: result, max_kits: maxKits === Infinity ? 0 : maxKits, can_build: canBuild });
+  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
 // ── POST /kitting/ordenes ── crea orden de armado 'pendiente' (+ origen sugerido).
 router.post('/kitting/ordenes', requireStockWrite, checkClientAccess('write', { required: true }), async (req, res) => {
   const { kit_sku, client_id, cantidad_kits, sugeridos, notas } = req.body;

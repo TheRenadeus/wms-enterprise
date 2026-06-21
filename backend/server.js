@@ -24,7 +24,6 @@ const skusRouter = require('./routes/skus');
 const mastersRouter = require('./routes/masters');
 const usersRouter = require('./routes/users');
 const clientsRouter = require('./routes/clients');
-const kitsRouter = require('./routes/kits');
 const returnsRouter = require('./routes/returns');
 const asnsRouter = require('./routes/asns');
 const pickWavesRouter = require('./routes/pick-waves');
@@ -252,7 +251,6 @@ app.use('/api', skusRouter);          // /skus, /bootstrap
 app.use('/api', mastersRouter);       // /locations GET, /statuses GET, /document_types GET
 app.use('/api', usersRouter);         // /users (GET/POST/DELETE)
 app.use('/api', clientsRouter);       // /clients (GET/POST/DELETE)
-app.use('/api', kitsRouter);          // /kits, /kit-build, /kit-orders, /kit-availability, /kits/build, /kits/direct-dispatch
 app.use('/api', returnsRouter);       // /returns (POST/GET), /returns/:id/inspect, /returns/create
 app.use('/api', asnsRouter);          // /suppliers, /asns (+ /asns/:id/receive)
 app.use('/api', pickWavesRouter);     // /pick-waves (+ release/close/available-lines)

@@ -23,4 +23,5 @@ module.exports = [
   require('./022_insumo_mov_anulado'),
   require('./023_kitting_ordenes'),
   require('./024_kitting_traza_origen'),
+  require('./025_drop_kit_orders'),
 ];
