@@ -171,11 +171,6 @@ export default function App() {
   const [waveForm, setWaveForm] = useState({ name: '', strategy: 'FIFO', notes: '', line_ids: [] });
   const [waveView, setWaveView] = useState('list'); // 'list' | 'new'
   const [waveLineSelection, setWaveLineSelection] = useState(new Set());
-  // ── Empaque ───────────────────────────────────────────────────────
-  const [packingOrders, setPackingOrders] = useState([]);
-  const [activePackingOrder, setActivePackingOrder] = useState(null);
-  const [packingLineQtys, setPackingLineQtys] = useState({});
-  const [packingCartons, setPackingCartons] = useState({});
   // ── Devoluciones ──────────────────────────────────────────────────
   const [returns, setReturns] = useState([]);
   const [returnInspectId, setReturnInspectId] = useState(null);
@@ -368,11 +363,10 @@ export default function App() {
       try {
         const isSup = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
         if (isSup) {
-          const [rSup, rAsn, rWave, rPack, rRet, rDocks, rAppts, rInv2] = await Promise.all([
+          const [rSup, rAsn, rWave, rRet, rDocks, rAppts, rInv2] = await Promise.all([
             apiFetch(`${host}/api/suppliers`).catch(()=>null),
             apiFetch(`${host}/api/asns`).catch(()=>null),
             apiFetch(`${host}/api/pick-waves`).catch(()=>null),
-            apiFetch(`${host}/api/packing-orders`).catch(()=>null),
             apiFetch(`${host}/api/returns`).catch(()=>null),
             apiFetch(`${host}/api/docks`).catch(()=>null),
             apiFetch(`${host}/api/dock-appointments`).catch(()=>null),
@@ -381,7 +375,6 @@ export default function App() {
           if (rSup?.ok) setSuppliers(await rSup.json());
           if (rAsn?.ok) setAsns(await rAsn.json());
           if (rWave?.ok) setWaves(await rWave.json());
-          if (rPack?.ok) setPackingOrders(await rPack.json());
           if (rRet?.ok) setReturns(await rRet.json());
           if (rDocks?.ok) setDocks(await rDocks.json());
           if (rAppts?.ok) setDockAppointments(await rAppts.json());
@@ -445,14 +438,14 @@ export default function App() {
     if (currentUser.role === 'JEFE_BODEGA') {
       if (disabledModules.includes(tabId)) return false;
       if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
-      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','purchase-orders','cycle-count','suppliers','waves','packing','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers','insumos'].includes(tabId);
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','purchase-orders','cycle-count','suppliers','waves','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers','insumos'].includes(tabId);
     }
     // EJECUTIVO_CUENTA (operario de piso): operaciones de stock y SKUs; sin gestión 3PL
     // (clientes, facturación, proveedores, docks) ni supervisión avanzada.
     if (currentUser.role === 'EJECUTIVO_CUENTA') {
       if (disabledModules.includes(tabId)) return false;
       if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
-      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','cycle-count','waves','packing','returns','occupation','lpn-history','insumos'].includes(tabId);
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','cycle-count','waves','returns','occupation','lpn-history','insumos'].includes(tabId);
     }
     // DEMO role legado ve todo excepto superadmin y users
     if (currentUser.role === 'DEMO') return tabId !== 'users' && tabId !== 'superadmin';
@@ -2479,10 +2472,10 @@ export default function App() {
                   {canView('returns') && <button onClick={() => switchTab('returns')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'returns' ? 'bg-orange-500/20 text-orange-400 font-black' : 'hover:bg-slate-800 text-slate-300'}`}><ArrowLeft size={18} className="mr-3"/> Devoluciones</button>}
                 </>)}
 
-                {/* ─── PICKING & EMPAQUE ─── */}
-                {(canView('picking-monitor') || canView('waves') || canView('packing')) && (<>
+                {/* ─── PICKING ─── */}
+                {(canView('picking-monitor') || canView('waves')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Picking & Empaque</p>
+                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Picking</p>
                   {canView('picking-monitor') && (
                     <button data-tutorial-target="picking-tab" onClick={() => switchTab('picking-monitor')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'picking-monitor' ? 'bg-violet-500/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}>
                       <ClipboardList size={18} className="mr-3"/> Monitor de Picking
@@ -2492,7 +2485,6 @@ export default function App() {
                     </button>
                   )}
                   {canView('waves') && <button onClick={() => switchTab('waves')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'waves' ? 'bg-violet-500/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Olas de Picking</button>}
-                  {canView('packing') && <button onClick={() => switchTab('packing')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'packing' ? 'bg-violet-500/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}><Package size={18} className="mr-3"/> Estación Empaque</button>}
                 </>)}
 
                 {/* ─── PROGRAMACIÓN & LOGÍSTICA ─── */}
@@ -10255,65 +10247,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ═══════════════ ESTACIÓN DE EMPAQUE ═══════════════ */}
-          {activeTab === 'packing' && (
-            <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in">
-              <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Package className="w-7 h-7 mr-3 text-cyan-600"/> Estación de Empaque</h2>
-
-              {!activePackingOrder ? (
-                <div className="space-y-3">
-                  {packingOrders.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin órdenes de empaque.</div> : packingOrders.map(po=>(
-                    <div key={po.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-start justify-between">
-                      <div>
-                        <p className="font-black text-slate-800">{po.doc_num}</p>
-                        <p className="text-xs text-slate-500">{is3PLMode ? `${po.client_name||po.client_id} — ` : ''}{po.total_lines||0} líneas</p>
-                        <span className={`mt-2 inline-block text-[9px] font-black uppercase px-2 py-1 rounded border ${po.status==='COMPLETADA'?'bg-emerald-50 text-emerald-600 border-emerald-200':po.status==='EN_PROCESO'?'bg-amber-50 text-amber-600 border-amber-200':'bg-slate-50 text-slate-500 border-slate-200'}`}>{po.status}</span>
-                      </div>
-                      {po.status !== 'COMPLETADA' && (
-                        <button onClick={async()=>{const r=await apiFetch(`${host}/api/packing-orders/${po.id}`);if(r.ok){setActivePackingOrder(await r.json());setPackingLineQtys({});setPackingCartons({});}}} className="text-xs bg-cyan-50 hover:bg-cyan-100 text-cyan-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"><Package size={12}/> Empacar</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-white rounded-2xl border-2 border-cyan-200 shadow-sm p-6 space-y-5">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-black text-slate-800 uppercase tracking-tighter">Empacando: {activePackingOrder.doc_num}</h3>
-                    <button onClick={()=>setActivePackingOrder(null)} className="text-slate-400 hover:text-slate-600"><X size={18}/></button>
-                  </div>
-                  <div className="space-y-3">
-                    {(activePackingOrder.lines||[]).map(ln=>(
-                      <div key={ln.id} className="bg-slate-50 rounded-xl p-4 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-mono font-black text-slate-800">{ln.sku}</p>
-                            <p className="text-xs text-slate-500">Solicitado: {ln.qty_requested} — Empacado: {ln.qty_packed||0}</p>
-                          </div>
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${ln.status==='COMPLETADA'?'bg-emerald-50 text-emerald-600 border-emerald-200':'bg-amber-50 text-amber-600 border-amber-200'}`}>{ln.status}</span>
-                        </div>
-                        {ln.status!=='COMPLETADA' && (
-                          <div className="flex gap-2">
-                            <input type="number" min="0" placeholder="Cant. empacada" value={packingLineQtys[ln.id]||''} onChange={e=>setPackingLineQtys(p=>({...p,[ln.id]:e.target.value}))} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-cyan-400 text-center"/>
-                            <input placeholder="Caja / Carton" value={packingCartons[ln.id]||''} onChange={e=>setPackingCartons(p=>({...p,[ln.id]:e.target.value}))} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-cyan-400"/>
-                            <button onClick={async()=>{
-                              const r=await apiFetch(`${host}/api/packing-orders/${activePackingOrder.id}/lines/${ln.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({qty_packed:parseFloat(packingLineQtys[ln.id]||0),carton_id:packingCartons[ln.id]||null})});
-                              if(r.ok){showMsg('✅ Línea actualizada');const r2=await apiFetch(`${host}/api/packing-orders/${activePackingOrder.id}`);if(r2.ok)setActivePackingOrder(await r2.json());fetchData();}
-                              else{const e2=await r.json();showMsg(`⛔ ${e2.error}`,true);}
-                            }} className="bg-cyan-600 text-white px-4 py-2 rounded-xl font-black text-xs hover:bg-cyan-700 transition-colors flex items-center gap-1"><CheckCircle2 size={13}/> OK</button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={async()=>{
-                    const r=await apiFetch(`${host}/api/packing-orders/${activePackingOrder.id}/complete`,{method:'POST'});
-                    if(r.ok){showMsg('✅ Orden de empaque completada');setActivePackingOrder(null);fetchData();}
-                    else{const e2=await r.json();showMsg(`⛔ ${e2.error}`,true);}
-                  }} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-colors">Completar Orden</button>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* ═══════════════ DEVOLUCIONES ═══════════════ */}
           {activeTab === 'returns' && (

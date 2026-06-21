@@ -31,7 +31,6 @@ const demoRouter = require('./routes/demo');
 const locationsRouter = require('./routes/locations');
 const cycleCountRouter = require('./routes/cycle-count');
 const pickTasksRouter = require('./routes/pick-tasks');
-const packingOrdersRouter = require('./routes/packing-orders');
 const docksRouter = require('./routes/docks');
 const reportsRouter = require('./routes/reports');
 const purchaseOrdersRouter = require('./routes/purchase-orders');
@@ -258,7 +257,6 @@ app.use('/api', demoRouter);          // /demo/* (sandbox-config, login, switch-
 app.use('/api', locationsRouter);     // /locations (POST/PUT/DELETE + bulk)
 app.use('/api', cycleCountRouter);    // /cycle-count/*, /adjust-request, /adjust-requests/*
 app.use('/api', pickTasksRouter);     // /pick-tasks/*, /picker/* (queue, start, confirm, skip)
-app.use('/api', packingOrdersRouter); // /packing-orders (+ /:id/lines/:lineId, /:id/complete)
 app.use('/api', docksRouter);         // /docks, /dock-appointments
 app.use('/api', reportsRouter);       // /reports/*, /report/occupation, /report/resources, /stats/dispatch-kpis, /stats/weekly-dispatch
 app.use('/api', purchaseOrdersRouter); // /purchase-orders/*
