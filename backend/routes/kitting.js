@@ -210,7 +210,9 @@ router.get('/kitting/ordenes/:id', requirePicking, async (req, res) => {
 // ── POST /kitting/ordenes/:id/armar ── el PICKER arma la orden 'pendiente'.
 // body: { consumos: { [componente_sku]: [{ lpn_id, qty }] }, kit_ubicacion, kit_lote, kit_serie }.
 // Un componente sin picks se arma por FEFO. Descuenta (FOR UPDATE, sin negativo),
-// registra origen FINAL (marcando difiere_de_sugerido), crea kit_stock y pasa a 'armado'.
+// registra origen FINAL (marcando difiere_de_sugerido), crea un LPN REAL del kit en
+// inventory_lpns (despachable por el flujo normal) + registro histórico en kit_stock,
+// y pasa a 'armado'.
 router.post('/kitting/ordenes/:id/armar', requirePicking, async (req, res) => {
   const { consumos, kit_ubicacion, kit_lote, kit_serie } = req.body || {};
   const src = (consumos && typeof consumos === 'object') ? consumos : {};
@@ -265,19 +267,26 @@ router.post('/kitting/ordenes/:id/armar', requirePicking, async (req, res) => {
     }
     if (touchedAll.length) await client.query('DELETE FROM inventory_lpns WHERE id = ANY($1::varchar[]) AND qty <= 0', [touchedAll]);
 
-    // Stock resultante del kit (tabla dedicada).
-    const ksId = genLpnId('KS');
+    // El kit armado entra como LPN REAL de inventario (sku = kit_sku, marcado es_kit en el
+    // maestro), por lo que se despacha por el flujo normal sin lógica extra. kit_stock queda
+    // como registro histórico de la orden, con el MISMO id que el LPN para poder cruzarlos.
+    const ubic = (kit_ubicacion && String(kit_ubicacion).toUpperCase()) || 'PISO-RECEPCION';
+    const ksId = genLpnId('KIT');
+    await client.query(
+      `INSERT INTO inventory_lpns(id,client_id,sku,qty,status,location_id,batch_number,serial_number,glosa)
+       VALUES($1,$2,$3,$4,'DISPONIBLE',$5,$6,$7,$8)`,
+      [ksId, ord.client_id, ord.kit_sku, ord.cantidad_kits, ubic, kit_lote || null, kit_serie || null, `Kit armado | Orden ${ord.id}`]);
     await client.query(
       `INSERT INTO kit_stock (id, kit_orden_id, kit_sku, client_id, cantidad, ubicacion, lote, serie, estado)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'disponible')`,
-      [ksId, ord.id, ord.kit_sku, ord.client_id, ord.cantidad_kits, (kit_ubicacion && String(kit_ubicacion).toUpperCase()) || 'PISO-RECEPCION', kit_lote || null, kit_serie || null]);
+      [ksId, ord.id, ord.kit_sku, ord.client_id, ord.cantidad_kits, ubic, kit_lote || null, kit_serie || null]);
     await client.query(
       `INSERT INTO audit_log(type,sku,qty,glosa,username) VALUES('ADJUST_IN',$1,$2,$3,$4)`,
-      [ord.kit_sku, ord.cantidad_kits, `[KIT ARMADO] Orden ${ord.id} | kit_stock ${ksId}`, req.user.username]);
+      [ord.kit_sku, ord.cantidad_kits, `[KIT ARMADO] Orden ${ord.id} | LPN ${ksId}`, req.user.username]);
 
     await client.query(`UPDATE kit_orden SET estado='armado', armado_por=$2, armado_at=NOW() WHERE id=$1`, [ord.id, req.user.username]);
     await client.query('COMMIT');
-    res.json({ success: true, kit_stock_id: ksId, resumen });
+    res.json({ success: true, kit_stock_id: ksId, lpn_id: ksId, resumen });
   } catch (e) {
     await client.query('ROLLBACK');
     res.status(e.status || 500).json({ error: e.status ? e.message : mapDbError(e) });
@@ -286,9 +295,9 @@ router.post('/kitting/ordenes/:id/armar', requirePicking, async (req, res) => {
 
 // ── POST /kitting/ordenes/:id/desarmar ── EJECUTIVO_CUENTA+ revierte un armado.
 // body: { destino_ubicacion } opcional (si no, reintegra a la ubicación de origen).
-// Valida que la orden esté 'armado' y que el kit_stock siga 'disponible' (no despachado);
-// reintegra cada componente con su lote/serie, marca el kit_stock 'desarmado', Kardex
-// inverso, orden → 'desarmado'. Transacción + FOR UPDATE.
+// Valida que la orden esté 'armado' y que el LPN del kit siga intacto en inventario (no
+// despachado ni movido); consume ese LPN, reintegra cada componente con su lote/serie,
+// marca el kit_stock 'desarmado', Kardex inverso, orden → 'desarmado'. Transacción + FOR UPDATE.
 router.post('/kitting/ordenes/:id/desarmar', requireStockWrite, async (req, res) => {
   const dest = req.body && req.body.destino_ubicacion ? String(req.body.destino_ubicacion).trim().toUpperCase() : null;
   const client = await pool.connect();
@@ -303,7 +312,16 @@ router.post('/kitting/ordenes/:id/desarmar', requireStockWrite, async (req, res)
 
     const ks = (await client.query('SELECT * FROM kit_stock WHERE kit_orden_id=$1 FOR UPDATE', [ord.id])).rows;
     if (!ks.length) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'La orden no tiene stock de kit asociado.' }); }
-    if (ks.some(k => k.estado !== 'disponible')) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'El kit ya fue despachado o desarmado; no se puede desarmar.' }); }
+    // El LPN del kit (mismo id que kit_stock) debe seguir intacto: si falta o tiene menos
+    // cantidad, fue despachado o movido. kit_stock.estado puede estar desactualizado (el
+    // despacho normal no lo toca), así que la verdad la da el inventario real.
+    for (const k of ks) {
+      const lpn = (await client.query('SELECT qty FROM inventory_lpns WHERE id=$1 FOR UPDATE', [k.id])).rows[0];
+      if (!lpn || parseFloat(lpn.qty) < parseFloat(k.cantidad)) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ error: 'El kit ya fue despachado o movido; no se puede desarmar.' });
+      }
+    }
 
     const cons = (await client.query('SELECT * FROM kit_componente_consumido WHERE kit_orden_id=$1', [ord.id])).rows;
     if (!cons.length) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'No hay componentes consumidos para reintegrar.' }); }
@@ -321,8 +339,9 @@ router.post('/kitting/ordenes/:id/desarmar', requireStockWrite, async (req, res)
         [cc.componente_sku, cc.cantidad, `[KIT DESARMADO] Orden ${ord.id} | reintegro ${newId} → ${target}${cc.lote ? ` L:${cc.lote}` : ''}${cc.serie ? ` S/N:${cc.serie}` : ''}`, req.user.username]);
       reintegros.push({ componente_sku: cc.componente_sku, cantidad: parseFloat(cc.cantidad), ubicacion: target, lote: cc.lote, serie: cc.serie, lpn: newId });
     }
-    // Consumir el kit_stock (marca desarmado) + Kardex de salida del kit.
+    // Consumir el LPN del kit, marcar el kit_stock 'desarmado' + Kardex de salida del kit.
     for (const k of ks) {
+      await client.query('DELETE FROM inventory_lpns WHERE id=$1', [k.id]);
       await client.query(`UPDATE kit_stock SET estado='desarmado' WHERE id=$1`, [k.id]);
       await client.query(
         `INSERT INTO audit_log(type,sku,qty,glosa,username) VALUES('ADJUST_OUT',$1,$2,$3,$4)`,
