@@ -4357,6 +4357,13 @@ export default function App() {
                             <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono text-[10px] font-bold text-slate-700 block w-max mb-1">{i.location_id || 'PISO-RECEPCION'}</span>
                             <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${getStatusBadge(i.status)}`}>{statusLabel(i.status || 'DISPONIBLE')}</span>
                             {i.batch_number && <p className="text-[8px] font-black text-amber-700 uppercase mt-1">LT: {i.batch_number}</p>}
+                            {i.expiry_date && (() => {
+                              const d = new Date(i.expiry_date);
+                              const today = new Date(); today.setHours(0,0,0,0);
+                              const days = Math.ceil((d - today) / 86400000);
+                              const cls = isNaN(d.getTime()) ? 'text-slate-500' : days < 0 ? 'text-red-700' : days <= 30 ? 'text-orange-600' : 'text-amber-700';
+                              return <p className={`text-[8px] font-black uppercase mt-0.5 ${cls}`}><Calendar size={9} className="inline mr-0.5 -mt-0.5"/>VENCE: {isNaN(d.getTime()) ? i.expiry_date : d.toLocaleDateString('es-ES')}{!isNaN(d.getTime()) && days < 0 ? ' (VENCIDO)' : ''}</p>;
+                            })()}
                             {i.serial_number && <p className="text-[8px] font-black text-indigo-700 uppercase mt-0.5">SN: {i.serial_number}</p>}
                           </td>
                           <td className="p-4">
