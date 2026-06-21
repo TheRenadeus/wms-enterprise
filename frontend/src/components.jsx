@@ -670,7 +670,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                           const inEditSelection = editSelection.has(locId) || (isRootMerge && mergeBlock.covered.some(id => editSelection.has(id)));
                           const isViewSelected = selectedLoc?.locId === locId && !editMode;
 
-                          let bgClass = 'bg-emerald-400/80 border-emerald-300';
+                          let bgClass = 'bg-slate-500/60 border-slate-400/50'; // vacía: gris (distinto del verde de lote fresco)
                           let lotBg = null; // color FEFO por vencimiento (va inline)
 
                           if (isBlocked) {
