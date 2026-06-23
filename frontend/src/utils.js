@@ -193,3 +193,24 @@ export const timeAgo = (dateStr) => {
     return diffD === 1 ? 'ayer' : `hace ${diffD} días`;
   } catch(e) { return dateStr; }
 };
+
+// ── RUT chileno (módulo 11) — espejo del validador backend (helpers.js) para
+// feedback inline en formularios. El backend revalida siempre.
+export const normalizeRut = (rut) => String(rut || '').replace(/[.\-\s]/g, '').toUpperCase();
+export const isValidRut = (rut) => {
+  const clean = normalizeRut(rut);
+  if (clean.length < 2) return false;
+  const body = clean.slice(0, -1);
+  const dv = clean.slice(-1);
+  if (!/^\d+$/.test(body)) return false;
+  let sum = 0, mul = 2;
+  for (let k = body.length - 1; k >= 0; k--) { sum += parseInt(body[k], 10) * mul; mul = mul === 7 ? 2 : mul + 1; }
+  const res = 11 - (sum % 11);
+  const calc = res === 11 ? '0' : res === 10 ? 'K' : String(res);
+  return calc === dv;
+};
+export const formatRut = (rut) => {
+  const clean = normalizeRut(rut);
+  if (clean.length < 2) return clean;
+  return clean.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + clean.slice(-1);
+};

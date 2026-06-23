@@ -24,4 +24,11 @@ module.exports = [
   require('./023_kitting_ordenes'),
   require('./024_kitting_traza_origen'),
   require('./025_drop_kit_orders'),
+  require('./026_role_coordinador_transporte'),
+  require('./027_transporte_maestros'),
+  require('./028_solicitud_transporte'),
+  require('./029_envios'),
+  require('./030_despacho_cierre_pod'),
+  require('./031_aviso_llegada'),
+  require('./032_contenedores'),
 ];

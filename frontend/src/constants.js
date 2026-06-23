@@ -158,6 +158,7 @@ export const SANDBOX_ROLES = {
   ADMIN:            { id: 'ADMIN', label: 'Administrador', icon: '🏢', color: 'red', desc: 'Control total del sistema', shortDesc: 'Ve y modifica todo' },
   JEFE_BODEGA:      { id: 'JEFE_BODEGA', label: 'Jefe de Bodega', icon: '📦', color: 'teal', desc: 'Supervisión y operaciones de almacén', shortDesc: 'Supervisa, aprueba, opera' },
   EJECUTIVO_CUENTA: { id: 'EJECUTIVO_CUENTA', label: 'Ejecutivo de Cuenta', icon: '📋', color: 'emerald', desc: 'Operario de piso: recibe, despacha, reubica', shortDesc: 'Operaciones de stock' },
+  COORDINADOR_TRANSPORTE: { id: 'COORDINADOR_TRANSPORTE', label: 'Coordinador de Transporte', icon: '🚚', color: 'amber', desc: 'Gestiona flota, solicitudes y envíos; lectura de despachos', shortDesc: 'Transporte y logística' },
   AUDITOR:          { id: 'AUDITOR', label: 'Auditor', icon: '🔎', color: 'blue', desc: 'Vista de solo lectura para control', shortDesc: 'Solo observa y audita' },
   PICKER:           { id: 'PICKER', label: 'Picker', icon: '📱', color: 'violet', desc: 'Tareas de picking en el piso', shortDesc: 'Cola de tareas móvil' },
   CLIENTE:          { id: 'CLIENTE', label: 'Cliente 3PL', icon: '🏪', color: 'cyan', desc: 'Portal de solo lectura para clientes', shortDesc: 'Ve su propio stock' },

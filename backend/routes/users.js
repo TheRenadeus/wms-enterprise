@@ -157,7 +157,7 @@ router.post('/users', requireAdmin, async (req, res) => {
   const { username, full_name, password, role, status, allowed_clients, allowed_modules } = req.body;
   if (!username) return res.status(400).json({ error: 'El usuario es requerido' });
   if (password && password.length < 6) return res.status(400).json({ error: 'La contraseña debe tener al menos 6 caracteres' });
-  const VALID_ROLES = ['CLIENTE','PICKER','AUDITOR','EJECUTIVO_CUENTA','JEFE_BODEGA','ADMIN','SUPERADMIN'];
+  const VALID_ROLES = ['CLIENTE','PICKER','AUDITOR','EJECUTIVO_CUENTA','COORDINADOR_TRANSPORTE','JEFE_BODEGA','ADMIN','SUPERADMIN'];
   if (role && !VALID_ROLES.includes(role)) return res.status(400).json({ error: `Rol inválido: ${role}` });
   // Solo SUPERADMIN puede crear/editar usuarios SUPERADMIN
   if (role === 'SUPERADMIN' && req.user.role !== 'SUPERADMIN') return res.status(403).json({ error: 'No se puede asignar el rol SUPERADMIN' });

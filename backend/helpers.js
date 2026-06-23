@@ -29,4 +29,41 @@ async function logStorageEvent(dbClient, { client_id, event_type, sku, lpn_id, q
   }
 }
 
-module.exports = { genLpnId, logStorageEvent };
+// ── RUT chileno (módulo 11) ──────────────────────────────────────────────────
+// normalizeRut: deja solo cuerpo+DV en mayúsculas, sin puntos ni guion.
+function normalizeRut(rut) {
+  return String(rut || '').replace(/[.\-\s]/g, '').toUpperCase();
+}
+// computeDv: dígito verificador (módulo 11) del cuerpo numérico. Devuelve '0'-'9' o 'K'.
+function computeDv(body) {
+  let sum = 0, mul = 2;
+  for (let i = body.length - 1; i >= 0; i--) {
+    sum += parseInt(body[i], 10) * mul;
+    mul = mul === 7 ? 2 : mul + 1;
+  }
+  const res = 11 - (sum % 11);
+  if (res === 11) return '0';
+  if (res === 10) return 'K';
+  return String(res);
+}
+// isValidRut: valida formato y dígito verificador. Vacío/null → false (el caller
+// decide si el RUT es obligatorio).
+function isValidRut(rut) {
+  const clean = normalizeRut(rut);
+  if (clean.length < 2) return false;
+  const body = clean.slice(0, -1);
+  const dv = clean.slice(-1);
+  if (!/^\d+$/.test(body)) return false;
+  return computeDv(body) === dv;
+}
+// formatRut: presentación canónica con puntos y guion (ej: 12.345.678-5).
+function formatRut(rut) {
+  const clean = normalizeRut(rut);
+  if (clean.length < 2) return clean;
+  const body = clean.slice(0, -1);
+  const dv = clean.slice(-1);
+  const withDots = body.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${withDots}-${dv}`;
+}
+
+module.exports = { genLpnId, logStorageEvent, normalizeRut, computeDv, isValidRut, formatRut };

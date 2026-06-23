@@ -28,6 +28,10 @@ const requireAdmin       = requireRole(['ADMIN', 'SUPERADMIN'], 'ADMIN+');
 const requireJefe        = requireRole(['JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'], 'JEFE_BODEGA+');
 const requireStockWrite  = requireRole(['EJECUTIVO_CUENTA', 'JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'], 'EJECUTIVO_CUENTA+');
 const requirePicking     = requireRole(['PICKER', 'EJECUTIVO_CUENTA', 'JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'], 'PICKER+');
+// requireTransporte: escritura del MÓDULO DE TRANSPORTE. Rol especialista paralelo
+// (COORDINADOR_TRANSPORTE) + ADMIN/SUPERADMIN. NO toca stock (ausente de
+// requireStockWrite) ni confirma/cierra despachos (ausente de requireJefe).
+const requireTransporte  = requireRole(['COORDINADOR_TRANSPORTE', 'ADMIN', 'SUPERADMIN'], 'COORDINADOR_TRANSPORTE+');
 const requireReadOnly    = requireAuth; // cualquiera autenticado (lectura, sujeta a scope)
 
 // Aliases de transición: las rutas aún no re-cableadas siguen importando estos
@@ -40,7 +44,9 @@ const requireStaff = requirePicking;
 const requirePickerOrAbove = requirePicking;
 
 // Rango numérico de roles (para reglas "solo sobre rango estrictamente inferior").
-const ROLE_RANK = { CLIENTE: 1, AUDITOR: 1, PICKER: 2, EJECUTIVO_CUENTA: 3, JEFE_BODEGA: 4, ADMIN: 5, SUPERADMIN: 6 };
+// COORDINADOR_TRANSPORTE: especialista paralelo, rango 3 (como EJECUTIVO) para que
+// JEFE_BODEGA+ pueda resetear su contraseña; lo gestionan/crean ADMIN+.
+const ROLE_RANK = { CLIENTE: 1, AUDITOR: 1, PICKER: 2, EJECUTIVO_CUENTA: 3, COORDINADOR_TRANSPORTE: 3, JEFE_BODEGA: 4, ADMIN: 5, SUPERADMIN: 6 };
 const rankOf = (role) => ROLE_RANK[role] || 0;
 
 // requireResetPassword: JEFE_BODEGA+ puede resetear SOLO la contraseña de usuarios
@@ -351,6 +357,7 @@ module.exports = {
   requireJefe,
   requireStockWrite,
   requirePicking,
+  requireTransporte,
   requireResetPassword,
   requireReauth,
   // Aliases de transición (se retiran al re-cablear rutas)
