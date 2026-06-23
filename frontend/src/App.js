@@ -32,6 +32,7 @@ const SkuMovementTab = lazy(() => import('./tabs/SkuMovementTab'));
 const KardexTab      = lazy(() => import('./tabs/KardexTab'));
 const TransporteTab  = lazy(() => import('./tabs/TransporteTab'));
 const CierreDespachosTab = lazy(() => import('./tabs/CierreDespachosTab'));
+const SolicitarTransporteTab = lazy(() => import('./tabs/SolicitarTransporteTab'));
 
 // Fallback compartido mientras carga el chunk. Mantiene el layout calmo (sin saltos).
 const TabLoader = () => (
@@ -440,14 +441,14 @@ export default function App() {
     if (currentUser.role === 'JEFE_BODEGA') {
       if (disabledModules.includes(tabId)) return false;
       if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
-      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','cierre-transporte','purchase-orders','cycle-count','suppliers','waves','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers','insumos'].includes(tabId);
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','cierre-transporte','solicitar-transporte','purchase-orders','cycle-count','suppliers','waves','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers','insumos'].includes(tabId);
     }
     // EJECUTIVO_CUENTA (operario de piso): operaciones de stock y SKUs; sin gestión 3PL
     // (clientes, facturación, proveedores, docks) ni supervisión avanzada.
     if (currentUser.role === 'EJECUTIVO_CUENTA') {
       if (disabledModules.includes(tabId)) return false;
       if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
-      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','cierre-transporte','cycle-count','waves','returns','occupation','lpn-history','insumos'].includes(tabId);
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','cierre-transporte','solicitar-transporte','cycle-count','waves','returns','occupation','lpn-history','insumos'].includes(tabId);
     }
     // COORDINADOR_TRANSPORTE: su módulo de transporte + lectura sobre inventario,
     // SKUs y despachos. No opera stock ni confirma despachos.
@@ -2511,6 +2512,7 @@ export default function App() {
                   {canView('insumos') && <button onClick={() => switchTab('insumos')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'insumos' ? 'bg-orange-500/20 text-orange-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Insumos de Bodega</button>}
                   {canView('transport') && <button onClick={() => switchTab('transport')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'transport' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte</button>}
                   {canView('transporte-coord') && <button onClick={() => switchTab('transporte-coord')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'transporte-coord' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte y Logística</button>}
+                  {canView('solicitar-transporte') && <button onClick={() => switchTab('solicitar-transporte')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'solicitar-transporte' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Solicitar transporte</button>}
                   {canView('cierre-transporte') && <button onClick={() => switchTab('cierre-transporte')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'cierre-transporte' ? 'bg-teal-500/20 text-teal-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte (bodega)</button>}
                   {canView('purchase-orders') && <button onClick={() => switchTab('purchase-orders')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'purchase-orders' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800 text-slate-300'}`}><FileText size={18} className="mr-3"/> Órdenes de Compra</button>}
                   {canView('suppliers') && <button onClick={() => switchTab('suppliers')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'suppliers' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Building2 size={18} className="mr-3"/> Proveedores & ASN</button>}
@@ -7814,6 +7816,13 @@ export default function App() {
             {activeTab === 'transporte-coord' && (
               <Suspense fallback={<TabLoader />}>
                 <TransporteTab showMsg={showMsg} currentUser={currentUser} />
+              </Suspense>
+            )}
+
+            {/* SOLICITAR TRANSPORTE (Origen A — ejecutivo prepara el despacho) */}
+            {activeTab === 'solicitar-transporte' && (
+              <Suspense fallback={<TabLoader />}>
+                <SolicitarTransporteTab showMsg={showMsg} />
               </Suspense>
             )}
 
