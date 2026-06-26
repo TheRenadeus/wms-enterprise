@@ -139,8 +139,8 @@ router.post('/asns/:id/receive', requireStockWrite, validateBody(schemas.asnRece
     );
     const newStatus = parseInt(pending.rows[0].cnt) === 0 ? 'RECIBIDO' : 'PARCIAL';
     await client.query(
-      `UPDATE asns SET status=$1, received_at=CASE WHEN $1='RECIBIDO' THEN NOW() ELSE received_at END WHERE id=$2`,
-      [newStatus, req.params.id]
+      `UPDATE asns SET status=$1, received_at=CASE WHEN $2 THEN NOW() ELSE received_at END WHERE id=$3`,
+      [newStatus, newStatus === 'RECIBIDO', req.params.id]
     );
     await client.query('COMMIT');
     res.json({ success: true, status: newStatus, lpns_created: createdLpns });
