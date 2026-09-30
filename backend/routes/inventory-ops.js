@@ -218,23 +218,32 @@ router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClient
       if (!s) return;
       skuTotals[s] = (skuTotals[s] || 0) + q;
     });
+    // Batch: una query para allow_substitutes de todos los SKUs y una para el
+    // stock disponible de los que aplican, en vez de 2 queries por SKU.
     const itemsConDeficit = [];
-    for (const [s, reqQty] of Object.entries(skuTotals)) {
-      const skuMeta = await pool.query(
-        `SELECT allow_substitutes FROM master_skus WHERE sku = $1 LIMIT 1`, [s]
-      );
-      if (!skuMeta.rows[0]?.allow_substitutes) continue;
-      const avail = await pool.query(
-        `SELECT COALESCE(SUM(qty),0)::float AS total FROM inventory_lpns
-          WHERE sku=$1 AND qty>0 AND status='DISPONIBLE'`, [s]
-      );
-      const qtyAvailable = parseFloat(avail.rows[0].total) || 0;
-      if (qtyAvailable < reqQty) {
-        itemsConDeficit.push({
-          sku: s, qty_solicitada: reqQty, qty_disponible: qtyAvailable,
-          deficit: reqQty - qtyAvailable,
-          substitutes_url: `/api/skus/${encodeURIComponent(s)}/substitutes?qty=${reqQty - qtyAvailable}`,
-        });
+    const skuList = Object.keys(skuTotals);
+    if (skuList.length > 0) {
+      const metaRes = await pool.query(`SELECT sku, allow_substitutes FROM master_skus WHERE sku = ANY($1)`, [skuList]);
+      const metaBySku = new Map();
+      for (const r of metaRes.rows) { if (!metaBySku.has(r.sku)) metaBySku.set(r.sku, r.allow_substitutes); }
+      const substitutableSkus = skuList.filter(s => metaBySku.get(s));
+      if (substitutableSkus.length > 0) {
+        const availRes = await pool.query(
+          `SELECT sku, COALESCE(SUM(qty),0)::float AS total FROM inventory_lpns
+            WHERE sku = ANY($1) AND qty>0 AND status='DISPONIBLE' GROUP BY sku`, [substitutableSkus]
+        );
+        const availBySku = new Map(availRes.rows.map(r => [r.sku, parseFloat(r.total) || 0]));
+        for (const s of substitutableSkus) {
+          const reqQty = skuTotals[s];
+          const qtyAvailable = availBySku.get(s) || 0;
+          if (qtyAvailable < reqQty) {
+            itemsConDeficit.push({
+              sku: s, qty_solicitada: reqQty, qty_disponible: qtyAvailable,
+              deficit: reqQty - qtyAvailable,
+              substitutes_url: `/api/skus/${encodeURIComponent(s)}/substitutes?qty=${reqQty - qtyAvailable}`,
+            });
+          }
+        }
       }
     }
     if (itemsConDeficit.length > 0) {
