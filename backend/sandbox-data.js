@@ -176,9 +176,9 @@ const DEMO_DOC_HISTORY = [
 ];
 
 const DEMO_CYCLE_COUNTS = [
-  { id: 1, name: 'Conteo Zona A — Electrónica', zone: 'A', status: 'COMPLETADO', total_locations: 5, counted_locations: 5, discrepancies: 1, created_by: 'auditor1', created_at: daysAgo(8), completed_at: daysAgo(7) },
-  { id: 2, name: 'Conteo Zona B — Ropa y Calzado', zone: 'B', status: 'EN_CURSO', total_locations: 3, counted_locations: 1, discrepancies: 0, created_by: 'auditor1', created_at: daysAgo(1), completed_at: null },
-  { id: 3, name: 'Conteo Zona C — Bulk', zone: 'C', status: 'PENDIENTE', total_locations: 2, counted_locations: 0, discrepancies: 0, created_by: 'jefe_bodega', created_at: hoursAgo(2), completed_at: null },
+  { id: 1, name: 'Conteo Zona A — Electrónica', zone: 'A', status: 'COMPLETED', total_locations: 5, counted_locations: 5, discrepancies: 1, created_by: 'auditor1', created_at: daysAgo(8), completed_at: daysAgo(7) },
+  { id: 2, name: 'Conteo Zona B — Ropa y Calzado', zone: 'B', status: 'EN_PROCESO', total_locations: 3, counted_locations: 1, discrepancies: 0, created_by: 'auditor1', created_at: daysAgo(1), completed_at: null },
+  { id: 3, name: 'Conteo Zona C — Bulk', zone: 'C', status: 'PENDING', total_locations: 2, counted_locations: 0, discrepancies: 0, created_by: 'jefe_bodega', created_at: hoursAgo(2), completed_at: null },
 ];
 
 const DEMO_PURCHASE_ORDERS = [
