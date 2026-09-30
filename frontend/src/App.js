@@ -7,7 +7,7 @@ import {
   ClipboardList, UserCheck, UserX, AlertTriangle, SkipForward, CheckCheck, ListTodo, CalendarClock, Clock, Send,
   HardHat, Wrench, Timer, Moon, Sun, BookOpen
 } from 'lucide-react';
-import { useAutoSaveState, apiFetch, setDemoMode, timeAgo, exportToExcel } from './utils';
+import { useAutoSaveState, apiFetch, setDemoMode, timeAgo, exportToExcel, descargarArchivoAutenticado } from './utils';
 import { useConfirm } from './useConfirm';
 import {
   initialSkuForm, MODULES_3PL_ONLY, APP_MODULES, colorMap, statusLabel,
@@ -33,6 +33,18 @@ const KardexTab      = lazy(() => import('./tabs/KardexTab'));
 const TransporteTab  = lazy(() => import('./tabs/TransporteTab'));
 const CierreDespachosTab = lazy(() => import('./tabs/CierreDespachosTab'));
 const SolicitarTransporteTab = lazy(() => import('./tabs/SolicitarTransporteTab'));
+const StatusesTab = lazy(() => import('./tabs/StatusesTab'));
+const DocTypesTab = lazy(() => import('./tabs/DocTypesTab'));
+const ReturnsTab = lazy(() => import('./tabs/ReturnsTab'));
+const TransportLegacyTab = lazy(() => import('./tabs/TransportLegacyTab'));
+const ClientsTab = lazy(() => import('./tabs/ClientsTab'));
+const AuditTab = lazy(() => import('./tabs/AuditTab'));
+const AccessLogTab = lazy(() => import('./tabs/AccessLogTab'));
+const PurchaseOrdersTab = lazy(() => import('./tabs/PurchaseOrdersTab'));
+const DocHistoryTab = lazy(() => import('./tabs/DocHistoryTab'));
+const CycleCountTab = lazy(() => import('./tabs/CycleCountTab'));
+const UsersTab = lazy(() => import('./tabs/UsersTab'));
+const KitsTab = lazy(() => import('./tabs/KitsTab'));
 
 // Fallback compartido mientras carga el chunk. Mantiene el layout calmo (sin saltos).
 const TabLoader = () => (
@@ -639,6 +651,13 @@ export default function App() {
 
   const [showDispatchConfirm, setShowDispatchConfirm] = useState(false);
   const [shipQtys, setShipQtys] = useState({});
+  // Solicitud de transporte desde un despacho (botón extra en el panel de salida).
+  const transReqEmpty = { destino:'', sentido:'SALIDA', tipo_vehiculo_sugerido:'', n_cajas:'', n_cajones:'', n_pallets:'', hora_carga_habilitada:'', fecha_hora_recepcion_destino:'' };
+  const [showTransportReq, setShowTransportReq] = useState(false);
+  const [transportReqForm, setTransportReqForm] = useState(transReqEmpty);
+  const [transportReqBusy, setTransportReqBusy] = useState(false);
+  const [transportReqResult, setTransportReqResult] = useState(null);
+  const [transportTipos, setTransportTipos] = useState([]);
   const [importModal, setImportModal] = useState(null); // null | { type, extraParams } → BulkImportModal
   const [confirmDialog, setConfirmDialog] = useState(null); // null | { title, message, confirmText, danger, onConfirm }
   const openConfirm = (opts) => setConfirmDialog(opts);
@@ -764,11 +783,12 @@ export default function App() {
   const [kitForm, setKitForm] = useState({ kit_sku: '', client_id: '', description: '', components: [] });
   const [kitComponentLine, setKitComponentLine] = useState({ sku: '', qty: '' });
   const [systemMetrics, setSystemMetrics] = useState(null);
+  const [ngrokStatus, setNgrokStatus] = useState(null);
   const [systemConfig, setSystemConfig] = useState({});
   // Cargar config pública antes del login (para mostrar nombre de empresa)
   useEffect(() => {
     const h = customHost || '';
-    fetch(`${h}/api/system/config`).then(r => r.ok ? r.json() : {}).then(cfg => setSystemConfig(prev => ({...cfg, ...prev}))).catch(() => {});
+    fetch(`${h}/api/system/config`, { headers: { 'ngrok-skip-browser-warning': 'true' } }).then(r => r.ok ? r.json() : {}).then(cfg => setSystemConfig(prev => ({...cfg, ...prev}))).catch(() => {});
   }, [customHost]);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
@@ -983,6 +1003,35 @@ export default function App() {
     setShowDispatchConfirm(true);
   };
 
+  // Abrir el modal de solicitud de transporte para el despacho activo. Prefija
+  // destino con la glosa del documento (si la hay) y carga tipos de vehículo.
+  const openTransportReq = () => {
+    if (!activeDoc || activeDoc.items.length === 0) return;
+    setTransportReqResult(null);
+    setTransportReqForm({ ...transReqEmpty, destino: activeDoc.glosa || '' });
+    setShowTransportReq(true);
+    apiFetch(`${host}/api/transporte/tipos-vehiculo`).then(r => r.ok ? r.json() : []).then(d => setTransportTipos(Array.isArray(d) ? d : [])).catch(() => {});
+  };
+
+  const submitTransportReq = async () => {
+    if (!activeDoc) return;
+    // Líneas del carrito → {sku, qty}. Para kits se usa la cantidad de kits.
+    const items = activeDoc.items.map(it => ({ sku: it.sku, qty: it.isKit ? Number(it.qtyKits) || 0 : Number(it.qtyToPick) || 0 })).filter(l => l.sku && l.qty > 0);
+    if (items.length === 0) return showMsg('El despacho no tiene líneas con cantidad para solicitar transporte', true);
+    setTransportReqBusy(true);
+    try {
+      const res = await apiFetch(`${host}/api/transporte/solicitudes/desde-despacho`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...transportReqForm, client_id: activeDoc.client || '', items }),
+      });
+      const d = await res.json();
+      if (!res.ok) { showMsg(d.error || 'Error al solicitar transporte', true); return; }
+      setTransportReqResult(d);
+      showMsg('✅ Solicitud de transporte creada. El coordinador la verá en su cola.');
+    } catch (e) { showMsg('Error de red al solicitar transporte', true); }
+    finally { setTransportReqBusy(false); }
+  };
+
   const loadDocPickLines = useCallback(async (docNum) => {
     if (!docNum) return;
     const res = await apiFetch(`${host}/api/pick-tasks/by-doc/${encodeURIComponent(docNum)}`).catch(()=>null);
@@ -1099,13 +1148,23 @@ export default function App() {
     setIsSavingLoc(true);
     const allLocs = buildLocsList();
     const locsToCreate = allLocs.filter(l => !whExcluded.has(l.location_id));
+    if (locsToCreate.length === 0) {
+      showMsg('⚠️ No hay ubicaciones para generar. Revisa el rango de pasillos, columnas y filas.', true);
+      setIsSavingLoc(false);
+      return;
+    }
     try {
       const res = await apiFetch(`${host}/api/locations/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ locations: locsToCreate, overwrite: whOverwrite })
       });
-      const d = await res.json();
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showMsg(`⛔ ${d.error || 'No se pudieron generar las ubicaciones.'}`, true);
+        setIsSavingLoc(false);
+        return;
+      }
       fetchData();
       showMsg(`✅ Se generaron ${d.generated || 0} ubicaciones${d.skipped ? ` (${d.skipped} omitidas por duplicado)` : ''}.`);
       setWhShowPreview(false); setWhExcluded(new Set());
@@ -1200,7 +1259,7 @@ export default function App() {
     e.preventDefault();
     if (isSavingSku) return;
     setIsSavingSku(true);
-    const payload = { ...skuForm, requires_lot: skuForm.traceability === 'LOT', requires_serial: skuForm.traceability === 'SERIAL', username: currentUser?.username };
+    const payload = { ...skuForm, username: currentUser?.username };
     if ((!is3PLMode || isHybridMode) && !payload.client_id) payload.client_id = systemConfig.own_client_id || 'PROPIO';
     try {
       // En edición → PUT (puede versionar). En creación → POST.
@@ -1228,7 +1287,7 @@ export default function App() {
   const handleEditSku = (s) => {
     const snapshot = { sku: s.sku, requires_lot: !!s.requires_lot, requires_serial: !!s.requires_serial, stock_total: parseFloat(s.stock_total) || 0 };
     setEditingSkuOriginal(snapshot);
-    setSkuForm({ sku: s.sku, barcode: s.barcode || '', desc: s.desc || '', category: s.category || 'General', uom: s.uom || 'UN', weight: s.weight || '', length: s.length || '', width: s.width || '', height: s.height || '', abc_class: s.abc_class || '-', traceability: s.requires_serial ? 'SERIAL' : (s.requires_lot ? 'LOT' : 'NONE'), client_id: s.client_id || '', manufacturer_id: s.manufacturer?.id || s.manufacturer_id || '', manufacturer_code: s.manufacturer?.code || s.manufacturer_code || '', manufacturer_sku: s.manufacturer_sku || '', brand: s.brand || '', allow_substitutes: !!s.allow_substitutes, substitute_scope: s.substitute_scope || 'any', substitute_threshold: s.substitute_threshold !== null && s.substitute_threshold !== undefined && s.substitute_threshold !== '' ? Math.round(parseFloat(s.substitute_threshold) * 100) : '' });
+    setSkuForm({ sku: s.sku, barcode: s.barcode || '', desc: s.desc || '', category: s.category || 'General', uom: s.uom || 'UN', weight: s.weight || '', length: s.length || '', width: s.width || '', height: s.height || '', abc_class: s.abc_class || '-', requires_lot: !!s.requires_lot, requires_serial: !!s.requires_serial, client_id: s.client_id || '', manufacturer_id: s.manufacturer?.id || s.manufacturer_id || '', manufacturer_code: s.manufacturer?.code || s.manufacturer_code || '', manufacturer_sku: s.manufacturer_sku || '', brand: s.brand || '', allow_substitutes: !!s.allow_substitutes, substitute_scope: s.substitute_scope || 'any', substitute_threshold: s.substitute_threshold !== null && s.substitute_threshold !== undefined && s.substitute_threshold !== '' ? Math.round(parseFloat(s.substitute_threshold) * 100) : '' });
     setIsEditingSku(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1806,7 +1865,7 @@ export default function App() {
   const filteredLocs = safeLocs.filter(l => {
     if (locCodeFilter && !l.location_id.toLowerCase().includes(locCodeFilter.toLowerCase())) return false;
     if (locZoneFilter && !(l.zone_code || '').toLowerCase().includes(locZoneFilter.toLowerCase())) return false;
-    if (whZoneFilter && (l.zone_code || '') !== whZoneFilter) return false;
+    if (whZoneFilter && (l.zone_code || 'SIN ZONA') !== whZoneFilter) return false;
     if (whBodegaFilter && !l.location_id.startsWith(whBodegaFilter)) return false;
     return true;
   });
@@ -1952,7 +2011,7 @@ export default function App() {
   const handlePortalLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${host}/api/portal/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(portalLoginForm) });
+      const res = await fetch(`${host}/api/portal/login`, { method:'POST', headers:{'Content-Type':'application/json', 'ngrok-skip-browser-warning':'true'}, body: JSON.stringify(portalLoginForm) });
       const d = await res.json();
       if (res.ok) { localStorage.setItem('wms_portal_token', d.token); setPortalUser(d); }
       else setPortalLoginError(d.error || 'Credenciales incorrectas');
@@ -2456,7 +2515,7 @@ export default function App() {
                 {canView('digital-twin') && <button onClick={() => switchTab('digital-twin')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'digital-twin' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Mapa 3D Bodega</button>}
 
                 {/* ─── OPERACIONES DIARIAS ─── */}
-                {(canView('receive') || canView('dispatch') || canView('relocate') || canView('change-status') || canView('adjust') || canView('returns')) && (<>
+                {(canView('receive') || canView('dispatch') || canView('insumos') || canView('relocate') || canView('change-status') || canView('adjust') || canView('returns')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
                   <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Operaciones Diarias</p>
                   {canView('receive') && <button data-tutorial-target="receive-tab" onClick={() => switchTab('receive')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'receive' ? 'bg-emerald-500/20 text-emerald-400 font-black' : 'hover:bg-slate-800'}`}><ArrowDownRight size={18} className="mr-3"/> Recepciones (In)</button>}
@@ -2468,6 +2527,7 @@ export default function App() {
                       )}
                     </button>
                   )}
+                  {canView('insumos') && <button onClick={() => switchTab('insumos')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'insumos' ? 'bg-orange-500/20 text-orange-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Insumos de Bodega</button>}
                   {canView('relocate') && (
                     <button data-tutorial-target="relocate-tab" onClick={() => switchTab('relocate')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'relocate' ? 'bg-purple-500/20 text-purple-400 font-black' : 'hover:bg-slate-800'}`}>
                       <ArrowRightLeft size={18} className="mr-3"/> Reubicar Stock
@@ -2496,10 +2556,10 @@ export default function App() {
                   {canView('waves') && <button onClick={() => switchTab('waves')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'waves' ? 'bg-violet-500/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Olas de Picking</button>}
                 </>)}
 
-                {/* ─── PROGRAMACIÓN & LOGÍSTICA ─── */}
-                {(canView('dispatch-schedule') || canView('docks') || canView('transport') || canView('purchase-orders') || canView('suppliers')) && (<>
+                {/* ─── TRANSPORTE ─── */}
+                {(canView('dispatch-schedule') || canView('docks') || canView('transport') || canView('transporte-coord') || canView('solicitar-transporte') || canView('cierre-transporte')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Programación & Logística</p>
+                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Transporte</p>
                   {canView('dispatch-schedule') && (
                     <button onClick={() => switchTab('dispatch-schedule')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'dispatch-schedule' ? 'bg-teal-500/20 text-teal-400 font-black' : 'hover:bg-slate-800'}`}>
                       <CalendarClock size={18} className="mr-3"/> Prog. de Salidas
@@ -2509,11 +2569,16 @@ export default function App() {
                     </button>
                   )}
                   {canView('docks') && <button onClick={() => switchTab('docks')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'docks' ? 'bg-teal-500/20 text-teal-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Muelles / Yard</button>}
-                  {canView('insumos') && <button onClick={() => switchTab('insumos')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'insumos' ? 'bg-orange-500/20 text-orange-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Insumos de Bodega</button>}
                   {canView('transport') && <button onClick={() => switchTab('transport')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'transport' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte</button>}
                   {canView('transporte-coord') && <button onClick={() => switchTab('transporte-coord')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'transporte-coord' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte y Logística</button>}
                   {canView('solicitar-transporte') && <button onClick={() => switchTab('solicitar-transporte')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'solicitar-transporte' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Solicitar transporte</button>}
                   {canView('cierre-transporte') && <button onClick={() => switchTab('cierre-transporte')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'cierre-transporte' ? 'bg-teal-500/20 text-teal-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte (bodega)</button>}
+                </>)}
+
+                {/* ─── ABASTECIMIENTO ─── */}
+                {(canView('purchase-orders') || canView('suppliers') || canView('manufacturers')) && (<>
+                  <div className="my-4 border-t border-slate-800"></div>
+                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Abastecimiento</p>
                   {canView('purchase-orders') && <button onClick={() => switchTab('purchase-orders')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'purchase-orders' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800 text-slate-300'}`}><FileText size={18} className="mr-3"/> Órdenes de Compra</button>}
                   {canView('suppliers') && <button onClick={() => switchTab('suppliers')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'suppliers' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Building2 size={18} className="mr-3"/> Proveedores & ASN</button>}
                   {canView('manufacturers') && <button onClick={() => switchTab('manufacturers')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'manufacturers' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><HardHat size={18} className="mr-3"/> Fabricantes</button>}
@@ -3097,1016 +3162,103 @@ export default function App() {
             )}
             
             {/* REGISTRO DE ACCESOS ──────────────────────────── */}
-            {activeTab === 'access-log' && isAdmin && (() => {
-              const loadAccessLog = async (filt = accessLogFilter, page = accessLogPage) => {
-                setAccessLogBusy(true);
-                try {
-                  const qs = new URLSearchParams();
-                  if (filt.username) qs.set('username', filt.username);
-                  if (filt.ip) qs.set('ip', filt.ip);
-                  if (filt.success) qs.set('success', filt.success);
-                  if (filt.from) qs.set('from', filt.from);
-                  if (filt.to) qs.set('to', filt.to);
-                  qs.set('limit', '100');
-                  qs.set('offset', String(page * 100));
-                  const r = await apiFetch(`${host}/api/login-history?${qs}`);
-                  if (r.ok) setAccessLogData(await r.json());
-                } catch (e) {} finally { setAccessLogBusy(false); }
-              };
-              const stats = accessLogData.stats || {};
-              const rows = accessLogData.rows || [];
-              const total = accessLogData.total || 0;
-              const totalPages = Math.max(1, Math.ceil(total / 100));
-              return (
-                <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-indigo-100 rounded-2xl"><Key className="w-7 h-7 text-indigo-600"/></div>
-                      <div>
-                        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Registro de accesos</h1>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quién entró al sistema, cuándo y desde qué IP</p>
-                      </div>
-                    </div>
-                    <button onClick={() => loadAccessLog()} disabled={accessLogBusy} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-md disabled:opacity-50">
-                      {accessLogBusy ? <Loader2 size={12} className="animate-spin"/> : <RefreshCcw size={12}/>}
-                      Actualizar
-                    </button>
-                  </div>
-
-                  {/* Tarjetas de estadísticas */}
-                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Accesos OK total</p><p className="text-2xl font-black text-emerald-600 mt-1">{stats.ok_total || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Intentos fallidos</p><p className="text-2xl font-black text-red-600 mt-1">{stats.fail_total || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">OK hoy</p><p className="text-2xl font-black text-emerald-600 mt-1">{stats.ok_today || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fallidos hoy</p><p className="text-2xl font-black text-red-600 mt-1">{stats.fail_today || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Activos 24h</p><p className="text-2xl font-black text-indigo-600 mt-1">{stats.active_24h || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">IPs únicas</p><p className="text-2xl font-black text-slate-700 mt-1">{stats.distinct_ips || 0}</p></div>
-                  </div>
-
-                  {/* Filtros */}
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Filtrar</p>
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                      <input type="text" placeholder="Usuario" value={accessLogFilter.username} onChange={e=>setAccessLogFilter(p=>({...p, username:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/>
-                      <input type="text" placeholder="IP" value={accessLogFilter.ip} onChange={e=>setAccessLogFilter(p=>({...p, ip:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/>
-                      <select value={accessLogFilter.success} onChange={e=>setAccessLogFilter(p=>({...p, success:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white focus:border-indigo-500">
-                        <option value="">Todos</option>
-                        <option value="true">Solo accesos OK</option>
-                        <option value="false">Solo fallidos</option>
-                      </select>
-                      <input type="date" value={accessLogFilter.from} onChange={e=>setAccessLogFilter(p=>({...p, from:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500" title="Desde"/>
-                      <input type="date" value={accessLogFilter.to} onChange={e=>setAccessLogFilter(p=>({...p, to:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500" title="Hasta"/>
-                      <div className="flex gap-2">
-                        <button onClick={()=>{setAccessLogPage(0);loadAccessLog(accessLogFilter, 0);}} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase">Aplicar</button>
-                        <button onClick={()=>{const empty={username:'',ip:'',success:'',from:'',to:''};setAccessLogFilter(empty);setAccessLogPage(0);loadAccessLog(empty,0);}} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase">Limpiar</button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Tabla */}
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                        <thead className="bg-slate-50 border-b border-slate-200">
-                          <tr>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase">Fecha / Hora</th>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase">Usuario</th>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase">Rol</th>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase">IP de origen</th>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase text-center">Resultado</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {rows.length === 0 && (
-                            <tr><td colSpan="5" className="p-8 text-center text-slate-400 text-sm">Sin accesos para los filtros aplicados. Presiona "Actualizar" para cargar el historial.</td></tr>
-                          )}
-                          {rows.map(r => (
-                            <tr key={r.id} className="hover:bg-indigo-50/30 transition-colors">
-                              <td className="px-5 py-3 text-xs font-bold text-slate-700">
-                                <p>{new Date(r.created_at).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'medium' })}</p>
-                                <p className="text-[9px] text-slate-400 font-medium">{timeAgo(r.created_at)}</p>
-                              </td>
-                              <td className="px-5 py-3">
-                                <p className="font-mono text-xs font-black text-slate-800">@{r.username}</p>
-                                {r.full_name && <p className="text-[10px] text-slate-500">{r.full_name}</p>}
-                              </td>
-                              <td className="px-5 py-3">
-                                {r.role ? <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${r.role === 'SUPERADMIN' ? 'bg-red-100 text-red-700' : r.role === 'ADMIN' ? 'bg-orange-100 text-orange-700' : r.role === 'CLIENTE' ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600'}`}>{r.role}</span> : <span className="text-[10px] text-slate-400">(usuario eliminado)</span>}
-                              </td>
-                              <td className="px-5 py-3 font-mono text-xs text-slate-600">{r.ip || '—'}</td>
-                              <td className="px-5 py-3 text-center">
-                                {r.success
-                                  ? <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1"><CheckCircle2 size={10}/> Acceso OK</span>
-                                  : <span className="bg-red-100 text-red-700 border border-red-200 px-3 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1"><XCircle size={10}/> Fallido</span>}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {/* Paginación */}
-                    {total > 0 && (
-                      <div className="flex items-center justify-between p-4 border-t border-slate-100 bg-slate-50">
-                        <p className="text-[10px] font-bold text-slate-500">Mostrando {accessLogPage*100+1}–{Math.min((accessLogPage+1)*100, total)} de {total}</p>
-                        <div className="flex gap-2">
-                          <button disabled={accessLogPage===0} onClick={()=>{const p=accessLogPage-1;setAccessLogPage(p);loadAccessLog(accessLogFilter,p);}} className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-[10px] font-black text-slate-600 disabled:opacity-30">← Anterior</button>
-                          <span className="px-3 py-1.5 text-[10px] font-black text-slate-500">Pág {accessLogPage+1} / {totalPages}</span>
-                          <button disabled={accessLogPage+1>=totalPages} onClick={()=>{const p=accessLogPage+1;setAccessLogPage(p);loadAccessLog(accessLogFilter,p);}} className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-[10px] font-black text-slate-600 disabled:opacity-30">Siguiente →</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
+            {activeTab === 'access-log' && isAdmin && (
+              <Suspense fallback={<TabLoader />}>
+                <AccessLogTab
+                  accessLogFilter={accessLogFilter} setAccessLogFilter={setAccessLogFilter}
+                  accessLogPage={accessLogPage} setAccessLogPage={setAccessLogPage}
+                  accessLogData={accessLogData} setAccessLogData={setAccessLogData}
+                  accessLogBusy={accessLogBusy} setAccessLogBusy={setAccessLogBusy}
+                  apiFetch={apiFetch} host={host} timeAgo={timeAgo}
+                />
+              </Suspense>
+            )}
 
             {/* USUARIOS CON SELECCIÓN DE MÓDULOS */}
             {activeTab === 'users' && isAdmin && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center">
-                        <UserCog className="w-5 h-5 mr-2 text-indigo-500"/> 
-                        {isEditingUser ? 'Editando Perfil' : 'Gestión de Usuarios'}
-                      </h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crear accesos, suspender y definir permisos</p>
-                    </div>
-                    <form onSubmit={handleSaveUser} className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Username *</label><input type="text" value={userForm.username} onChange={e=>setUserForm({...userForm, username: e.target.value.toLowerCase().replace(/\s/g, '')})} required disabled={isEditingUser} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 lowercase ${isEditingUser ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} placeholder="Ej: jlopez"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Contraseña {isEditingUser ? '' : '*'}</label><input type="password" value={userForm.password} onChange={e=>setUserForm({...userForm, password: e.target.value})} required={!isEditingUser} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder={isEditingUser ? "(Vacío para no cambiar)" : "******"}/></div>
-                        </div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Nombre Completo *</label><input type="text" value={userForm.full_name} onChange={e=>setUserForm({...userForm, full_name: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Ej: Juan López"/></div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                             <label className="text-[10px] font-black text-slate-400 uppercase">Rol de Seguridad Base</label>
-                             <select value={userForm.role} onChange={e=>setUserForm({...userForm, role: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                               <option value="CLIENTE">CLIENTE (Portal solo lectura)</option>
-                               <option value="PICKER">PICKER (Bodega)</option>
-                               <option value="EJECUTIVO_CUENTA">EJECUTIVO DE CUENTA (Operario)</option>
-                               {isAdmin && <option value="COORDINADOR_TRANSPORTE">COORDINADOR DE TRANSPORTE</option>}
-                               {isAdmin && <option value="JEFE_BODEGA">JEFE DE BODEGA</option>}
-                               <option value="AUDITOR">AUDITOR</option>
-                               {isAdmin && <option value="ADMIN">ADMINISTRADOR</option>}
-                             </select>
-                          </div>
-                          <div className="space-y-1">
-                             <label className="text-[10px] font-black text-slate-400 uppercase">Estado de la Cuenta</label>
-                             <select value={userForm.status} onChange={e=>setUserForm({...userForm, status: e.target.value})} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white ${userForm.status === 'SUSPENDED' ? 'text-red-600' : 'text-emerald-600'}`}>
-                               <option value="ACTIVE">🟢 Activa (Permitir Acceso)</option>
-                               <option value="SUSPENDED">🔴 Inhabilitada (Bloqueado)</option>
-                             </select>
-                          </div>
-                        </div>
-
-                        {/* ── ACCESO A CLIENTES (modo 3PL) ─────────────── */}
-                        <div className="space-y-3 pt-4 border-t border-slate-100">
-                          <label className="text-[10px] font-black text-indigo-600 uppercase flex items-center"><Users className="w-3 h-3 mr-1"/> Acceso a clientes (operaciones)</label>
-                          {['ADMIN','SUPERADMIN'].includes(userForm.role) ? (
-                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
-                              <p className="text-xs font-black text-indigo-700">🛡 Todos los clientes</p>
-                              <p className="text-[10px] text-indigo-600 font-bold mt-0.5">Los administradores siempre acceden a todos los clientes.</p>
-                            </div>
-                          ) : (
-                            <>
-                              <p className="text-[10px] text-slate-500 font-bold">Define sobre qué clientes este usuario puede crear operaciones (recibir, despachar, ajustar). La <strong>consulta</strong> de stock e inventario sigue siendo global.</p>
-                              <div className="space-y-2">
-                                {[
-                                  ['all','Todos los clientes','admin, jefe de bodega'],
-                                  ['assigned','Solo clientes asignados','operador específico'],
-                                  ['none','Sin acceso a clientes','usuario bloqueado'],
-                                ].map(([id,label,desc]) => (
-                                  <label key={id} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${userForm.client_scope === id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                                    <input type="radio" name="client_scope" value={id} checked={userForm.client_scope === id} onChange={()=>setUserForm(p=>({...p, client_scope: id}))} className="mt-0.5 accent-indigo-600"/>
-                                    <div>
-                                      <p className="text-xs font-black text-slate-800">{label}</p>
-                                      <p className="text-[10px] text-slate-500 font-medium">{desc}</p>
-                                    </div>
-                                  </label>
-                                ))}
-                              </div>
-
-                              {userForm.client_scope === 'assigned' && (
-                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 animate-in fade-in">
-                                  <div className="flex items-center justify-between">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase">Clientes asignados ({(userForm.assigned_clients||[]).length})</p>
-                                    <div className="flex gap-2">
-                                      <button type="button" onClick={()=>setUserForm(p=>({...p, assigned_clients: clients.map(c=>c.id)}))} className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 underline">Seleccionar todos</button>
-                                      <button type="button" onClick={()=>setUserForm(p=>({...p, assigned_clients: []}))} className="text-[9px] font-black text-slate-500 hover:text-slate-700 underline">Deseleccionar todos</button>
-                                    </div>
-                                  </div>
-                                  <div className="max-h-48 overflow-y-auto space-y-1 bg-white border border-slate-200 rounded-lg p-2">
-                                    {clients.length === 0 && <p className="text-[10px] text-slate-400 text-center py-3">Sin clientes registrados aún.</p>}
-                                    {clients.map(c => {
-                                      const checked = (userForm.assigned_clients || []).includes(c.id);
-                                      return (
-                                        <label key={c.id} className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-slate-50 rounded">
-                                          <input type="checkbox" checked={checked} onChange={()=>setUserForm(p=>({...p, assigned_clients: checked ? p.assigned_clients.filter(x=>x!==c.id) : [...(p.assigned_clients||[]), c.id]}))} className="w-3.5 h-3.5 accent-indigo-600"/>
-                                          <span className="font-mono text-[10px] font-black text-indigo-700">{c.id}</span>
-                                          <span className="text-[10px] text-slate-600">· {c.name}</span>
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-
-                        {/* SELECCIÓN DE MÓDULOS */}
-                        <div className="space-y-1 pt-4 border-t border-slate-100">
-                           <label className="text-[10px] font-black text-indigo-600 uppercase flex items-center"><LayoutDashboard className="w-3 h-3 mr-1"/> Permisos de Visualización (Menú)</label>
-                           <select value={userForm.allowed_modules_type} onChange={e=>{setUserForm({...userForm, allowed_modules_type: e.target.value, moduleSelection: []})}} className="w-full border-2 border-indigo-100 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 text-indigo-800">
-                             <option value="ROLE">Por Defecto (Basado en Rol Base)</option>
-                             <option value="CUSTOM">Personalizado (Elegir qué módulos ve)</option>
-                           </select>
-                        </div>
-
-                        {userForm.allowed_modules_type === 'CUSTOM' && (
-                           <div className="grid grid-cols-2 gap-2 mt-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                              {APP_MODULES.map(m => {
-                                const is3PLMod = MODULES_3PL_ONLY.includes(m.id);
-                                const hiddenByMode = is3PLMod && !is3PLMode;
-                                return (
-                                  <label key={m.id} className={`flex items-center gap-2 bg-white px-3 py-2 rounded-lg border shadow-sm cursor-pointer ${hiddenByMode ? 'border-cyan-100 bg-cyan-50/30' : 'border-slate-100 hover:border-indigo-300'}`} title={m.label}>
-                                    <input type="checkbox" checked={userForm.moduleSelection.includes(m.id)} onChange={e => { const sel = e.target.checked ? [...userForm.moduleSelection, m.id] : userForm.moduleSelection.filter(id => id !== m.id); setUserForm({...userForm, moduleSelection: sel}); }} className="w-4 h-4 text-indigo-600 rounded" />
-                                    <span className="text-[10px] font-black text-slate-700 truncate">{m.label}</span>
-                                    {is3PLMod && <span className="ml-auto text-[7px] bg-cyan-100 text-cyan-600 px-1 rounded font-black uppercase shrink-0">{hiddenByMode ? 'oculto' : '3PL'}</span>}
-                                  </label>
-                                );
-                              })}
-                           </div>
-                        )}
-
-                        {/* SELECCIÓN DE CLIENTES */}
-                        <div className="space-y-1 pt-4 border-t border-slate-100">
-                           <label className="text-[10px] font-black text-indigo-600 uppercase flex items-center"><Building2 className="w-3 h-3 mr-1"/> Aislamiento de Datos por Cliente</label>
-                           <select value={userForm.allowed_clients} onChange={e=>{setUserForm({...userForm, allowed_clients: e.target.value, clientSelection: []})}} className="w-full border-2 border-indigo-100 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 text-indigo-800">
-                             <option value="ALL">Sin restricciones (Ve inventario de todos)</option>
-                             <option value="RESTRICTED">Restringir (Solo ve clientes seleccionados)</option>
-                           </select>
-                        </div>
-                        
-                        {userForm.allowed_clients === 'RESTRICTED' && (
-                           <div className="grid grid-cols-2 gap-2 mt-2 bg-slate-50 p-4 rounded-xl border border-slate-200 custom-scrollbar max-h-40 overflow-y-auto">
-                              {clients.map(c => (
-                                 <label key={c.id} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-100 shadow-sm hover:border-indigo-300">
-                                   <input type="checkbox" checked={userForm.clientSelection.includes(c.id)} onChange={e => { const sel = e.target.checked ? [...userForm.clientSelection, c.id] : userForm.clientSelection.filter(id => id !== c.id); setUserForm({...userForm, clientSelection: sel}); }} className="w-4 h-4 text-indigo-600 rounded" />
-                                   <span className="text-[10px] font-black text-slate-700 truncate" title={c.name}>{c.id}</span>
-                                 </label>
-                              ))}
-                              {clients.length === 0 && <p className="text-[10px] text-slate-400 col-span-2">No hay clientes registrados.</p>}
-                           </div>
-                        )}
-                      </div>
-
-                      <div className="flex gap-4 mt-4">
-                        <button type="submit" disabled={isSavingUser} className={`flex-[2] text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center ${isEditingUser ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
-                          {isSavingUser ? <><Loader2 size={14} className="mr-2 animate-spin"/> Guardando...</> : (isEditingUser ? 'Actualizar Usuario' : 'Crear Usuario')}
-                        </button>
-                        {isEditingUser && (
-                          <button type="button" onClick={() => {setUserForm({ username: '', full_name: '', password: '', role: 'EJECUTIVO_CUENTA', status: 'ACTIVE', allowed_clients: 'ALL', clientSelection: [], allowed_modules_type: 'ROLE', moduleSelection: [] }); setIsEditingUser(false);}} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-4 rounded-2xl shadow-sm uppercase text-xs tracking-widest transition-colors">
-                            Cancelar
-                          </button>
-                        )}
-                      </div>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
-                    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Usuarios del Sistema ({users.length})</p>
-                      {(() => {
-                        const max = parseInt(systemConfig?.license_max_users, 10);
-                        const active = users.filter(u => (u.status || 'ACTIVE') !== 'SUSPENDED' && u.role !== 'SUPERADMIN').length;
-                        if (!Number.isFinite(max) || max <= 0) return <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cupos: sin límite</span>;
-                        const full = active >= max;
-                        return <span className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-widest border ${full ? 'bg-red-50 text-red-600 border-red-200' : 'bg-emerald-50 text-emerald-600 border-emerald-200'}`} title="Usuarios activos que ocupan cupo de licencia (SUPERADMIN no cuenta)">Cupos: {active} / {max}{full ? ' · lleno' : ''}</span>;
-                      })()}
-                    </div>
-                    <div className="space-y-3">
-                      {users.map(u => (
-                        <div key={u.username} className={`p-4 border rounded-2xl flex flex-col hover:bg-slate-50 transition-colors shadow-sm ${u.status === 'SUSPENDED' ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-white border-slate-200'}`}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="text-sm font-black text-slate-800 flex items-center gap-2">
-                                {u.full_name} 
-                                {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase">Inhabilitado</span>}
-                              </p>
-                              <p className="text-[10px] font-mono text-slate-500 mt-1">@{u.username}</p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${u.role === 'ADMIN' || u.role === 'SUPERADMIN' ? 'bg-red-50 text-red-600 border-red-200' : u.role === 'EJECUTIVO_CUENTA' ? 'bg-teal-50 text-teal-600 border-teal-200' : u.role === 'AUDITOR' ? 'bg-blue-50 text-blue-600 border-blue-200' : u.role === 'PICKER' ? 'bg-violet-50 text-violet-600 border-violet-200' : u.role === 'CLIENTE' ? 'bg-cyan-50 text-cyan-600 border-cyan-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{u.role === 'EJECUTIVO_CUENTA' ? 'EJECUTIVO' : u.role}</span>
-                              <button onClick={() => handleToggleUserStatus(u)} disabled={u.username === 'admin' || u.username === currentUser?.username} className={`p-1.5 rounded-full border shadow-sm transition-all ml-2 disabled:opacity-30 ${u.status === 'SUSPENDED' ? 'bg-white border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-300' : 'bg-white border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300'}`} title={u.status === 'SUSPENDED' ? 'Activar (ocupa un cupo)' : 'Inhabilitar (libera el cupo)'}>{u.status === 'SUSPENDED' ? <UserCheck size={14}/> : <UserX size={14}/>}</button>
-                              <button onClick={() => handleEditUser(u)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all ml-2" title="Editar Usuario"><Pencil size={14}/></button>
-                              <button onClick={() => handleDeleteUser(u.username)} disabled={u.username === 'admin'} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 shadow-sm transition-all ml-1 disabled:opacity-30"><Trash2 size={14}/></button>
-                            </div>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-2">
-                            {u.allowed_modules !== 'ALL' && (
-                              <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-widest flex items-center"><LayoutDashboard size={10} className="mr-1"/> Vistas: {JSON.parse(u.allowed_modules || '[]').length} act</p>
-                            )}
-                            {/* Badge de scope de clientes */}
-                            {(() => {
-                              const isAdminRole = ['ADMIN','SUPERADMIN'].includes(u.role);
-                              const scope = isAdminRole ? 'all' : (u.client_scope || 'all');
-                              if (scope === 'all') return <button onClick={()=>handleEditUser(u)} className="bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[9px] font-black uppercase hover:bg-blue-200">🏢 Todos los clientes</button>;
-                              if (scope === 'none') return <button onClick={()=>handleEditUser(u)} className="bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded text-[9px] font-black uppercase hover:bg-red-200">⛔ Sin acceso</button>;
-                              const ac = Array.isArray(u.assigned_clients) ? u.assigned_clients : [];
-                              if (ac.length === 0) return <button onClick={()=>handleEditUser(u)} className="bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-black uppercase hover:bg-amber-200">⚠ Sin clientes asignados</button>;
-                              const shown = ac.slice(0,3);
-                              const extra = ac.length - shown.length;
-                              return (
-                                <div className="flex flex-wrap gap-1 items-center" title={ac.join(', ')}>
-                                  {shown.map(cid => <button key={cid} onClick={()=>handleEditUser(u)} className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[9px] font-mono font-black hover:bg-emerald-200">{cid}</button>)}
-                                  {extra > 0 && <button onClick={()=>handleEditUser(u)} className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[9px] font-black">+{extra} más</button>}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* API KEYS */}
-            {activeTab === 'users' && isAdmin && isSuperAdmin && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8">
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center mb-6"><Key className="w-5 h-5 mr-2 text-indigo-500"/> API Keys para Integración ERP</h2>
-                  <div className="grid md:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Generar Nueva Key</h3>
-                      <form onSubmit={handleGenerateKey} className="space-y-4">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Nombre / Descripción *</label>
-                          <input type="text" required value={newKeyName} onChange={e=>setNewKeyName(e.target.value)} placeholder="Ej: ERP-SAP-Producción" className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500"/>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Cliente (opcional)</label>
-                          <select value={newKeyClient} onChange={e=>setNewKeyClient(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                            <option value="">-- Todos los clientes --</option>
-                            {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Permisos</label>
-                          <select value={newKeyPerms} onChange={e=>setNewKeyPerms(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                            <option value="read">Solo Lectura</option>
-                            <option value="write">Lectura + Escritura</option>
-                          </select>
-                        </div>
-                        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-indigo-200 transition-colors flex items-center justify-center gap-2"><Key size={14}/> Generar API Key</button>
-                      </form>
-                      {generatedKey && (
-                        <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4 animate-in fade-in">
-                          <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-2">⚠️ Copia esta key ahora — no se mostrará de nuevo</p>
-                          <code className="block bg-white border border-emerald-200 rounded-xl px-4 py-3 font-mono text-xs text-slate-800 break-all select-all">{generatedKey}</code>
-                          <button onClick={()=>{navigator.clipboard.writeText(generatedKey); showMsg('✅ Copiado');}} className="mt-2 text-[10px] font-black text-emerald-600 hover:text-emerald-800 uppercase tracking-widest">Copiar al portapapeles</button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-3">
-                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Keys Activas ({apiKeys.length})</h3>
-                      {apiKeys.map(k=>(
-                        <div key={k.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-black text-slate-800">{k.name}</p>
-                              <p className="font-mono text-[10px] text-slate-500 mt-1">{k.key_prefix}••••••••</p>
-                              <div className="flex gap-2 mt-2">
-                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${k.permissions==='write'?'bg-amber-100 text-amber-700':'bg-blue-100 text-blue-700'}`}>{k.permissions}</span>
-                                {k.client_id && <span className="text-[9px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{k.client_id}</span>}
-                              </div>
-                            </div>
-                            <button onClick={()=>handleRevokeKey(k.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                          </div>
-                          <p className="text-[9px] text-slate-400 mt-2">Creada: {new Date(k.created_at).toLocaleDateString('es-ES')}</p>
-                        </div>
-                      ))}
-                      {apiKeys.length===0 && <div className="p-6 text-center text-slate-400"><Key className="w-10 h-10 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase font-bold">Sin keys activas</p></div>}
-                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Endpoints Disponibles</p>
-                        <div className="space-y-1 font-mono text-[9px] text-slate-600">
-                          <p>GET /v1/inventory</p>
-                          <p>GET /v1/inventory/:sku/stock</p>
-                          <p>GET /v1/skus</p>
-                          <p>GET /v1/movements</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* HISTORIAL DE LOGINS */}
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><History className="w-4 h-4 text-slate-500"/> Historial de Accesos</h2>
-                    <button onClick={async()=>{ const res=await apiFetch(`${host}/api/login-history`); const d=await res.json(); setLoginHistory(Array.isArray(d)?d:[]); setShowLoginHistory(true); }} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Cargar</button>
-                  </div>
-                  {showLoginHistory && loginHistory.length > 0 && (
-                    <div className="overflow-x-auto max-h-64 overflow-y-auto custom-scrollbar">
-                      <table className="w-full text-left">
-                        <thead className="bg-slate-50 sticky top-0"><tr>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Fecha</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Usuario</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">IP</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Estado</th>
-                        </tr></thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {loginHistory.map(h=>(
-                            <tr key={h.id} className={`hover:bg-slate-50 ${!h.success?'bg-red-50/50':''}`}>
-                              <td className="p-3 text-[10px] text-slate-400">{new Date(h.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
-                              <td className="p-3 font-mono text-xs font-black text-slate-700">@{h.username}</td>
-                              <td className="p-3 font-mono text-[10px] text-slate-500">{h.ip}</td>
-                              <td className="p-3"><span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${h.success?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{h.success?'OK':'Fallido'}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  {showLoginHistory && loginHistory.length===0 && <p className="text-center text-xs text-slate-400 py-4">Sin registros</p>}
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <UsersTab
+                  isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} is3PLMode={is3PLMode}
+                  clients={clients} systemConfig={systemConfig} users={users} currentUser={currentUser}
+                  userForm={userForm} setUserForm={setUserForm}
+                  isEditingUser={isEditingUser} setIsEditingUser={setIsEditingUser} isSavingUser={isSavingUser}
+                  handleSaveUser={handleSaveUser} handleEditUser={handleEditUser}
+                  handleDeleteUser={handleDeleteUser} handleToggleUserStatus={handleToggleUserStatus}
+                  apiKeys={apiKeys} newKeyName={newKeyName} setNewKeyName={setNewKeyName}
+                  newKeyClient={newKeyClient} setNewKeyClient={setNewKeyClient}
+                  newKeyPerms={newKeyPerms} setNewKeyPerms={setNewKeyPerms}
+                  generatedKey={generatedKey} handleGenerateKey={handleGenerateKey} handleRevokeKey={handleRevokeKey}
+                  loginHistory={loginHistory} setLoginHistory={setLoginHistory}
+                  showLoginHistory={showLoginHistory} setShowLoginHistory={setShowLoginHistory}
+                  showMsg={showMsg} apiFetch={apiFetch} host={host}
+                />
+              </Suspense>
             )}
 
             {/* CONVERSIONES */}
             {activeTab === 'kits' && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                {/* Sub-tabs kitting */}
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit flex-wrap">
-                  {[['definitions','Definiciones'],['ordenes','Órdenes (armado)']].map(([id,label])=>(
-                    <button key={id} onClick={()=>setKittingTab(id)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${kittingTab===id?'bg-white text-indigo-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>{label}</button>
-                  ))}
-                </div>
-
-                {/* SUB-TAB DEFINICIONES (original) */}
-                {kittingTab === 'definitions' && (
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  {/* Panel izquierdo: formulario */}
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Package className="w-5 h-5 mr-2 text-indigo-500"/> Nuevo Kit</h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Agrupa SKUs en un producto compuesto</p>
-                    </div>
-                    <form onSubmit={handleSaveKit} className="space-y-5">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">ID del Kit (SKU) *</label>
-                        <input type="text" value={kitForm.kit_sku} onChange={e=>setKitForm({...kitForm, kit_sku: e.target.value.toUpperCase()})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: KIT-BASICO-001"/>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
-                        {is3PLMode ? (
-                          <select value={kitForm.client_id} onChange={e=>{setKitForm({...kitForm, client_id: e.target.value, components: []}); setKitComponentLine({ sku:'', qty:'' });}} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
-                            <option value="">-- Seleccionar --</option>
-                            {permittedClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        ) : (
-                          <div className="w-full border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                            <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Descripción</label>
-                        <input type="text" value={kitForm.description} onChange={e=>setKitForm({...kitForm, description: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Ej: Kit de bienvenida"/>
-                      </div>
-
-                      {/* Agregar componente */}
-                      <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-200">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Agregar Componente</p>
-                        <div className="flex gap-2">
-                          <select value={kitComponentLine.sku} onChange={e=>setKitComponentLine({...kitComponentLine, sku: e.target.value})} disabled={is3PLMode && !kitForm.client_id} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 bg-white disabled:bg-slate-100 disabled:cursor-not-allowed">
-                            <option value="">{is3PLMode && !kitForm.client_id ? '-- Elige un cliente primero --' : '-- SKU --'}</option>
-                            {kitClientSkus.map(s => <option key={s.sku} value={s.sku}>{s.sku} — {s.desc}</option>)}
-                          </select>
-                          <input type="number" min="0.01" step="0.01" value={kitComponentLine.qty} onChange={e=>setKitComponentLine({...kitComponentLine, qty: e.target.value})} className="w-20 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-indigo-500 text-center" placeholder="Qty"/>
-                          <button type="button" onClick={addKitComponent} className="bg-indigo-600 text-white px-3 py-2 rounded-xl hover:bg-indigo-700 transition-colors"><Plus size={16}/></button>
-                        </div>
-                      </div>
-
-                      {/* Lista de componentes del kit */}
-                      {kitForm.components.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Componentes ({kitForm.components.length})</p>
-                          {kitForm.components.map(c => {
-                            const skuInfo = permittedSkus.find(s => s.sku === c.sku);
-                            return (
-                              <div key={c.sku} className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2">
-                                <div>
-                                  <span className="text-sm font-black text-indigo-800 uppercase">{c.sku}</span>
-                                  {skuInfo && <span className="text-[10px] text-indigo-500 ml-2">{skuInfo.desc}</span>}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-black text-indigo-700 bg-indigo-100 px-3 py-0.5 rounded-full">× {c.qty}</span>
-                                  <button type="button" onClick={() => removeKitComponent(c.sku)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest hover:bg-indigo-700 transition-colors flex justify-center items-center"><Plus size={16} className="mr-2"/> Guardar Kit</button>
-                    </form>
-                  </div>
-
-                  {/* Panel derecho: lista de kits */}
-                  <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
-                    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kits Definidos ({kits.length})</p>
-                    </div>
-                    <div className="space-y-4">
-                      {kits.map(k => (
-                        <div key={`${k.kit_sku}-${k.client_id}`} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <p className="text-sm font-black text-slate-800 uppercase">{k.kit_sku}</p>
-                              {k.description && <p className="text-[10px] text-slate-500 mt-0.5">{k.description}</p>}
-                              <span className="text-[9px] font-black bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full uppercase mt-1 inline-block">{k.client_id}</span>
-                            </div>
-                            <button onClick={() => handleDeleteKit(k.kit_sku, k.client_id)} className="text-slate-300 hover:text-red-500 transition-colors mt-1"><Trash2 size={14}/></button>
-                          </div>
-                          <div className="space-y-1">
-                            {(k.components || []).map(c => {
-                              const skuInfo = safeSkus.find(s => s.sku === c.component_sku);
-                              return (
-                                <div key={c.component_sku} className="flex items-center justify-between text-[11px] bg-white border border-slate-100 rounded-lg px-3 py-1.5">
-                                  <span className="font-black text-slate-700 uppercase">{c.component_sku}</span>
-                                  <span className="text-slate-400">{skuInfo?.desc}</span>
-                                  <span className="font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">× {c.qty}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                      {kits.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay kits definidos</p></div>}
-                    </div>
-                  </div>
-                </div>
-                )}
-
-                {/* SUB-TAB ÓRDENES DE ARMADO (v2) */}
-                {kittingTab === 'ordenes' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Crear orden */}
-                  <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8">
-                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center mb-1"><ClipboardCheck className="w-5 h-5 mr-2 text-indigo-500"/> Nueva orden de armado</h2>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-5">El ejecutivo crea la orden; el picker la arma</p>
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
-                          <select value={ordForm.client_id} onChange={e=>{ setOrdForm({...ordForm, client_id:e.target.value, kit_sku:''}); setOrdSugeridos({}); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
-                            <option value="">-- Seleccionar --</option>
-                            {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Kit (receta) *</label>
-                          <select value={ordForm.kit_sku} disabled={!ordForm.client_id} onChange={e=>{ setOrdForm({...ordForm, kit_sku:e.target.value}); setOrdSugeridos({}); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white disabled:bg-slate-100">
-                            <option value="">{ordForm.client_id ? '-- Seleccionar --' : '-- Elige cliente --'}</option>
-                            {(kits||[]).filter(k=>k.client_id===ordForm.client_id && (k.components||[]).length>0).map(k=><option key={k.kit_sku} value={k.kit_sku}>{k.kit_sku}</option>)}
-                          </select>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad de kits *</label>
-                          <input type="number" min="1" value={ordForm.cantidad_kits} onChange={e=>setOrdForm({...ordForm, cantidad_kits:parseInt(e.target.value)||1})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500"/>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Notas</label>
-                          <input type="text" value={ordForm.notas} onChange={e=>setOrdForm({...ordForm, notas:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Opcional"/>
-                        </div>
-                      </div>
-                      {/* Componentes + origen sugerido (opcional) */}
-                      {ordKit && (
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Componentes · origen sugerido <span className="text-slate-300 normal-case">(opcional, el picker confirma o ajusta)</span></p>
-                          <div className="space-y-2">
-                            {(ordKit.components||[]).map(c=>{
-                              const sug = ordSugeridos[c.component_sku] || {};
-                              const setSug = (k,v)=>setOrdSugeridos(prev=>({...prev, [c.component_sku]: { ...(prev[c.component_sku]||{}), [k]:v }}));
-                              return (
-                                <div key={c.component_sku} className="flex items-center gap-2 flex-wrap text-[11px]">
-                                  <span className="font-black text-slate-700 w-32 truncate">{c.component_sku}</span>
-                                  <span className="text-slate-400">×{parseFloat(c.qty)} → {parseFloat(c.qty)*(parseInt(ordForm.cantidad_kits)||1)}</span>
-                                  <input value={sug.ubicacion||''} onChange={e=>setSug('ubicacion',e.target.value.toUpperCase())} placeholder="Ubicación" className="flex-1 min-w-[90px] border border-slate-200 rounded-lg px-2 py-1 font-bold outline-none focus:border-indigo-400 uppercase"/>
-                                  <input value={sug.lote||''} onChange={e=>setSug('lote',e.target.value)} placeholder="Lote" className="w-20 border border-slate-200 rounded-lg px-2 py-1 font-bold outline-none focus:border-indigo-400"/>
-                                  <input value={sug.serie||''} onChange={e=>setSug('serie',e.target.value)} placeholder="Serie" className="w-24 border border-slate-200 rounded-lg px-2 py-1 font-bold outline-none focus:border-indigo-400"/>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-                      <button onClick={handleCreateOrden} disabled={creatingOrden || !ordForm.kit_sku} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-indigo-200 transition-colors disabled:opacity-50 flex items-center justify-center gap-2">{creatingOrden ? <Loader2 size={16} className="animate-spin"/> : <Plus size={16}/>} Crear orden (pendiente)</button>
-                    </div>
-                  </div>
-                  {/* Lista de órdenes */}
-                  <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
-                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Órdenes ({ordenesV2.length})</h3>
-                      <button onClick={loadOrdenesV2} className="text-slate-400 hover:text-indigo-600" title="Refrescar"><RefreshCcw size={14}/></button>
-                    </div>
-                    <div className="overflow-x-auto max-h-[60vh]">
-                      <table className="w-full text-left">
-                        <thead className="bg-slate-100 border-b border-slate-200 sticky top-0"><tr>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Orden / Kit</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Cliente</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cant.</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Estado</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center pr-5">Acción</th>
-                        </tr></thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {ordenesV2.map(o=>{
-                            const est = o.estado==='pendiente' ? 'bg-amber-100 text-amber-700' : o.estado==='armado' ? 'bg-emerald-100 text-emerald-700' : o.estado==='desarmado' ? 'bg-slate-200 text-slate-600' : 'bg-red-100 text-red-700';
-                            return (
-                              <tr key={o.id} className="hover:bg-slate-50">
-                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{o.kit_sku}</p><p className="text-[9px] font-mono text-slate-400">{o.id}</p></td>
-                                <td className="p-3 text-[10px] font-bold text-slate-500">{o.client_name||o.client_id}</td>
-                                <td className="p-3 text-center text-sm font-black text-slate-700">{o.cantidad_kits}</td>
-                                <td className="p-3 text-center"><span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${est}`}>{o.estado}</span></td>
-                                <td className="p-3 text-center pr-5 whitespace-nowrap">
-                                  {o.estado==='pendiente' && <button onClick={()=>openArmar(o.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg mr-1">Armar</button>}
-                                  {o.estado==='armado' && <button onClick={()=>openDesarmar(o.id)} className="bg-rose-600 hover:bg-rose-700 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg mr-1">Desarmar</button>}
-                                  <button onClick={()=>openTrace(o.id)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[9px] font-black uppercase px-3 py-1.5 rounded-lg">Ver</button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                          {ordenesV2.length===0 && <tr><td colSpan={5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin órdenes</td></tr>}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-                )}
-
-                {/* Modal de ARMADO (picker) */}
-                {armOrden && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>setArmOrden(null)}>
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={e=>e.stopPropagation()}>
-                      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                        <div>
-                          <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Package size={18} className="text-indigo-500"/> Armar {armOrden.orden.cantidad_kits}× {armOrden.orden.kit_sku}</h3>
-                          <p className="text-[11px] font-bold text-slate-500">{armOrden.orden.client_name||armOrden.orden.client_id} · orden {armOrden.orden.id}</p>
-                        </div>
-                        <button onClick={()=>setArmOrden(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
-                      </div>
-                      <div className="overflow-auto p-5 space-y-3">
-                        {(armOrden.receta||[]).map(r => {
-                          const c = { component_sku: r.component_sku, needed: parseFloat(r.qty_necesaria), lpns: r.lpns||[] };
-                          const sug = (armOrden.sugeridos||[]).filter(s => s.componente_sku === r.component_sku);
-                          const falta = parseFloat(r.disponible) < parseFloat(r.qty_necesaria);
-                          return (
-                            <div key={r.component_sku} className="bg-slate-50 rounded-2xl p-3 border border-slate-200">
-                              <div className="flex items-center justify-between flex-wrap gap-2">
-                                <span className="text-xs font-black text-slate-700">{r.component_sku} <span className="text-slate-400 font-bold">{r.desc||''}</span></span>
-                                <span className="text-[11px] font-bold text-slate-500">Necesario: <strong>{parseFloat(r.qty_necesaria)}</strong> · Disp: <strong className={falta?'text-red-600':'text-emerald-600'}>{parseFloat(r.disponible)}</strong></span>
-                              </div>
-                              {(r.requires_serial || r.requires_lot) && <p className="text-[9px] font-black uppercase mt-1 text-violet-600">{r.requires_serial?'requiere serie':''}{r.requires_serial&&r.requires_lot?' · ':''}{r.requires_lot?'requiere lote':''}</p>}
-                              {sug.length>0 && <div className="flex flex-wrap gap-1 mt-1.5">{sug.map((s,i)=><span key={i} className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5">Sugerido: {s.ubicacion||'—'}{s.lote?` · L:${s.lote}`:''}{s.serie?` · S/N:${s.serie}`:''}</span>)}</div>}
-                              {renderKitSourcePicker(c, armSources, setArmSources)}
-                            </div>
-                          );
-                        })}
-                        {/* Destino del kit */}
-                        <div className="bg-white rounded-2xl border border-slate-200 p-3">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Destino del kit armado</p>
-                          <div className="flex items-center gap-2 flex-wrap text-[11px]">
-                            <input value={armDest.ubicacion} onChange={e=>setArmDest({...armDest, ubicacion:e.target.value.toUpperCase()})} placeholder="Ubicación" className="flex-1 min-w-[110px] border border-slate-200 rounded-lg px-2 py-1.5 font-bold outline-none focus:border-indigo-400 uppercase"/>
-                            <input value={armDest.lote} onChange={e=>setArmDest({...armDest, lote:e.target.value})} placeholder="Lote (si aplica)" className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 font-bold outline-none focus:border-indigo-400"/>
-                            <input value={armDest.serie} onChange={e=>setArmDest({...armDest, serie:e.target.value})} placeholder="Serie (si aplica)" className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 font-bold outline-none focus:border-indigo-400"/>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="p-4 border-t border-slate-100 flex gap-2">
-                        <button onClick={()=>setArmOrden(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
-                        <button onClick={handleArmar} disabled={armBusy} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">{armBusy ? <Loader2 size={14} className="animate-spin"/> : <Package size={14}/>} Confirmar armado</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Modal de TRAZABILIDAD */}
-                {traceOrden && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>setTraceOrden(null)}>
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={e=>e.stopPropagation()}>
-                      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                        <div>
-                          <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ClipboardCheck size={18} className="text-indigo-500"/> Trazabilidad · {traceOrden.orden.kit_sku}</h3>
-                          <p className="text-[11px] font-bold text-slate-500">{traceOrden.orden.client_name||traceOrden.orden.client_id} · {traceOrden.orden.cantidad_kits} kit(s) · estado <strong>{traceOrden.orden.estado}</strong> · orden {traceOrden.orden.id}</p>
-                        </div>
-                        <button onClick={()=>setTraceOrden(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
-                      </div>
-                      <div className="overflow-auto p-5 space-y-4">
-                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-[10px] font-bold text-slate-500">
-                          <span>Creó: <strong className="text-slate-700">{traceOrden.orden.usuario_creador||'—'}</strong></span>
-                          {traceOrden.orden.armado_por && <span>Armó: <strong className="text-slate-700">{traceOrden.orden.armado_por}</strong></span>}
-                          {traceOrden.orden.desarmado_por && <span>Desarmó: <strong className="text-slate-700">{traceOrden.orden.desarmado_por}</strong></span>}
-                          {(traceOrden.kit_stock||[]).map(k=><span key={k.id}>kit_stock: <strong className="text-slate-700">{k.estado}</strong> @ {k.ubicacion}</span>)}
-                        </div>
-                        {/* Origen FINAL consumido */}
-                        <div>
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Componentes · origen de cada pieza</p>
-                          {(traceOrden.consumidos||[]).length===0 ? <p className="text-[11px] text-slate-400">Aún no armado (sin consumo registrado).</p> : (
-                            <div className="overflow-x-auto border border-slate-100 rounded-2xl">
-                              <table className="w-full text-left">
-                                <thead className="bg-slate-100 border-b border-slate-200"><tr>
-                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase pl-4">Componente</th>
-                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase text-center">Cant.</th>
-                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">Ubicación</th>
-                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">Lote</th>
-                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">Serie</th>
-                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">LPN origen</th>
-                                  <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase text-center pr-4">vs sug.</th>
-                                </tr></thead>
-                                <tbody className="divide-y divide-slate-100">
-                                  {traceOrden.consumidos.map(cc=>(
-                                    <tr key={cc.id} className="hover:bg-slate-50">
-                                      <td className="p-2.5 pl-4 text-[11px] font-black text-slate-700">{cc.componente_sku}</td>
-                                      <td className="p-2.5 text-center text-[11px] font-bold text-slate-600">{parseFloat(cc.cantidad)}</td>
-                                      <td className="p-2.5 text-[11px] text-slate-600">{cc.ubicacion||'—'}</td>
-                                      <td className="p-2.5 text-[11px] text-amber-600 font-bold">{cc.lote||'—'}</td>
-                                      <td className="p-2.5 text-[11px] text-violet-600 font-bold">{cc.serie||'—'}</td>
-                                      <td className="p-2.5 text-[10px] font-mono text-slate-400">{cc.lpn_origen||'—'}</td>
-                                      <td className="p-2.5 text-center pr-4">{cc.difiere_de_sugerido ? <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase">Difiere</span> : <span className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase">OK</span>}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          )}
-                        </div>
-                        {/* Origen sugerido (referencia) */}
-                        {(traceOrden.sugeridos||[]).length>0 && (
-                          <div>
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Origen sugerido (referencia del ejecutivo)</p>
-                            <div className="flex flex-wrap gap-1">
-                              {traceOrden.sugeridos.map((s,i)=><span key={i} className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5">{s.componente_sku}: {s.ubicacion||'—'}{s.lote?` · L:${s.lote}`:''}{s.serie?` · S/N:${s.serie}`:''}</span>)}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Modal de DESARMADO (ejecutivo) */}
-                {desarmOrden && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>setDesarmOrden(null)}>
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col" onClick={e=>e.stopPropagation()}>
-                      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-                        <div>
-                          <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><AlertTriangle size={18} className="text-rose-500"/> Desarmar {desarmOrden.orden.kit_sku}</h3>
-                          <p className="text-[11px] font-bold text-slate-500">Se reintegran estos componentes a stock:</p>
-                        </div>
-                        <button onClick={()=>setDesarmOrden(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
-                      </div>
-                      <div className="overflow-auto p-5 space-y-2">
-                        {(desarmOrden.consumidos||[]).map(cc => (
-                          <div key={cc.id} className="flex items-center justify-between text-[11px] bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
-                            <span className="font-black text-slate-700">{cc.componente_sku}</span>
-                            <span className="text-slate-500">{parseFloat(cc.cantidad)} → <strong>{desarmDest || cc.ubicacion || 'PISO-RECEPCION'}</strong>{cc.lote?` · L:${cc.lote}`:''}{cc.serie?` · S/N:${cc.serie}`:''}</span>
-                          </div>
-                        ))}
-                        {(desarmOrden.consumidos||[]).length===0 && <p className="text-center text-slate-400 text-xs font-bold py-4">Sin componentes consumidos.</p>}
-                        <div className="pt-2">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Ubicación destino (opcional — si se omite, vuelve a su origen)</label>
-                          <input value={desarmDest} onChange={e=>setDesarmDest(e.target.value.toUpperCase())} placeholder="Ej: RACK-A (vacío = ubicación de origen)" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-rose-400 uppercase mt-1"/>
-                        </div>
-                      </div>
-                      <div className="p-4 border-t border-slate-100 flex gap-2">
-                        <button onClick={()=>setDesarmOrden(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
-                        <button onClick={handleDesarmar} disabled={desarmBusy} className="flex-[2] bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">{desarmBusy ? <Loader2 size={14} className="animate-spin"/> : <AlertTriangle size={14}/>} Confirmar desarmado</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <KitsTab
+                  is3PLMode={is3PLMode} systemConfig={systemConfig} permittedClients={permittedClients}
+                  permittedSkus={permittedSkus} safeSkus={safeSkus} kits={kits}
+                  kittingTab={kittingTab} setKittingTab={setKittingTab}
+                  kitForm={kitForm} setKitForm={setKitForm}
+                  kitComponentLine={kitComponentLine} setKitComponentLine={setKitComponentLine}
+                  kitClientSkus={kitClientSkus}
+                  handleSaveKit={handleSaveKit} addKitComponent={addKitComponent}
+                  removeKitComponent={removeKitComponent} handleDeleteKit={handleDeleteKit}
+                  ordForm={ordForm} setOrdForm={setOrdForm} ordSugeridos={ordSugeridos} setOrdSugeridos={setOrdSugeridos}
+                  ordKit={ordKit} ordenesV2={ordenesV2} creatingOrden={creatingOrden}
+                  handleCreateOrden={handleCreateOrden} loadOrdenesV2={loadOrdenesV2}
+                  openArmar={openArmar} openDesarmar={openDesarmar} openTrace={openTrace}
+                  armOrden={armOrden} setArmOrden={setArmOrden} armSources={armSources} setArmSources={setArmSources}
+                  armDest={armDest} setArmDest={setArmDest} armBusy={armBusy} handleArmar={handleArmar}
+                  traceOrden={traceOrden} setTraceOrden={setTraceOrden}
+                  desarmOrden={desarmOrden} setDesarmOrden={setDesarmOrden} desarmDest={desarmDest} setDesarmDest={setDesarmDest}
+                  desarmBusy={desarmBusy} handleDesarmar={handleDesarmar}
+                  renderKitSourcePicker={renderKitSourcePicker}
+                />
+              </Suspense>
             )}
 
             {/* CLIENTES */}
             {activeTab === 'clients' && is3PLMode && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Users className="w-5 h-5 mr-2 text-indigo-500"/> Registro de Clientes</h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Añadir dueños de mercadería (Operación Multi-Cliente)</p>
-                    </div>
-                    <form onSubmit={handleSaveClient} className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">ID / RUT / CUIT *</label><input type="text" value={clientForm.id} onChange={e=>setClientForm({...clientForm, id: e.target.value.toUpperCase().replace(/\s/g, '')})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: CLI-001"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Razón Social / Nombre *</label><input type="text" value={clientForm.name} onChange={e=>setClientForm({...clientForm, name: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Nombre de la empresa"/></div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Contacto (Persona)</label><input type="text" value={clientForm.contact} onChange={e=>setClientForm({...clientForm, contact: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Nombre del responsable"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Email</label><input type="email" value={clientForm.email} onChange={e=>setClientForm({...clientForm, email: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="correo@empresa.com"/></div>
-                        </div>
-                      </div>
-                      <button type="submit" disabled={isSavingClient} className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest hover:bg-indigo-700 transition-colors mt-4 flex justify-center items-center disabled:opacity-60">
-                        {isSavingClient ? <><Loader2 size={16} className="mr-2 animate-spin"/> Guardando...</> : <><Building2 size={16} className="mr-2"/> Guardar Cliente en Base de Datos</>}
-                      </button>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[500px] custom-scrollbar pr-2">
-                    <div className="sticky top-0 bg-white pt-2 pb-3 z-10 border-b border-slate-100 space-y-2 mb-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clientes ({filteredClients.length})</p>
-                          <button onClick={() => { const headers='id,name,contact,email'; const csv=filteredClients.map(c=>`"${c.id}","${c.name}","${c.contact||''}","${c.email||''}"`).join('\n'); const blob=new Blob([headers+'\n'+csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='clientes_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
-                          <button onClick={() => setImportModal({ type: 'clients' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Upload size={10}/> Importar</button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1">
-                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><Search size={11} className="text-slate-400 mr-1 shrink-0"/><input type="text" placeholder="ID..." value={clientIdFilter} onChange={(e) => setClientIdFilter(e.target.value)} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700"/></div>
-                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><Search size={11} className="text-slate-400 mr-1 shrink-0"/><input type="text" placeholder="Nombre..." value={clientNameFilter} onChange={(e) => setClientNameFilter(e.target.value)} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700"/></div>
-                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><Search size={11} className="text-slate-400 mr-1 shrink-0"/><input type="text" placeholder="Contacto / email..." value={clientContactFilter} onChange={(e) => setClientContactFilter(e.target.value)} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700"/></div>
-                      </div>
-                      {(clientIdFilter||clientNameFilter||clientContactFilter) && <button onClick={()=>{setClientIdFilter('');setClientNameFilter('');setClientContactFilter('');}} className="mt-1 bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[9px] font-black uppercase flex items-center gap-1 w-max"><X size={9}/> Limpiar</button>}
-                    </div>
-                    <div className="space-y-3">
-                      {filteredClients.map(c => (
-                        <div key={c.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="text-sm font-black text-slate-800 flex items-center gap-2">{c.name}</p>
-                              <p className="text-[10px] font-mono text-indigo-600 mt-1">ID: {c.id}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => { setPortalConfigClient(c.id); setPortalConfigForm({ portal_enabled: !!c.portal_enabled, portal_password:'', portal_email: c.portal_email||'' }); }} className="text-[9px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-1 rounded-lg uppercase flex items-center gap-1 transition-colors"><Globe size={10}/> Portal</button>
-                              <button onClick={() => handleDeleteClient(c.id)} className="text-slate-300 hover:text-red-500 transition-colors ml-2"><Trash2 size={14}/></button>
-                            </div>
-                          </div>
-                          {(c.contact || c.email) && (
-                            <div className="mt-2 pt-2 border-t border-slate-100 flex gap-4 text-[9px] text-slate-500 font-bold tracking-widest">
-                              {c.contact && <span>Contacto: {c.contact}</span>}
-                              {c.email && <span>Email: {c.email}</span>}
-                            </div>
-                          )}
-                          {/* Portal config expandida */}
-                          {portalConfigClient === c.id && (
-                            <div className="mt-3 pt-3 border-t-2 border-indigo-100 bg-indigo-50 rounded-2xl p-4 space-y-3">
-                              <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1"><Globe size={10}/> Configuración Portal 3PL</p>
-                              <div className="flex items-center gap-3">
-                                <label className="text-[10px] font-black text-slate-600 uppercase">Portal Habilitado</label>
-                                <button onClick={()=>setPortalConfigForm(f=>({...f,portal_enabled:!f.portal_enabled}))} className={`w-10 h-6 rounded-full transition-colors ${portalConfigForm.portal_enabled?'bg-indigo-600':'bg-slate-300'}`}><span className={`block w-4 h-4 bg-white rounded-full shadow transition-transform mx-1 ${portalConfigForm.portal_enabled?'translate-x-4':'translate-x-0'}`}/></button>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-500 uppercase">Nueva Contraseña Portal</label>
-                                <input type="password" placeholder="Dejar vacío para no cambiar" value={portalConfigForm.portal_password} onChange={e=>setPortalConfigForm(f=>({...f,portal_password:e.target.value}))} className="w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500"/>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-500 uppercase">Email del Portal</label>
-                                <input type="email" placeholder="email@cliente.com" value={portalConfigForm.portal_email} onChange={e=>setPortalConfigForm(f=>({...f,portal_email:e.target.value}))} className="w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500"/>
-                              </div>
-                              {portalConfigForm.portal_enabled && (
-                                <div className="bg-white rounded-xl px-3 py-2 border border-indigo-200">
-                                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1">URL del Portal</p>
-                                  <p className="font-mono text-[10px] text-indigo-700 break-all">{window.location.origin}?portal={c.id}</p>
-                                </div>
-                              )}
-                              <div className="flex gap-2">
-                                <button onClick={()=>handlePortalSaveConfig(c.id)} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2 rounded-xl text-[10px] uppercase tracking-widest transition-colors">Guardar</button>
-                                <button onClick={()=>setPortalConfigClient(null)} className="px-4 bg-slate-200 hover:bg-slate-300 text-slate-600 font-black py-2 rounded-xl text-[10px] uppercase tracking-widest transition-colors">Cancelar</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      {permittedClients.length === 0 && <div className="p-8 text-center text-slate-400"><Building2 className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay clientes visibles para usted</p></div>}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <ClientsTab
+                  clientForm={clientForm} setClientForm={setClientForm} isSavingClient={isSavingClient} handleSaveClient={handleSaveClient}
+                  filteredClients={filteredClients} permittedClients={permittedClients}
+                  clientIdFilter={clientIdFilter} setClientIdFilter={setClientIdFilter}
+                  clientNameFilter={clientNameFilter} setClientNameFilter={setClientNameFilter}
+                  clientContactFilter={clientContactFilter} setClientContactFilter={setClientContactFilter}
+                  setImportModal={setImportModal}
+                  portalConfigClient={portalConfigClient} setPortalConfigClient={setPortalConfigClient}
+                  portalConfigForm={portalConfigForm} setPortalConfigForm={setPortalConfigForm}
+                  handleDeleteClient={handleDeleteClient} handlePortalSaveConfig={handlePortalSaveConfig}
+                />
+              </Suspense>
             )}
 
             {/* MAESTRO ESTADOS */}
             {activeTab === 'statuses' && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Activity className="w-5 h-5 mr-2 text-indigo-500"/> Maestro de Estados</h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Configurar colores y reglas de bloqueo</p>
-                    </div>
-                    <form onSubmit={handleSaveStatus} className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">ID Estado (Ej: BASURA, RETENIDO) *</label><input type="text" value={statusForm.id} onChange={e=>setStatusForm({...statusForm, id: e.target.value.toUpperCase().replace(/\s/g, '_')})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: EN_REVISION"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Descripción / Uso *</label><input type="text" value={statusForm.description} onChange={e=>setStatusForm({...statusForm, description: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Motivo de este estado"/></div>
-                        
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                          <div className="space-y-1">
-                             <label className="text-[10px] font-black text-slate-400 uppercase">Color Visual</label>
-                             <select value={statusForm.color} onChange={e=>setStatusForm({...statusForm, color: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                               <option value="slate">Gris (Defecto)</option>
-                               <option value="emerald">Verde</option>
-                               <option value="red">Rojo</option>
-                               <option value="amber">Amarillo / Naranja</option>
-                               <option value="blue">Azul</option>
-                               <option value="purple">Morado</option>
-                               <option value="pink">Rosa</option>
-                             </select>
-                          </div>
-                          <div className="space-y-1 flex flex-col justify-center">
-                             <label className="flex items-center gap-2 cursor-pointer mt-4">
-                               <input type="checkbox" checked={statusForm.blocks_outbound} onChange={e=>setStatusForm({...statusForm, blocks_outbound: e.target.checked})} className="w-5 h-5 accent-indigo-600 rounded" />
-                               <span className="text-xs font-black text-slate-700 uppercase">Bloquea Despacho</span>
-                             </label>
-                             <p className="text-[9px] text-slate-400 mt-1 leading-tight">Si se marca, el LPN no aparecerá en el módulo de Despachos.</p>
-                          </div>
-                        </div>
-
-                      </div>
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest hover:bg-indigo-700 transition-colors mt-4 flex justify-center items-center"><Plus size={16} className="mr-2"/> Guardar Estado</button>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[500px] custom-scrollbar pr-2">
-                    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estados Registrados ({statuses.length})</p>
-                    </div>
-                    <div className="space-y-3">
-                      {statuses.map(s => (
-                        <div key={s.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-1 rounded text-[10px] font-black uppercase border ${getStatusBadge(s.id)}`}>{s.id}</span>
-                              {s.blocks_outbound && <span className="text-[8px] bg-red-100 text-red-700 px-2 py-0.5 rounded flex items-center font-bold uppercase"><ShieldAlert size={10} className="mr-1"/> Bloquea Salida</span>}
-                            </div>
-                            {s.id !== 'DISPONIBLE' && (
-                              <button onClick={() => handleDeleteStatus(s.id)} className="text-slate-300 hover:text-red-500 transition-colors ml-2"><Trash2 size={14}/></button>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-600 font-bold mt-2">{s.description}</p>
-                        </div>
-                      ))}
-                      {statuses.length === 0 && <div className="p-8 text-center text-slate-400"><Activity className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay estados configurados</p></div>}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <StatusesTab
+                  statuses={statuses}
+                  statusForm={statusForm} setStatusForm={setStatusForm}
+                  handleSaveStatus={handleSaveStatus} handleDeleteStatus={handleDeleteStatus}
+                  getStatusBadge={getStatusBadge}
+                />
+              </Suspense>
             )}
 
             {/* MAESTRO DOCUMENTOS */}
             {activeTab === 'doc-types' && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><FileType className="w-5 h-5 mr-2 text-indigo-500"/> Maestro de Documentos</h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Configurar tipos de documentos admitidos (Factura, Guía, etc.)</p>
-                    </div>
-                    <form onSubmit={handleSaveDocType} className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">ID Documento (Ej: FACTURA, GUIA) *</label><input type="text" value={docTypeForm.id} onChange={e=>setDocTypeForm({...docTypeForm, id: e.target.value.toUpperCase().replace(/\s/g, '_')})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: FACTURA_VENTA"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Descripción *</label><input type="text" value={docTypeForm.description} onChange={e=>setDocTypeForm({...docTypeForm, description: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Ej: Factura de Venta Electrónica"/></div>
-                        <div className="space-y-1">
-                           <label className="text-[10px] font-black text-slate-400 uppercase">Flujo Permitido</label>
-                           <select value={docTypeForm.flow_type} onChange={e=>setDocTypeForm({...docTypeForm, flow_type: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                             <option value="BOTH">Ambos (Recepción y Despacho)</option>
-                             <option value="INBOUND">Solo Recepción (Inbound)</option>
-                             <option value="OUTBOUND">Solo Despacho (Outbound)</option>
-                           </select>
-                        </div>
-                      </div>
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest hover:bg-indigo-700 transition-colors mt-4 flex justify-center items-center"><Plus size={16} className="mr-2"/> Guardar Tipo de Documento</button>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[500px] custom-scrollbar pr-2">
-                    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipos de Documento Registrados ({documentTypes.length})</p>
-                    </div>
-                    <div className="space-y-3">
-                      {documentTypes.map(d => (
-                        <div key={d.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-1 rounded text-[10px] font-black uppercase border bg-slate-100 text-slate-600 border-slate-200">{d.id}</span>
-                              <span className="text-[8px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded flex items-center font-bold uppercase">{d.flow_type === 'BOTH' ? 'AMBOS' : d.flow_type === 'INBOUND' ? 'RECEPCIÓN' : 'DESPACHO'}</span>
-                            </div>
-                            <button onClick={() => handleDeleteDocType(d.id)} className="text-slate-300 hover:text-red-500 transition-colors ml-2"><Trash2 size={14}/></button>
-                          </div>
-                          <p className="text-xs text-slate-600 font-bold mt-2">{d.description}</p>
-                        </div>
-                      ))}
-                      {documentTypes.length === 0 && <div className="p-8 text-center text-slate-400"><FileType className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay tipos de documento</p></div>}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <DocTypesTab
+                  documentTypes={documentTypes}
+                  docTypeForm={docTypeForm} setDocTypeForm={setDocTypeForm}
+                  handleSaveDocType={handleSaveDocType} handleDeleteDocType={handleDeleteDocType}
+                />
+              </Suspense>
             )}
 
             {/* INVENTORY */}
@@ -4128,7 +3280,7 @@ export default function App() {
                           <BarChart3 size={10}/> Saldo
                         </button>
                       </div>}
-                      <button onClick={() => window.open(`${host}/api/export/inventory`, '_blank')} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> <span className="hidden sm:inline">Exportar</span></button>
+                      <button onClick={async () => { try { await descargarArchivoAutenticado(host, '/api/export/inventory', `inventario_${new Date().toISOString().slice(0,10)}.xlsx`); } catch (e) { showMsg(`⛔ ${e.message}`, true); } }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> <span className="hidden sm:inline">Exportar</span></button>
                       <button onClick={() => setImportModal({ type: 'inventory' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Upload size={12}/> <span className="hidden sm:inline">Importar</span></button>
                     </div>
                   </div>
@@ -4420,113 +3572,16 @@ export default function App() {
 
             {/* AUDIT */}
             {activeTab === 'audit' && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="flex flex-col gap-4 mb-4">
-                  <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Historial de Auditoría</h1>
-                    <button onClick={() => { const headers = 'id,type,sku,qty,glosa,username,created_at'; const csv = filteredAudit.map(l => `"${l.id}","${l.type}","${l.sku}","${l.qty}","${(l.glosa||'').replace(/"/g,"'")}","${l.username||''}","${l.created_at}"`).join('\n'); const blob = new Blob([headers+'\n'+csv],{type:'text/csv'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='auditoria_filtrada.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> Exportar Filtrado</button>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <select value={auditTypeFilter} onChange={e=>{setAuditTypeFilter(e.target.value);setAuditPage(0);}} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none shadow-sm text-slate-700 uppercase">
-                      <option value="">Todos los tipos</option>
-                      <option value="INBOUND">Entrada</option>
-                      <option value="OUTBOUND">Salida</option>
-                      <option value="ADJUST_IN">Sobrante</option>
-                      <option value="ADJUST_OUT">Merma</option>
-                      <option value="RELOCATE">Reubicación</option>
-                      <option value="STATUS_CHANGE">Cambio Estado</option>
-                    </select>
-                    <input type="text" placeholder="Filtrar por usuario..." value={auditUserFilter} onChange={e=>{setAuditUserFilter(e.target.value);setAuditPage(0);}} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none shadow-sm text-slate-700"/>
-                    <input type="date" value={auditDateFrom} onChange={e=>{setAuditDateFrom(e.target.value);setAuditPage(0);}} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none shadow-sm text-slate-700" title="Fecha desde"/>
-                    <input type="date" value={auditDateTo} onChange={e=>{setAuditDateTo(e.target.value);setAuditPage(0);}} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none shadow-sm text-slate-700" title="Fecha hasta"/>
-                    {(auditTypeFilter||auditUserFilter||auditDateFrom||auditDateTo) && (
-                      <button onClick={() => { setAuditTypeFilter(''); setAuditUserFilter(''); setAuditDateFrom(''); setAuditDateTo(''); }} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm col-span-2"><X size={10}/> Limpiar Filtros</button>
-                    )}
-                  </div>
-                </div>
-                <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b">
-                      <tr>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">Fecha y Autor</th>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">Flujo</th>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">SKU</th>
-                        <th className="px-5 pt-4 pb-1 text-center text-[10px] font-black text-slate-400 uppercase">Cant.</th>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">
-                          {(auditTypeFilter||auditUserFilter||auditDateFrom||auditDateTo) && <button onClick={() => { setAuditTypeFilter(''); setAuditUserFilter(''); setAuditDateFrom(''); setAuditDateTo(''); }} className="bg-red-100 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase flex items-center gap-1 ml-auto"><X size={8}/> Limpiar</button>}
-                        </th>
-                      </tr>
-                      <tr className="border-t border-slate-100">
-                        <td className="px-3 pb-3 pt-1">
-                          <div className="flex gap-1">
-                            <input type="date" value={auditDateFrom} onChange={e=>setAuditDateFrom(e.target.value)} className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700" title="Desde"/>
-                            <input type="date" value={auditDateTo} onChange={e=>setAuditDateTo(e.target.value)} className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700" title="Hasta"/>
-                          </div>
-                        </td>
-                        <td className="px-3 pb-3 pt-1">
-                          <select value={auditTypeFilter} onChange={e=>setAuditTypeFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
-                            <option value="">Todos los tipos</option>
-                            <option value="INBOUND">Entrada</option>
-                            <option value="OUTBOUND">Salida</option>
-                            <option value="ADJUST_IN">Sobrante</option>
-                            <option value="ADJUST_OUT">Merma</option>
-                            <option value="RELOCATE">Reubicación</option>
-                            <option value="STATUS_CHANGE">Cambio Estado</option>
-                          </select>
-                        </td>
-                        <td className="px-3 pb-3 pt-1">
-                          <select value={auditTypeFilter === '' ? invSkuFilter : ''} onChange={e=>{}} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
-                            <option value="">Todos los SKUs</option>
-                            {[...new Set(auditLogs.map(l=>l.sku))].sort().map(s=><option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-3 pb-3 pt-1"></td>
-                        <td className="px-3 pb-3 pt-1">
-                          <input type="text" placeholder="🔍 Usuario..." value={auditUserFilter} onChange={e=>setAuditUserFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700"/>
-                        </td>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredAudit.slice(auditPage * PAGE_SIZE, (auditPage + 1) * PAGE_SIZE).map(log => (
-                        <tr key={log.id} className="hover:bg-slate-50">
-                          <td className="p-5">
-                            <p className="text-xs font-bold text-slate-600">{new Date(log.created_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'medium' })}</p>
-                            <p className="text-[9px] font-black text-indigo-600 mt-1 uppercase">👤 {log.username || 'SYSTEM'}</p>
-                          </td>
-                          <td className="p-5">
-                            <span className={`px-2 py-1 rounded text-[9px] font-black uppercase ${
-                              log.type === 'INBOUND' || log.type === 'ADJUST_IN' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 
-                              log.type === 'OUTBOUND' || log.type === 'ADJUST_OUT' ? 'bg-red-100 text-red-800 border border-red-200' : 
-                              'bg-purple-100 text-purple-800 border border-purple-200'
-                            }`}>
-                              {log.type === 'INBOUND' ? 'ENTRADA' : 
-                               log.type === 'OUTBOUND' ? 'SALIDA' : 
-                               log.type === 'ADJUST_IN' ? 'SOBRANTE (+)' : 
-                               log.type === 'ADJUST_OUT' ? 'MERMA (-)' : 
-                               log.type === 'STATUS_CHANGE' ? 'ESTADO FÍSICO' : 'REUBICACIÓN'}
-                            </span>
-                          </td>
-                          <td className="p-5 text-xs font-black text-slate-800 uppercase">{log.sku}</td>
-                          <td className="p-5 text-center font-black text-sm text-slate-800">{log.qty}</td>
-                          <td className="p-5 text-xs text-slate-500 italic max-w-sm truncate" title={log.glosa}>
-                            {log.glosa ? `"${log.glosa}"` : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredAudit.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-500">No hay registros que coincidan.</td></tr>}
-                    </tbody>
-                  </table>
-                  {filteredAudit.length > PAGE_SIZE && (
-                    <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50">
-                      <span className="text-[10px] font-bold text-slate-500">Mostrando {auditPage * PAGE_SIZE + 1}–{Math.min((auditPage + 1) * PAGE_SIZE, filteredAudit.length)} de {filteredAudit.length}</span>
-                      <div className="flex gap-2">
-                        <button disabled={auditPage === 0} onClick={() => setAuditPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40">← Anterior</button>
-                        <button disabled={(auditPage + 1) * PAGE_SIZE >= filteredAudit.length} onClick={() => setAuditPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40">Siguiente →</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <AuditTab
+                  filteredAudit={filteredAudit} auditLogs={auditLogs} invSkuFilter={invSkuFilter}
+                  auditTypeFilter={auditTypeFilter} setAuditTypeFilter={setAuditTypeFilter}
+                  auditUserFilter={auditUserFilter} setAuditUserFilter={setAuditUserFilter}
+                  auditDateFrom={auditDateFrom} setAuditDateFrom={setAuditDateFrom}
+                  auditDateTo={auditDateTo} setAuditDateTo={setAuditDateTo}
+                  auditPage={auditPage} setAuditPage={setAuditPage}
+                />
+              </Suspense>
             )}
 
             {/* WAREHOUSE SETUP */}
@@ -4710,12 +3765,19 @@ export default function App() {
                     const existingIds = new Set(safeLocs.map(l=>l.location_id));
                     const aisles = [...new Set(preview.map(p => p.aisle || p.location_id.split('-')[1]))];
                     const cols = parseInt(draftLoc.colCount) || 1;
-                    const newCount = preview.filter(p => !whExcluded.has(p.location_id)).length;
+                    // FALLA-04: contar SOLO las que no existen (las "Ya existe" no cuentan como nuevas).
+                    const newCount = preview.filter(p => !whExcluded.has(p.location_id) && !existingIds.has(p.location_id)).length;
+                    const existingCount = preview.filter(p => !whExcluded.has(p.location_id) && existingIds.has(p.location_id)).length;
                     return (
                       <div className="space-y-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                         <div className="flex justify-between items-center">
                           <p className="text-[10px] font-black text-slate-600 uppercase">Grilla: {aisles.length} pasillos x {cols} columnas x {draftLoc.levelCount} niveles</p>
-                          <p className="text-[10px] font-black text-emerald-600">Se generaran {newCount} ubicaciones nuevas</p>
+                          <div className="text-right">
+                            <p className="text-[10px] font-black text-emerald-600">Se generaran {newCount} ubicaciones nuevas{existingCount>0?` (${existingCount} ya existen)`:''}</p>
+                            {newCount===0 && existingCount>0 && (
+                              <p className="text-[9px] font-bold text-amber-600">Todas ya existen. "Generar" solo reescribe si marcas "Sobrescribir duplicados".</p>
+                            )}
+                          </div>
                         </div>
                         <div className="overflow-auto max-h-60 custom-scrollbar">
                           {aisles.map(aisle => (
@@ -5053,8 +4115,8 @@ export default function App() {
                       <div className="space-y-4">
                         {(() => {
                           if (!isEditingSku || !editingSkuOriginal) return null;
-                          const newLot    = skuForm.traceability === 'LOT';
-                          const newSerial = skuForm.traceability === 'SERIAL';
+                          const newLot    = skuForm.requires_lot;
+                          const newSerial = skuForm.requires_serial;
                           const criticalChange = newLot !== editingSkuOriginal.requires_lot || newSerial !== editingSkuOriginal.requires_serial;
                           if (!criticalChange) return null;
                           const hasStock = editingSkuOriginal.stock_total > 0;
@@ -5069,7 +4131,7 @@ export default function App() {
                             </div>
                           );
                         })()}
-                        <select value={skuForm.traceability} onChange={e=>setSkuForm({...skuForm, traceability: e.target.value})} className="w-full border-2 border-blue-200 bg-blue-50 text-blue-900 rounded-xl px-4 py-3 text-xs font-bold outline-none uppercase focus:border-blue-500">
+                        <select value={skuForm.requires_serial ? 'SERIAL' : (skuForm.requires_lot ? 'LOT' : 'NONE')} onChange={e=>{ const v = e.target.value; setSkuForm({...skuForm, requires_lot: v === 'LOT', requires_serial: v === 'SERIAL'}); }} className="w-full border-2 border-blue-200 bg-blue-50 text-blue-900 rounded-xl px-4 py-3 text-xs font-bold outline-none uppercase focus:border-blue-500">
                           <option value="NONE">Sin Controles (Stock General)</option>
                           <option value="LOT">Exigir Registro de LOTE y Vencimiento</option>
                           <option value="SERIAL">Exigir Registro de Número de SERIE Único</option>
@@ -5519,7 +4581,7 @@ export default function App() {
                                     <tbody className="divide-y divide-slate-200">
                                       {stockForDisp.map(lpn => (
                                         <tr key={lpn.id} className="bg-white hover:bg-blue-50/50">
-                                          <td className="p-3 text-xs font-mono font-bold text-slate-600"><p>{lpn.id}</p><p className="text-[9px] text-slate-400 mt-1">Rack: {lpn.location_id || 'PISO'} - <span className={getStatusBadge(lpn.status)}>{statusLabel(lpn.status || 'DISPONIBLE')}</span></p></td>
+                                          <td className="p-3 text-xs font-mono font-bold text-slate-600"><p>{lpn.id}</p><p className="text-[9px] text-slate-400 mt-1">Rack: {lpn.location_id || 'PISO'} - <span className={getStatusBadge(lpn.status)}>{statusLabel(lpn.status || 'DISPONIBLE')}</span></p>{selSku.requires_serial && !lpn.serial_number && <p className="text-[8px] font-black text-amber-600 uppercase mt-1">⚠ Sin serie — stock anterior</p>}</td>
                                           <td className="p-3 text-sm font-black text-indigo-600 text-center">{lpn.effectiveQty}</td>
                                           <td className="p-3 text-center flex justify-center items-center h-full pt-4">
                                             {lpn.serial_number ? (
@@ -5618,7 +4680,7 @@ export default function App() {
                                   </>
                                 ) : (
                                   <>
-                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}</p></td>
+                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}{!it.serial && skus.find(s=>s.sku===it.sku)?.requires_serial && <span className="ml-1 bg-amber-100 text-amber-700 px-1 rounded font-bold">⚠ Sin serie</span>}</p></td>
                                     <td className="p-3 text-center text-lg font-black text-blue-600">-{it.qtyToPick}</td>
                                   </>
                                 )}
@@ -5690,6 +4752,10 @@ export default function App() {
                       );
                     })()}
 
+                    <button disabled={activeDoc.items.length === 0} onClick={openTransportReq} className="w-full bg-white border-2 border-cyan-500 text-cyan-700 hover:bg-cyan-50 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">
+                      <Truck size={16} className="mr-2"/> Solicitar Transporte
+                    </button>
+
                     <button disabled={activeDoc.items.length === 0} onClick={openDispatchConfirm} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">
                       <ArrowUpRight size={16} className="mr-2"/> Proceder a Confirmación de Salida
                     </button>
@@ -5734,7 +4800,7 @@ export default function App() {
                               <>
                                 <td className="p-3 pl-4">
                                   <p className="text-xs font-black text-slate-800">{it.sku}</p>
-                                  <p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}</p>
+                                  <p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}{!it.serial && skus.find(s=>s.sku===it.sku)?.requires_serial && <span className="ml-1 bg-amber-100 text-amber-700 px-1 rounded font-bold">⚠ Sin serie — stock anterior</span>}</p>
                                 </td>
                                 <td className="p-3 text-center text-sm font-black text-slate-500">{it.qtyToPick}</td>
                                 <td className="p-3 text-center pr-4">
@@ -5768,6 +4834,54 @@ export default function App() {
                       <button onClick={() => { setShowDispatchConfirm(false); setShipQtys({}); }} className="w-1/3 bg-white border border-slate-200 text-slate-600 font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-slate-100 transition-colors">Volver</button>
                       <button disabled={isCommitting} onClick={handleCommitDispatchPartial} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center">{isCommitting ? <><Loader2 size={16} className="mr-2 animate-spin"/> Procesando...</> : <><CheckCircle2 size={16} className="mr-2"/> Confirmar y Descontar Stock</>}</button>
                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* MODAL: SOLICITAR TRANSPORTE DESDE DESPACHO */}
+            {showTransportReq && activeDoc && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 max-h-[90vh]">
+                  <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-cyan-50 shrink-0">
+                    <div>
+                      <h2 className="text-xl font-black text-cyan-900 uppercase tracking-tighter flex items-center"><Truck className="w-6 h-6 mr-2"/> Solicitar Transporte</h2>
+                      <p className="text-[10px] font-bold text-cyan-600 uppercase tracking-widest mt-1">Despacho {activeDoc.docNum} · {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client || 'sin cliente'}</p>
+                    </div>
+                    <button onClick={() => { setShowTransportReq(false); setTransportReqResult(null); }} className="bg-white p-2 rounded-full text-slate-400 hover:text-slate-600 shadow-sm"><X size={16}/></button>
+                  </div>
+                  <div className="p-8 flex-1 overflow-y-auto custom-scrollbar space-y-5">
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Líneas del carrito (peso/volumen los calcula el sistema)</p>
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {activeDoc.items.map((it, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-xs">
+                            <span className="font-mono font-black text-slate-700">{it.sku}{it.isKit && <span className="ml-1 bg-violet-100 text-violet-700 px-1 rounded text-[8px] uppercase">KIT</span>}</span>
+                            <span className="font-black text-slate-500">{it.isKit ? `${it.qtyKits} kit${it.qtyKits>1?'s':''}` : it.qtyToPick}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="md:col-span-2"><label className="text-[9px] font-black text-slate-400 uppercase">Destino</label><input value={transportReqForm.destino} onChange={e => setTransportReqForm({ ...transportReqForm, destino: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500" placeholder="Dirección / lugar de entrega"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Sentido</label><select value={transportReqForm.sentido} onChange={e => setTransportReqForm({ ...transportReqForm, sentido: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white"><option value="SALIDA">Salida</option><option value="REGRESO">Regreso</option></select></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Tipo vehículo sugerido</label><select value={transportReqForm.tipo_vehiculo_sugerido} onChange={e => setTransportReqForm({ ...transportReqForm, tipo_vehiculo_sugerido: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white"><option value="">—</option>{transportTipos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}</select></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">N° cajas</label><input type="number" value={transportReqForm.n_cajas} onChange={e => setTransportReqForm({ ...transportReqForm, n_cajas: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">N° cajones</label><input type="number" value={transportReqForm.n_cajones} onChange={e => setTransportReqForm({ ...transportReqForm, n_cajones: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">N° pallets</label><input type="number" value={transportReqForm.n_pallets} onChange={e => setTransportReqForm({ ...transportReqForm, n_pallets: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Hora carga habilitada</label><input type="datetime-local" value={transportReqForm.hora_carga_habilitada} onChange={e => setTransportReqForm({ ...transportReqForm, hora_carga_habilitada: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Recepción en destino</label><input type="datetime-local" value={transportReqForm.fecha_hora_recepcion_destino} onChange={e => setTransportReqForm({ ...transportReqForm, fecha_hora_recepcion_destino: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                    </div>
+                    {transportReqResult && (
+                      <div className={`rounded-xl p-3 ${transportReqResult.dims_incompletas ? 'bg-amber-50 border border-amber-300' : 'bg-emerald-50 border border-emerald-200'}`}>
+                        <div className="text-[11px] font-bold text-slate-700">Calculado — Peso: <b>{(Number(transportReqResult.peso_total)||0).toLocaleString('es-CL')} kg</b> · Volumen: <b>{(Number(transportReqResult.volumen_total)||0).toLocaleString('es-CL')} m³</b></div>
+                        {transportReqResult.aviso && <div className="flex items-center gap-1.5 text-amber-700 text-[11px] font-bold mt-1"><AlertTriangle size={13}/> {transportReqResult.aviso}</div>}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-4 shrink-0">
+                    <button onClick={() => { setShowTransportReq(false); setTransportReqResult(null); }} className="w-1/3 bg-white border border-slate-200 text-slate-600 font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-slate-100 transition-colors">{transportReqResult ? 'Cerrar' : 'Cancelar'}</button>
+                    <button disabled={transportReqBusy} onClick={submitTransportReq} className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center">{transportReqBusy ? <><Loader2 size={16} className="mr-2 animate-spin"/> Enviando...</> : <><Send size={16} className="mr-2"/> Enviar Solicitud</>}</button>
                   </div>
                 </div>
               </div>
@@ -6539,366 +5653,36 @@ export default function App() {
 
             {/* ÓRDENES DE COMPRA */}
             {activeTab === 'purchase-orders' && (
-              <div className="space-y-6 animate-in fade-in max-w-5xl mx-auto">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><FileText className="text-indigo-500"/> Órdenes de Compra</h1>
-                  <div className="flex gap-2">
-                    <button onClick={async () => { const res = await apiFetch(`${host}/api/purchase-orders`); const d = await res.json(); setPurchaseOrders(Array.isArray(d)?d:[]); }} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Cargar</button>
-                    <button onClick={() => setShowPOForm(!showPOForm)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-md"><Plus size={12}/> Nueva OC</button>
-                  </div>
-                </div>
-
-                {showPOForm && (
-                  <div className="bg-white rounded-3xl border border-indigo-200 shadow-sm p-8 animate-in slide-in-from-top-4">
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter mb-6 border-b pb-4 flex items-center gap-2"><FileText size={16} className="text-indigo-500"/> Crear Nueva Orden de Compra</h3>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <input type="text" placeholder="N° OC / Referencia *" value={newPO.doc_num} onChange={e=>setNewPO({...newPO,doc_num:e.target.value.toUpperCase()})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black uppercase outline-none focus:border-indigo-500"/>
-                      <input type="text" placeholder="Proveedor *" value={newPO.supplier} onChange={e=>setNewPO({...newPO,supplier:e.target.value})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500"/>
-                      {is3PLMode ? (
-                        <select value={newPO.client_id} onChange={e=>setNewPO({...newPO,client_id:e.target.value})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                          <option value="">-- Cliente Destino --</option>
-                          {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                      ) : (
-                        <div className="border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                          <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                        </div>
-                      )}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase">Fecha Esperada de Llegada</label>
-                        <input type="date" value={newPO.expected_date} onChange={e=>setNewPO({...newPO,expected_date:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white"/>
-                      </div>
-                    </div>
-                    <div className="bg-slate-50 rounded-2xl p-4 mb-4">
-                      <p className="text-[10px] font-black text-slate-500 uppercase mb-3">Líneas de Productos Esperados</p>
-                      <div className="flex gap-3 mb-3">
-                        <select value={newPOLine.sku} onChange={e=>setNewPOLine({...newPOLine,sku:e.target.value})} className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white uppercase">
-                          <option value="">-- SKU --</option>
-                          {permittedSkus.filter(s=>!newPO.client_id || (s.client_id||'')===newPO.client_id).map(s=><option key={s.sku} value={s.sku}>{s.sku} — {s.desc}</option>)}
-                        </select>
-                        <input type="number" min="0.01" placeholder="Cant. Esperada" value={newPOLine.expected_qty} onChange={e=>setNewPOLine({...newPOLine,expected_qty:e.target.value})} className="w-36 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none text-center"/>
-                        <button onClick={() => { if (!newPOLine.sku || !newPOLine.expected_qty) return; setNewPO(p=>({...p,items:[...p.items,{...newPOLine}]})); setNewPOLine({sku:'',expected_qty:''}); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Plus size={12}/> Agregar</button>
-                      </div>
-                      {newPO.items.map((it,i) => (
-                        <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 mb-2">
-                          <span className="text-xs font-black uppercase text-slate-800">{it.sku} <span className="text-slate-400 font-normal">— esperado: {it.expected_qty} un</span></span>
-                          <button onClick={()=>setNewPO(p=>({...p,items:p.items.filter((_,idx)=>idx!==i)}))} className="text-red-400 hover:text-red-600"><X size={14}/></button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-3">
-                      <button disabled={!newPO.doc_num || !newPO.supplier || newPO.items.length===0} onClick={async () => { const poPayload={...newPO,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !poPayload.client_id) poPayload.client_id=systemConfig.own_client_id||'PROPIO'; if(is3PLMode && !poPayload.client_id) return showMsg('⛔ Selecciona el cliente de la orden de compra', true); const res = await apiFetch(`${host}/api/purchase-orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(poPayload)}); if(res.ok){const d=await res.json(); showMsg(`✅ OC ${d.poId} creada`); setNewPO({doc_num:'',supplier:'',client_id:'',expected_date:'',notes:'',items:[]}); setShowPOForm(false); const r2=await apiFetch(`${host}/api/purchase-orders`); setPurchaseOrders(await r2.json());} else { const e=await res.json().catch(()=>({})); showMsg(`⛔ ${e.error||'Error'}`,true); } }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50">Crear Orden de Compra</button>
-                      <button onClick={() => setShowPOForm(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[10px]">Cancelar</button>
-                    </div>
-                  </div>
-                )}
-
-                {activePO ? (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="bg-indigo-50 p-6 border-b border-indigo-200 flex justify-between items-center">
-                      <div>
-                        <h3 className="text-lg font-black text-indigo-900 uppercase">{activePO.doc_num} — {activePO.supplier}</h3>
-                        <p className="text-[10px] font-bold text-indigo-600 uppercase">Comparar cantidades recibidas vs esperadas</p>
-                      </div>
-                      <button onClick={() => { setActivePO(null); setPoLines([]); setPoReceivedQtys({}); }} className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase"><ArrowLeft size={12} className="inline mr-1"/> Volver</button>
-                    </div>
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 border-b"><tr>
-                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase">SKU / Producto</th>
-                        <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Esperado</th>
-                        <th className="p-4 text-center text-[10px] font-black text-indigo-600 uppercase">Recibido Real</th>
-                        <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Diferencia</th>
-                        <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Estado</th>
-                      </tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {poLines.map(line => {
-                          const received = parseFloat(poReceivedQtys[line.id] ?? line.received_qty ?? 0);
-                          const expected = parseFloat(line.expected_qty);
-                          const diff = received - expected;
-                          return (
-                            <tr key={line.id} className={`hover:bg-slate-50 ${diff < 0 ? 'bg-red-50/30' : diff > 0 ? 'bg-amber-50/30' : ''}`}>
-                              <td className="p-4"><p className="text-xs font-black text-slate-800 uppercase">{line.sku}</p><p className="text-[9px] text-slate-500">{line.desc}</p></td>
-                              <td className="p-4 text-center font-black text-slate-700">{expected} <span className="text-[9px] text-slate-400">{line.uom||'UN'}</span></td>
-                              <td className="p-4 text-center">
-                                {line.status === 'RECEIVED' ? <span className="font-black text-emerald-700">{line.received_qty}</span> : (
-                                  <input type="number" min="0" step="0.01" value={poReceivedQtys[line.id] ?? ''} onChange={e=>setPoReceivedQtys(p=>({...p,[line.id]:e.target.value}))} className="w-24 border-2 border-indigo-200 rounded-xl px-3 py-2 text-center font-black text-sm outline-none focus:border-indigo-500 text-indigo-700 bg-indigo-50" placeholder="0"/>
-                                )}
-                              </td>
-                              <td className="p-4 text-center">
-                                {line.status === 'RECEIVED' ? (
-                                  <span className={`font-black text-sm ${parseFloat(line.difference)===0?'text-emerald-600':parseFloat(line.difference)>0?'text-amber-600':'text-red-600'}`}>
-                                    {parseFloat(line.difference)>0?'+':''}{line.difference}
-                                  </span>
-                                ) : (
-                                  poReceivedQtys[line.id] !== undefined && (
-                                    <span className={`font-black text-sm ${diff===0?'text-emerald-600':diff>0?'text-amber-600':'text-red-600'}`}>
-                                      {diff>0?'+':''}{diff.toFixed(2)}
-                                    </span>
-                                  )
-                                )}
-                              </td>
-                              <td className="p-4 text-center">
-                                <span className={`text-[9px] font-black px-2 py-1 rounded uppercase ${line.status==='RECEIVED'?'bg-emerald-100 text-emerald-700':line.status==='PARTIAL'?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600'}`}>
-                                  {line.status==='RECEIVED'?'Completo':line.status==='PARTIAL'?'Parcial':'Pendiente'}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-                      <div className="flex gap-4 text-[10px] font-black text-slate-500 uppercase">
-                        <span>Total líneas: {poLines.length}</span>
-                        <span className="text-emerald-600">Completas: {poLines.filter(l=>l.status==='RECEIVED').length}</span>
-                        <span className="text-red-500">Pendientes: {poLines.filter(l=>l.status==='PENDING').length}</span>
-                      </div>
-                      <button onClick={async () => {
-                        const items = poLines.filter(l=>l.status!=='RECEIVED' && poReceivedQtys[l.id]!==undefined).map(l=>({lineId:l.id,received_qty:parseFloat(poReceivedQtys[l.id])||0}));
-                        if (!items.length) return showMsg('⚠️ Ingresa cantidades recibidas primero', true);
-                        const res = await apiFetch(`${host}/api/purchase-orders/${activePO.id}/receive`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({received_items:items,username:currentUser.username})});
-                        if(res.ok){showMsg('✅ Recepción comparada y guardada');const r2=await apiFetch(`${host}/api/purchase-orders/${activePO.id}/lines`);const d=await r2.json();setPoLines(d.lines);setPoReceivedQtys({});}else showMsg('⛔ Error',true);
-                      }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 py-3 rounded-2xl shadow-md uppercase text-[10px] tracking-widest flex items-center gap-2"><CheckCircle2 size={14}/> Confirmar Recepción</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {purchaseOrders.map(po => (
-                      <div key={po.id} className={`bg-white p-5 rounded-2xl border shadow-sm flex items-center justify-between hover:shadow-md transition-all ${po.status==='COMPLETED'?'border-emerald-200':po.status==='PARTIAL'?'border-amber-200':'border-slate-200'}`}>
-                        <div>
-                          <div className="flex items-center gap-3 mb-1">
-                            <p className="text-sm font-black text-slate-800 uppercase">{po.doc_num}</p>
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${po.status==='COMPLETED'?'bg-emerald-100 text-emerald-700':po.status==='PARTIAL'?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600'}`}>{po.status}</span>
-                          </div>
-                          <p className="text-[10px] text-slate-500 font-bold">Proveedor: {po.supplier} · {po.received_lines}/{po.total_lines} líneas recibidas</p>
-                          {po.expected_date && <p className="text-[9px] text-slate-400 mt-0.5">Esperado: {new Date(po.expected_date).toLocaleDateString('es-ES')}</p>}
-                        </div>
-                        <button onClick={async () => { const res = await apiFetch(`${host}/api/purchase-orders/${po.id}/lines`); const d = await res.json(); setActivePO(d.po); setPoLines(d.lines); setPoReceivedQtys({}); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Search size={12}/> Ver / Comparar</button>
-                      </div>
-                    ))}
-                    {purchaseOrders.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400"><FileText className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">No hay órdenes. Presiona Cargar o crea una nueva.</p></div>}
-                  </div>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <PurchaseOrdersTab
+                  purchaseOrders={purchaseOrders} setPurchaseOrders={setPurchaseOrders}
+                  showPOForm={showPOForm} setShowPOForm={setShowPOForm}
+                  newPO={newPO} setNewPO={setNewPO} newPOLine={newPOLine} setNewPOLine={setNewPOLine}
+                  activePO={activePO} setActivePO={setActivePO} poLines={poLines} setPoLines={setPoLines} poReceivedQtys={poReceivedQtys} setPoReceivedQtys={setPoReceivedQtys}
+                  is3PLMode={is3PLMode} isHybridMode={isHybridMode} permittedClients={permittedClients} permittedSkus={permittedSkus} systemConfig={systemConfig} currentUser={currentUser}
+                  showMsg={showMsg} apiFetch={apiFetch} host={host}
+                />
+              </Suspense>
             )}
 
             {/* HISTORIAL DOCUMENTOS */}
             {activeTab === 'doc-history' && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><History className="text-slate-500"/> Historial de Documentos</h1>
-                  <div className="flex gap-2">
-                    {['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                      <button onClick={async()=>{ const r=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`); if(r.ok){const d=await r.json();setAnulationRequests(d);} setAnulHistoryTab('requests'); }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-colors ${anulHistoryTab==='requests'?'bg-red-600 text-white shadow-md':'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200'}`}>
-                        <XCircle size={12}/> Solicitudes Anulación
-                        {anulationRequests.filter(r=>r.status==='PENDIENTE').length > 0 && <span className="bg-white text-red-600 px-1.5 rounded-full text-[8px] font-black">{anulationRequests.filter(r=>r.status==='PENDIENTE').length}</span>}
-                      </button>
-                    )}
-                    <button onClick={async()=>{ setAnulHistoryTab('docs'); setDocHistoryPage(0); const params=new URLSearchParams(); if(docHistoryModule) params.append('module',docHistoryModule); if(docHistorySearch) params.append('search',docHistorySearch); if(docHistoryDateFrom) params.append('date_from',docHistoryDateFrom); if(docHistoryDateTo) params.append('date_to',docHistoryDateTo); const res=await apiFetch(`${host}/api/document-history?${params}`); const d=await res.json(); setDocHistory(Array.isArray(d)?d:[]); }} className="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-sm"><Search size={12}/> Buscar</button>
-                    {docHistory.length > 0 && <button onClick={()=> exportToExcel(docHistory,[{key:'created_at',header:'Fecha',format:'date'},{key:'module',header:'Módulo',format:'text'},{key:'doc_type',header:'Tipo Doc',format:'text'},{key:'doc_num',header:'N° Documento',format:'text'},{key:'glosa',header:'Glosa',format:'text'},{key:'username',header:'Usuario',format:'text'},{key:'total_qty',header:'Cantidad Total',format:'number'},{key:'status',header:'Estado',format:'text'},{key:'client_id',header:'Cliente ID',format:'text'}],`historial-docs${docHistoryModule?'_'+docHistoryModule:''}_${new Date().toISOString().slice(0,10)}`,'Historial')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
-                  </div>
-                </div>
-
-                {/* ── SOLICITUDES DE ANULACIÓN (solo admins) ── */}
-                {anulHistoryTab === 'requests' && ['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                  <div className="space-y-3">
-                    <div className="flex gap-2 items-center">
-                      {['PENDIENTE','APROBADA','RECHAZADA'].map(s=>(
-                        <button key={s} onClick={async()=>{ const r=await apiFetch(`${host}/api/anulation-requests?status=${s}`); if(r.ok){const d=await r.json();setAnulationRequests(d);} }} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border transition-colors ${s==='PENDIENTE'?'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100':s==='APROBADA'?'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100':'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'}`}>{s}</button>
-                      ))}
-                      <button onClick={()=>setAnulHistoryTab('docs')} className="ml-auto text-slate-400 hover:text-slate-700 text-[10px] font-black uppercase flex items-center gap-1"><ArrowLeft size={12}/> Volver al historial</button>
-                    </div>
-                    {anulationRequests.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-12 text-center text-slate-400"><XCircle className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="font-black uppercase text-xs">Sin solicitudes</p></div>}
-                    {anulationRequests.map(req => (
-                      <div key={req.id} className={`bg-white rounded-2xl border-2 shadow-sm p-5 ${req.status==='PENDIENTE'?'border-amber-200':req.status==='APROBADA'?'border-emerald-200':'border-red-200'}`}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${req.status==='PENDIENTE'?'bg-amber-100 text-amber-700':req.status==='APROBADA'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{req.status}</span>
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded border ${req.module==='receive'?'bg-emerald-50 text-emerald-700 border-emerald-200':'bg-blue-50 text-blue-700 border-blue-200'}`}>{req.module==='receive'?'RECEPCIÓN':'DESPACHO'}</span>
-                            </div>
-                            <p className="text-sm font-black text-slate-800 uppercase">{req.doc_type ? `[${req.doc_type}]` : ''} {req.doc_num}</p>
-                            <p className="text-xs text-slate-600 mt-1">Motivo: <span className="font-bold">"{req.reason}"</span></p>
-                            <p className="text-[10px] text-slate-400 mt-1">Solicitado por <strong>{req.requested_by}</strong> · {new Date(req.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</p>
-                            {req.authorized_by && <p className="text-[10px] text-slate-400">Procesado por <strong>{req.authorized_by}</strong> · {req.resolved_at && new Date(req.resolved_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</p>}
-                            {req.reject_reason && <p className="text-[10px] text-red-500 mt-1">Rechazo: "{req.reject_reason}"</p>}
-                          </div>
-                          {req.status === 'PENDIENTE' && (
-                            <div className="flex gap-2 shrink-0">
-                              <button onClick={async()=>{
-                                if(!(await confirm({ message: `¿Aprobar la anulación del documento ${req.doc_num}?\nEsto revertirá el stock.`, danger: true }))) return;
-                                const r=await apiFetch(`${host}/api/anulation-requests/${req.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
-                                if(r.ok){showMsg('✅ Anulación aprobada y stock revertido');const d=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`);if(d.ok)setAnulationRequests(await d.json());fetchData();}
-                                else{const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                              }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 transition-colors">
-                                <CheckCircle2 size={12}/> Aprobar
-                              </button>
-                              <button onClick={async()=>{
-                                const motivo=(await prompt({ message: 'Motivo del rechazo (opcional):' }));
-                                if(motivo===null) return;
-                                const r=await apiFetch(`${host}/api/anulation-requests/${req.id}/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reject_reason:motivo})});
-                                if(r.ok){showMsg('Solicitud rechazada');const d=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`);if(d.ok)setAnulationRequests(await d.json());}
-                                else{const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                              }} className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 transition-colors border border-red-200">
-                                <X size={12}/> Rechazar
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* ── HISTORIAL DE DOCUMENTOS ── */}
-                {anulHistoryTab === 'docs' && (
-                  <>
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <select value={docHistoryModule} onChange={e=>setDocHistoryModule(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white text-slate-700 uppercase">
-                          <option value="">Todos los módulos</option>
-                          <option value="receive">Recepciones</option>
-                          <option value="dispatch">Despachos</option>
-                          <option value="adjust">Ajustes</option>
-                        </select>
-                        <input type="text" placeholder="🔍 N° doc, glosa, usuario..." value={docHistorySearch} onChange={e=>setDocHistorySearch(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none text-slate-700"/>
-                        <input type="date" value={docHistoryDateFrom} onChange={e=>setDocHistoryDateFrom(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white text-slate-700" title="Desde"/>
-                        <input type="date" value={docHistoryDateTo} onChange={e=>setDocHistoryDateTo(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white text-slate-700" title="Hasta"/>
-                      </div>
-                    </div>
-                    {/* Paginación historial de documentos */}
-                    {docHistory.length > 0 && (() => {
-                      const DH_PAGE_SIZE = 50;
-                      const totalPages = Math.ceil(docHistory.length / DH_PAGE_SIZE);
-                      return totalPages > 1 ? (
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">{docHistory.length} documentos — página {docHistoryPage + 1} de {totalPages}</p>
-                          <div className="flex gap-2">
-                            <button disabled={docHistoryPage === 0} onClick={() => setDocHistoryPage(p => p - 1)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">← Anterior</button>
-                            <button disabled={docHistoryPage >= totalPages - 1} onClick={() => setDocHistoryPage(p => p + 1)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Siguiente →</button>
-                          </div>
-                        </div>
-                      ) : null;
-                    })()}
-                    <div className="space-y-3">
-                      {docHistory.slice(docHistoryPage * 50, (docHistoryPage + 1) * 50).map(doc => {
-                        const isVoided = doc.status === 'ANULADO';
-                        const canVoid = ['receive','dispatch'].includes(doc.module) && !isVoided;
-                        const isAdmin = ['ADMIN','SUPERADMIN'].includes(currentUser?.role);
-                        return (
-                          <div key={doc.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isVoided?'border-red-200 opacity-70':'border-slate-200'}`}>
-                            <div className="flex items-center justify-between p-5 cursor-pointer hover:bg-slate-50" onClick={() => setExpandedHistoryDoc(expandedHistoryDoc===doc.id ? null : doc.id)}>
-                              <div className="flex items-center gap-4">
-                                <div className={`p-2.5 rounded-xl ${isVoided?'bg-red-100 text-red-400':doc.module==='receive'?'bg-emerald-100 text-emerald-600':doc.module==='dispatch'?'bg-blue-100 text-blue-600':'bg-amber-100 text-amber-600'}`}>
-                                  {isVoided?<XCircle size={16}/>:doc.module==='receive'?<ArrowDownRight size={16}/>:doc.module==='dispatch'?<ArrowUpRight size={16}/>:<ClipboardCheck size={16}/>}
-                                </div>
-                                <div>
-                                  <p className={`text-sm font-black uppercase flex items-center gap-2 ${isVoided?'text-red-400 line-through':'text-slate-800'}`}>
-                                    [{doc.doc_type||doc.module.toUpperCase()}] {doc.doc_num}
-                                    {isVoided
-                                      ? <span className="text-[9px] px-2 py-0.5 rounded font-black bg-red-100 text-red-600 no-underline" style={{textDecoration:'none'}}>ANULADO</span>
-                                      : <span className={`text-[9px] px-2 py-0.5 rounded font-black ${doc.module==='receive'?'bg-emerald-100 text-emerald-700':doc.module==='dispatch'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{doc.module==='receive'?'RECEPCIÓN':doc.module==='dispatch'?'DESPACHO':'AJUSTE'}</span>
-                                    }
-                                  </p>
-                                  <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
-                                    <span>👤 {doc.username}</span><span>·</span>
-                                    <span>{new Date(doc.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</span>
-                                    {doc.glosa && <span>· "{doc.glosa}"</span>}
-                                    {doc.doc_ref && <span>· Ref: <strong>{doc.doc_ref}</strong></span>}
-                                    {doc.doc_date && <span>· 📅 {doc.doc_date}</span>}
-                                  </p>
-                                  {isVoided && <p className="text-[9px] text-red-500 font-bold mt-0.5">Anulado por {doc.voided_by} · Motivo: "{doc.void_reason}"</p>}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <div className="text-right">
-                                  <p className={`text-lg font-black ${isVoided?'text-red-400':'text-slate-800'}`}>{Number(doc.total_qty).toLocaleString()}</p>
-                                  <p className="text-[9px] text-slate-400 uppercase font-bold">unidades</p>
-                                </div>
-                                {canVoid && (
-                                  <button onClick={e=>{e.stopPropagation();setVoidModal({doc});setVoidReason('');}} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1 transition-colors">
-                                    <XCircle size={11}/> {isAdmin?'Anular':'Solicitar Anulación'}
-                                  </button>
-                                )}
-                                <ChevronRight size={16} className={`text-slate-400 transition-transform ${expandedHistoryDoc===doc.id?'rotate-90':''}`}/>
-                              </div>
-                            </div>
-                            {expandedHistoryDoc === doc.id && (
-                              <div className="border-t border-slate-100 bg-slate-50 p-4">
-                                <table className="w-full text-left">
-                                  <thead><tr><th className="p-2 text-[9px] font-black text-slate-400 uppercase">SKU</th><th className="p-2 text-[9px] font-black text-slate-400 uppercase">Descripción</th><th className="p-2 text-center text-[9px] font-black text-slate-400 uppercase">Cantidad</th><th className="p-2 text-[9px] font-black text-slate-400 uppercase">Detalle</th></tr></thead>
-                                  <tbody className="divide-y divide-slate-100">
-                                    {JSON.parse(doc.items_json||'[]').map((item,i) => (
-                                      <tr key={i} className="bg-white hover:bg-slate-50">
-                                        <td className="p-2 text-xs font-black text-slate-800 uppercase">{item.sku}</td>
-                                        <td className="p-2 text-[10px] text-slate-500 truncate max-w-[200px]">{item.desc||'-'}</td>
-                                        <td className="p-2 text-center font-black text-slate-700">{item.qty||item.qtyToPick||'-'}</td>
-                                        <td className="p-2 text-[9px] text-slate-400">{item.location_id||item.lpnId||'-'}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {docHistory.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400"><History className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">Usa los filtros y presiona Buscar</p></div>}
-                    </div>
-                  </>
-                )}
-
-                {/* ── MODAL DE ANULACIÓN ── */}
-                {voidModal && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e=>{if(e.target===e.currentTarget)setVoidModal(null);}}>
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
-                      <div className="bg-red-600 rounded-t-3xl px-6 py-5 flex items-center justify-between">
-                        <div>
-                          <p className="text-white font-black uppercase tracking-tight flex items-center gap-2"><XCircle size={18}/> {['ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Documento':'Solicitar Anulación'}</p>
-                          <p className="text-red-200 text-[11px] mt-0.5 uppercase font-bold">[{voidModal.doc.doc_type||voidModal.doc.module}] {voidModal.doc.doc_num}</p>
-                        </div>
-                        <button onClick={()=>setVoidModal(null)} className="text-white/70 hover:text-white"><X size={18}/></button>
-                      </div>
-                      <div className="p-6 space-y-4">
-                        {!['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[11px] text-amber-800 font-bold">
-                            ⚠️ No tienes permisos para anular directamente. Se enviará una solicitud a un administrador para su aprobación.
-                          </div>
-                        )}
-                        {['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-[11px] text-red-800 font-bold">
-                            ⚠️ Esta acción {voidModal.doc.module==='receive'?'eliminará los LPNs creados en esta recepción':'restaurará las cantidades despachadas al inventario'}. No se puede deshacer.
-                          </div>
-                        )}
-                        <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Motivo de la anulación *</label>
-                          <textarea rows={3} value={voidReason} onChange={e=>setVoidReason(e.target.value)} placeholder="Describe el motivo de la anulación..." className="w-full border-2 border-slate-200 focus:border-red-400 rounded-xl px-4 py-3 text-sm font-medium outline-none resize-none"/>
-                        </div>
-                        <div className="flex gap-3">
-                          <button onClick={()=>setVoidModal(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl py-3 font-black uppercase text-[10px] transition-colors">Cancelar</button>
-                          <button disabled={!voidReason.trim()} onClick={async()=>{
-                            const isAdmin = ['ADMIN','SUPERADMIN'].includes(currentUser?.role);
-                            const endpoint = isAdmin
-                              ? `${host}/api/document-history/${voidModal.doc.id}/void`
-                              : `${host}/api/document-history/${voidModal.doc.id}/void-request`;
-                            const r = await apiFetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({reason:voidReason.trim()})});
-                            if(r.ok){
-                              showMsg(isAdmin?'✅ Documento anulado y stock revertido':'✅ Solicitud enviada al administrador');
-                              setVoidModal(null);
-                              // Refrescar historial
-                              const params=new URLSearchParams(); if(docHistoryModule) params.append('module',docHistoryModule); if(docHistorySearch) params.append('search',docHistorySearch); if(docHistoryDateFrom) params.append('date_from',docHistoryDateFrom); if(docHistoryDateTo) params.append('date_to',docHistoryDateTo);
-                              const res=await apiFetch(`${host}/api/document-history?${params}`); const d=await res.json(); setDocHistory(Array.isArray(d)?d:[]);
-                              if(isAdmin) fetchData();
-                            } else {const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                          }} className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl py-3 font-black uppercase text-[10px] transition-colors flex items-center justify-center gap-2">
-                            <XCircle size={14}/> {['ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Ahora':'Enviar Solicitud'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <DocHistoryTab
+                  anulHistoryTab={anulHistoryTab} setAnulHistoryTab={setAnulHistoryTab}
+                  anulationRequests={anulationRequests} setAnulationRequests={setAnulationRequests}
+                  docHistoryModule={docHistoryModule} setDocHistoryModule={setDocHistoryModule}
+                  docHistorySearch={docHistorySearch} setDocHistorySearch={setDocHistorySearch}
+                  docHistoryDateFrom={docHistoryDateFrom} setDocHistoryDateFrom={setDocHistoryDateFrom}
+                  docHistoryDateTo={docHistoryDateTo} setDocHistoryDateTo={setDocHistoryDateTo}
+                  docHistoryPage={docHistoryPage} setDocHistoryPage={setDocHistoryPage}
+                  docHistory={docHistory} setDocHistory={setDocHistory}
+                  expandedHistoryDoc={expandedHistoryDoc} setExpandedHistoryDoc={setExpandedHistoryDoc}
+                  voidModal={voidModal} setVoidModal={setVoidModal} voidReason={voidReason} setVoidReason={setVoidReason}
+                  currentUser={currentUser} showMsg={showMsg} apiFetch={apiFetch} host={host}
+                  confirm={confirm} prompt={prompt} exportToExcel={exportToExcel} fetchData={fetchData}
+                />
+              </Suspense>
             )}
 
             {/* 3PL BILLING */}
@@ -7833,439 +6617,49 @@ export default function App() {
               </Suspense>
             )}
 
-            {/* DEVOLUCIONES */}
             {activeTab === 'returns' && (
-              <div className="space-y-6 animate-in fade-in max-w-5xl mx-auto">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ArrowLeft className="text-orange-500"/> Gestión de Devoluciones</h1>
-                  <button onClick={async () => { const res = await apiFetch(`${host}/api/returns`); const d = await res.json(); setReturnsData(Array.isArray(d)?d:[]); }} className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-sm"><RefreshCcw size={12}/> Cargar</button>
-                </div>
-                <div className="bg-white rounded-3xl border border-orange-200 shadow-sm p-8">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter mb-6 border-b pb-4">Nueva Devolución</h3>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <input type="text" placeholder="N° Documento *" value={newReturn.doc_num} onChange={e=>setNewReturn({...newReturn,doc_num:e.target.value.toUpperCase()})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black uppercase outline-none focus:border-orange-500"/>
-                    {is3PLMode ? (
-                      <select value={newReturn.client_id} onChange={e=>setNewReturn({...newReturn,client_id:e.target.value})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500 bg-white">
-                        <option value="">-- Cliente --</option>
-                        {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    ) : (
-                      <div className="border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                        <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                      </div>
-                    )}
-                    <input type="text" placeholder="Motivo de devolución *" value={newReturn.reason} onChange={e=>setNewReturn({...newReturn,reason:e.target.value})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500 col-span-2"/>
-                  </div>
-                  <div className="bg-slate-50 rounded-2xl p-4 mb-4 space-y-3">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase">Agregar Línea de Devolución</h4>
-                    <div className="grid grid-cols-3 gap-3">
-                      <select value={returnLineItem.sku} onChange={e=>setReturnLineItem({...returnLineItem,sku:e.target.value})} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white uppercase">
-                        <option value="">-- SKU --</option>
-                        {permittedSkus.filter(s=>!newReturn.client_id || (s.client_id||'')===newReturn.client_id).map(s=><option key={s.sku} value={s.sku}>{s.sku}</option>)}
-                      </select>
-                      <input type="number" placeholder="Cantidad" value={returnLineItem.qty} onChange={e=>setReturnLineItem({...returnLineItem,qty:e.target.value})} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none"/>
-                      <select value={returnLineItem.condition} onChange={e=>setReturnLineItem({...returnLineItem,condition:e.target.value})} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white">
-                        <option value="BUENO">Buen Estado → DISPONIBLE</option>
-                        <option value="MALO">Dañado → RETENIDO</option>
-                      </select>
-                    </div>
-                    <button onClick={() => { if (!returnLineItem.sku || !returnLineItem.qty) return; setNewReturn(prev=>({...prev,items:[...prev.items,{...returnLineItem}]})); setReturnLineItem({sku:'',qty:'',original_lpn:'',condition:'BUENO',location_id:'PISO-RECEPCION',notes:''}); }} className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Plus size={12}/> Agregar</button>
-                  </div>
-                  {newReturn.items.length > 0 && (
-                    <div className="mb-4">
-                      {newReturn.items.map((it,i) => (
-                        <div key={i} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-200 mb-2">
-                          <span className="text-xs font-black uppercase">{it.sku} — {it.qty} un <span className={`text-[9px] px-1 rounded ${it.condition==='BUENO'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{it.condition}</span></span>
-                          <button onClick={()=>setNewReturn(prev=>({...prev,items:prev.items.filter((_,idx)=>idx!==i)}))} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <button disabled={!newReturn.doc_num || !newReturn.reason || newReturn.items.length===0} onClick={async () => { const retPayload={...newReturn,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !retPayload.client_id) retPayload.client_id=systemConfig.own_client_id||'PROPIO'; if(is3PLMode && !retPayload.client_id) return showMsg('⛔ Selecciona el cliente de la devolución', true); const res = await apiFetch(`${host}/api/returns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(retPayload)}); if (res.ok) { const d=await res.json(); showMsg(`✅ Devolución ${d.returnId} procesada`); setNewReturn({doc_num:'',doc_type:'DEVOLUCION',client_id:'',reason:'',glosa:'',items:[]}); fetchData(); } else { const e=await res.json().catch(()=>({})); showMsg(`⛔ ${e.error||'Error'}`,true); } }} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"><ArrowLeft size={16}/> Procesar Devolución e Ingresar Stock</button>
-                </div>
-                {returnsData.length > 0 && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 border-b"><tr><th className="p-4 text-[10px] font-black text-slate-400 uppercase">ID Devolución</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Documento</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Motivo</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Fecha</th><th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Líneas</th></tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {returnsData.map(r=>(
-                          <tr key={r.id} className="hover:bg-slate-50">
-                            <td className="p-4 font-mono text-[10px] font-black text-orange-700">{r.id}</td>
-                            <td className="p-4 text-xs font-black uppercase">{r.doc_num}</td>
-                            <td className="p-4 text-xs text-slate-600">{r.reason}</td>
-                            <td className="p-4 text-[10px] text-slate-400">{new Date(r.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
-                            <td className="p-4 text-center font-black text-slate-700">{r.line_count}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <ReturnsTab
+                  returnsData={returnsData} setReturnsData={setReturnsData}
+                  newReturn={newReturn} setNewReturn={setNewReturn}
+                  returnLineItem={returnLineItem} setReturnLineItem={setReturnLineItem}
+                  is3PLMode={is3PLMode} isHybridMode={isHybridMode} permittedClients={permittedClients} permittedSkus={permittedSkus} systemConfig={systemConfig} currentUser={currentUser}
+                  showMsg={showMsg} apiFetch={apiFetch} host={host} fetchData={fetchData}
+                />
+              </Suspense>
             )}
 
-            {/* TRANSPORTE */}
             {activeTab === 'transport' && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Truck className="text-cyan-500"/> Módulo de Transporte</h1>
-                </div>
-                {/* Sub-tabs transporte */}
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
-                  {[['carriers','Transportistas'],['shipments','Envíos']].map(([id,label])=>(
-                    <button key={id} onClick={()=>setTransportTab(id)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${transportTab===id?'bg-white text-cyan-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>{label}</button>
-                  ))}
-                </div>
-
-                {transportTab === 'carriers' && (
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-5 border-r border-slate-100 pr-8">
-                    <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center"><Truck className="w-4 h-4 mr-2 text-cyan-500"/> {carrierForm.id ? 'Editar Transportista' : 'Nuevo Transportista'}</h2>
-                    <form onSubmit={handleSaveCarrier} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Razón Social *</label><input type="text" required value={carrierForm.name} onChange={e=>setCarrierForm({...carrierForm,name:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">RUT</label><input type="text" value={carrierForm.rut} onChange={e=>setCarrierForm({...carrierForm,rut:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Contacto</label><input type="text" value={carrierForm.contact} onChange={e=>setCarrierForm({...carrierForm,contact:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Teléfono</label><input type="text" value={carrierForm.phone} onChange={e=>setCarrierForm({...carrierForm,phone:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="col-span-2 space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Email</label><input type="email" value={carrierForm.email} onChange={e=>setCarrierForm({...carrierForm,email:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                      </div>
-                      <div className="flex gap-3">
-                        <button type="submit" className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-cyan-200 transition-colors flex items-center justify-center gap-2"><Plus size={14}/> {carrierForm.id?'Actualizar':'Guardar'}</button>
-                        {carrierForm.id && <button type="button" onClick={()=>setCarrierForm({id:'',name:'',rut:'',contact:'',phone:'',email:''})} className="px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-4 rounded-2xl text-xs uppercase tracking-widest transition-colors">Cancelar</button>}
-                      </div>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Transportistas Registrados ({carriers.length})</p>
-                    <div className="space-y-3">
-                      {carriers.map(c=>(
-                        <div key={c.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-black text-slate-800">{c.name}</p>
-                              {c.rut && <p className="text-[10px] font-mono text-slate-500 mt-0.5">RUT: {c.rut}</p>}
-                              <div className="flex gap-3 mt-1 text-[9px] text-slate-400 font-bold">{c.contact&&<span>{c.contact}</span>}{c.phone&&<span>{c.phone}</span>}{c.email&&<span>{c.email}</span>}</div>
-                            </div>
-                            <div className="flex gap-2">
-                              <button onClick={()=>setCarrierForm({id:c.id,name:c.name,rut:c.rut||'',contact:c.contact||'',phone:c.phone||'',email:c.email||''})} className="text-slate-400 hover:text-cyan-600 transition-colors"><Settings2 size={14}/></button>
-                              <button onClick={async()=>{if(!(await confirm({ message: '¿Eliminar?', danger: true })))return;const r=await apiFetch(`${host}/api/carriers/${c.id}`,{method:'DELETE'});if(r.ok){showMsg('✅ Eliminado');fetchData();}}} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {carriers.length===0 && <div className="p-8 text-center text-slate-400"><Truck className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay transportistas registrados</p></div>}
-                    </div>
-                  </div>
-                </div>
-                )}
-
-                {transportTab === 'shipments' && (
-                <div className="space-y-6">
-                  <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8">
-                    <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center mb-6"><FileText className="w-4 h-4 mr-2 text-cyan-500"/> Nuevo Envío</h2>
-                    <form onSubmit={handleSaveShipment} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Transportista *</label><select required value={shipmentForm.carrier_id} onChange={e=>setShipmentForm({...shipmentForm,carrier_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500 bg-white"><option value="">-- Seleccionar --</option>{carriers.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">N° Documento *</label><input type="text" required value={shipmentForm.doc_num} onChange={e=>setShipmentForm({...shipmentForm,doc_num:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-cyan-500 uppercase"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Cliente</label>{is3PLMode ? (<select value={shipmentForm.client_id} onChange={e=>setShipmentForm({...shipmentForm,client_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500 bg-white"><option value="">-- Seleccionar --</option>{permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>) : (<div className="w-full border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2"><Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}</div>)}</div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Destino</label><input type="text" value={shipmentForm.destination} onChange={e=>setShipmentForm({...shipmentForm,destination:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="col-span-2 space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Notas</label><input type="text" value={shipmentForm.notes} onChange={e=>setShipmentForm({...shipmentForm,notes:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                      </div>
-                      <button type="submit" className="bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 px-8 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-cyan-200 transition-colors flex items-center gap-2"><Plus size={14}/> Crear Envío</button>
-                    </form>
-                  </div>
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 border-b"><tr><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Documento</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Transportista</th>{is3PLMode && <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Cliente</th>}<th className="p-4 text-[10px] font-black text-slate-400 uppercase">Destino</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Estado</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Acciones</th></tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {shipments.map(s=>{
-                          const statusColors = {PENDING:'bg-slate-100 text-slate-600',ASSIGNED:'bg-blue-100 text-blue-700',IN_TRANSIT:'bg-amber-100 text-amber-700',DELIVERED:'bg-emerald-100 text-emerald-700',RETURNED:'bg-red-100 text-red-700'};
-                          const nextStatus = {PENDING:'ASSIGNED',ASSIGNED:'IN_TRANSIT',IN_TRANSIT:'DELIVERED'};
-                          const nextLabel = {PENDING:'Asignar',ASSIGNED:'En Tránsito',IN_TRANSIT:'Entregar'};
-                          return (
-                            <tr key={s.id} className="hover:bg-slate-50">
-                              <td className="p-4 font-black text-xs uppercase text-cyan-700">{s.doc_num}</td>
-                              <td className="p-4 text-xs text-slate-600">{s.carrier_name||s.carrier_id}</td>
-                              {is3PLMode && <td className="p-4 text-xs text-slate-500">{s.client_id||'—'}</td>}
-                              <td className="p-4 text-xs text-slate-500">{s.destination||'—'}</td>
-                              <td className="p-4"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${statusColors[s.status]||'bg-slate-100 text-slate-600'}`}>{s.status}</span></td>
-                              <td className="p-4">
-                                <div className="flex gap-2">
-                                  {nextStatus[s.status] && <button onClick={()=>handleShipmentStatus(s.id,nextStatus[s.status])} className="text-[9px] font-black bg-cyan-50 hover:bg-cyan-100 text-cyan-700 px-2 py-1 rounded-lg uppercase transition-colors">{nextLabel[s.status]}</button>}
-                                  {s.status!=='DELIVERED'&&s.status!=='RETURNED' && <button onClick={()=>handleShipmentStatus(s.id,'RETURNED')} className="text-[9px] font-black bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1 rounded-lg uppercase transition-colors">Devolver</button>}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {shipments.length===0 && <tr><td colSpan={is3PLMode ? 6 : 5} className="p-8 text-center text-slate-400 text-xs">Sin envíos registrados</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <TransportLegacyTab
+                  transportTab={transportTab} setTransportTab={setTransportTab}
+                  carrierForm={carrierForm} setCarrierForm={setCarrierForm} handleSaveCarrier={handleSaveCarrier} carriers={carriers}
+                  shipmentForm={shipmentForm} setShipmentForm={setShipmentForm} handleSaveShipment={handleSaveShipment} shipments={shipments} handleShipmentStatus={handleShipmentStatus}
+                  is3PLMode={is3PLMode} permittedClients={permittedClients} systemConfig={systemConfig}
+                  confirm={confirm} apiFetch={apiFetch} host={host} showMsg={showMsg} fetchData={fetchData}
+                />
+              </Suspense>
             )}
 
             {/* CONTEOS CÍCLICOS — oculto para CLIENTE */}
             {activeTab === 'cycle-count' && currentUser?.role !== 'CLIENTE' && (
-              <div className="space-y-6 animate-in fade-in max-w-5xl mx-auto">
-                {/* ── Header ── */}
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ClipboardCheck className="text-cyan-500"/> Conteo Físico</h1>
-                  <button onClick={async()=>{ const r=await apiFetch(`${host}/api/cycle-count`); const d=await r.json(); setCycleCountData(Array.isArray(d)?d:[]); }} className="bg-cyan-100 hover:bg-cyan-200 text-cyan-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Cargar</button>
-                </div>
-
-                {/* ── Formulario nuevo conteo ── */}
-                <div className="bg-white rounded-3xl border border-cyan-200 shadow-sm p-6 space-y-4">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter border-b pb-3">Nuevo Conteo</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {clients.length > 0 && (
-                      <div>
-                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Cliente</label>
-                        <select value={ccFilter.client_id} onChange={e=>{setCcFilter(f=>({...f,client_id:e.target.value}));setCcPreview(null);}} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white">
-                          <option value="">Todos</option>
-                          {clients.map(c=><option key={c.id} value={c.id}>{c.name||c.id}</option>)}
-                        </select>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">SKU (opcional)</label>
-                      <input value={ccFilter.sku} onChange={e=>{setCcFilter(f=>({...f,sku:e.target.value.toUpperCase()}));setCcPreview(null);}} placeholder="SKU exacto" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold uppercase outline-none focus:border-cyan-500"/>
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Zona (opcional)</label>
-                      <select value={ccFilter.zone} onChange={e=>{setCcFilter(f=>({...f,zone:e.target.value}));setCcPreview(null);}} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white">
-                        <option value="">Todas</option>
-                        {[...new Set(safeLocs.map(l=>l.zone_code).filter(Boolean))].map(z=><option key={z} value={z}>{z}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Ubicación puntual</label>
-                      <input value={ccFilter.location_id} onChange={e=>{setCcFilter(f=>({...f,location_id:e.target.value.toUpperCase()}));setCcPreview(null);}} placeholder="1-A-01-1" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold uppercase outline-none focus:border-cyan-500"/>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <label className="flex items-center gap-2 px-3 py-2 border-2 border-slate-200 rounded-xl cursor-pointer hover:border-cyan-300">
-                      <input type="checkbox" checked={ccBlind} onChange={e=>setCcBlind(e.target.checked)} className="rounded accent-cyan-600"/>
-                      <span className="text-xs font-black text-slate-600 uppercase">A ciegas</span>
-                    </label>
-                    <button onClick={async()=>{
-                      setCcPreviewLoading(true);setCcPreview(null);
-                      const r=await apiFetch(`${host}/api/cycle-count/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zone_code:ccFilter.zone||undefined,client_id:ccFilter.client_id||undefined,sku:ccFilter.sku||undefined,location_id:ccFilter.location_id||undefined})});
-                      setCcPreviewLoading(false);
-                      if(r.ok)setCcPreview(await r.json()); else showMsg('⛔ Error al previsualizar',true);
-                    }} disabled={ccPreviewLoading} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 disabled:opacity-50">
-                      <Search size={12}/> {ccPreviewLoading?'…':'Previsualizar'}
-                    </button>
-                    {ccPreview && <span className="text-xs font-bold text-cyan-700 bg-cyan-50 border border-cyan-200 px-3 py-1.5 rounded-xl">{ccPreview.lines} ubicaciones · {Number(ccPreview.total_units).toLocaleString('es-CL')} unidades</span>}
-                    <button onClick={async()=>{
-                      const body={username:currentUser.username,blind:ccBlind};
-                      if(ccFilter.zone)        body.zone_code=ccFilter.zone;
-                      if(ccFilter.client_id)   body.client_id=ccFilter.client_id;
-                      if(ccFilter.sku)         body.sku=ccFilter.sku;
-                      if(ccFilter.location_id) body.location_id=ccFilter.location_id;
-                      const res=await apiFetch(`${host}/api/cycle-count/create`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-                      if(res.ok){const d=await res.json();showMsg(`✅ Conteo ${d.countId} creado — ${d.lines} líneas`);const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());setCcFilter({zone:'',client_id:'',sku:'',location_id:''});setCcPreview(null);}
-                      else{const e=await res.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);}
-                    }} className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg flex items-center gap-2 ml-auto">
-                      <Plus size={13}/> Crear conteo
-                    </button>
-                  </div>
-                </div>
-
-                {/* ── Modal rechazar ── */}
-                {ccRejectModal && (
-                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-2xl p-6 w-96 shadow-2xl space-y-4">
-                      <h3 className="font-black text-slate-800 uppercase">Rechazar conteo</h3>
-                      <textarea value={ccRejectReason} onChange={e=>setCcRejectReason(e.target.value)} placeholder="Motivo del rechazo..." className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-red-400 h-24 resize-none"/>
-                      <div className="flex gap-2 justify-end">
-                        <button onClick={()=>{setCcRejectModal(null);setCcRejectReason('');}} className="px-4 py-2 text-[10px] font-black uppercase text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
-                        <button onClick={async()=>{
-                          const r=await apiFetch(`${host}/api/cycle-count/${ccRejectModal}/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username,reason:ccRejectReason})});
-                          if(r.ok){showMsg('Conteo rechazado');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());}
-                          else showMsg('⛔ Error',true);
-                          setCcRejectModal(null);setCcRejectReason('');
-                        }} className="px-4 py-2 text-[10px] font-black uppercase bg-red-600 hover:bg-red-700 text-white rounded-xl">Rechazar</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Conteo activo ── */}
-                {activeCycleCount ? (()=>{
-                  const isBlind=activeCycleCount.blind;
-                  const isCompleted=activeCycleCount.status==='COMPLETED';
-                  const isPendApproval=activeCycleCount.status==='PENDIENTE_APROBACION';
-                  const showExpected=!isBlind||isCompleted||isPendApproval;
-                  const canApprove=['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
-                  const STATUS_BADGE={PENDING:'bg-slate-100 text-slate-600',EN_PROCESO:'bg-cyan-100 text-cyan-700',PENDIENTE_APROBACION:'bg-amber-100 text-amber-700',COMPLETED:'bg-emerald-100 text-emerald-700',RECHAZADO:'bg-red-100 text-red-700'};
-                  return (
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                      <div className="bg-cyan-50 p-5 border-b border-cyan-200 flex justify-between items-start flex-wrap gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-sm font-black text-cyan-900 uppercase">{activeCycleCount.id}</h3>
-                            {isBlind && <span className="text-[9px] bg-violet-100 text-violet-700 border border-violet-200 px-2 py-0.5 rounded font-black uppercase">A ciegas</span>}
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${STATUS_BADGE[activeCycleCount.status]||'bg-slate-100 text-slate-600'}`}>{activeCycleCount.status}</span>
-                          </div>
-                          <p className="text-[10px] text-cyan-700 font-bold">{activeCycleCount.scope_label||activeCycleCount.zone_code} · {activeCycleCount.counted_lines}/{activeCycleCount.total_lines} contadas · {activeCycleCount.diff_lines||0} con diferencia</p>
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                          {!isPendApproval && !isCompleted && <button onClick={()=>setCcAddLineForm({location_id:'',sku:'',qty:'',note:''})} className="bg-white border border-amber-200 text-amber-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Plus size={11}/> Reportar hallazgo</button>}
-                          <button onClick={()=>{setActiveCycleCount(null);setCycleLines([]);setCcAddLineForm(null);}} className="bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase">Cerrar</button>
-                          {!isPendApproval && !isCompleted && (
-                            <button onClick={async()=>{
-                              if(!(await confirm({message:'¿Enviar el conteo a aprobación? Si no hay diferencias, se completará directamente.',danger:false})))return;
-                              const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/submit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username})});
-                              const d=await r.json().catch(()=>({}));
-                              if(r.ok){showMsg(d.requires_approval?'✅ Conteo enviado a aprobación':'✅ Conteo completado (sin diferencias)');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());setActiveCycleCount(null);setCycleLines([]);}
-                              else showMsg(`⛔ ${d.error||'Error'}`,true);
-                            }} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-md">Enviar a aprobación</button>
-                          )}
-                          {isPendApproval && canApprove && (<>
-                            <button onClick={async()=>{
-                              if(!(await confirm({message:'¿Aprobar y aplicar ajustes al inventario?',danger:true})))return;
-                              const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username})});
-                              if(r.ok){showMsg('✅ Conteo aprobado y stock ajustado');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());setActiveCycleCount(null);setCycleLines([]);fetchData();}
-                              else{const e=await r.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);}
-                            }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-md">Aprobar</button>
-                            <button onClick={()=>{setCcRejectModal(activeCycleCount.id);setCcRejectReason('');}} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase">Rechazar</button>
-                          </>)}
-                        </div>
-                      </div>
-
-                      {/* Hallazgo form */}
-                      {ccAddLineForm && (
-                        <div className="bg-amber-50 border-b border-amber-200 p-4 flex gap-3 flex-wrap items-end">
-                          {[{label:'Ubicación',key:'location_id',ph:'1-A-01-1',w:'w-36',up:true},{label:'SKU',key:'sku',ph:'SKU',w:'w-36',up:true},{label:'Cantidad',key:'qty',ph:'0',w:'w-24',type:'number'},{label:'Nota',key:'note',ph:'Detalle...',w:'w-44'}].map(f=>(
-                            <div key={f.key}>
-                              <p className="text-[9px] font-black text-amber-700 uppercase mb-1">{f.label}</p>
-                              <input type={f.type||'text'} min={f.type==='number'?0:undefined} step={f.type==='number'?'0.01':undefined}
-                                value={ccAddLineForm[f.key]} onChange={e=>setCcAddLineForm(p=>({...p,[f.key]:f.up?e.target.value.toUpperCase():e.target.value}))}
-                                placeholder={f.ph} className={`border border-amber-300 rounded-lg px-3 py-2 text-xs font-black outline-none focus:border-amber-500 bg-white ${f.w}`}/>
-                            </div>
-                          ))}
-                          <button onClick={async()=>{
-                            if(!ccAddLineForm.location_id||!ccAddLineForm.sku){showMsg('⛔ Ubicación y SKU requeridos',true);return;}
-                            const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/add-line`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location_id:ccAddLineForm.location_id,sku:ccAddLineForm.sku,counted_qty:parseFloat(ccAddLineForm.qty)||0,note:ccAddLineForm.note,username:currentUser.username})});
-                            if(r.ok){const d=await r.json();setCycleLines(d.lines);setCcAddLineForm(null);showMsg('✅ Hallazgo registrado');}
-                            else showMsg('⛔ Error',true);
-                          }} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase">Guardar</button>
-                          <button onClick={()=>setCcAddLineForm(null)} className="text-slate-500 text-[9px] font-black uppercase px-3 py-2">Cancelar</button>
-                        </div>
-                      )}
-
-                      {cycleLines.length===0 ? (
-                        <div className="p-10 text-center space-y-3">
-                          <ClipboardCheck className="w-10 h-10 mx-auto text-slate-300"/>
-                          <p className="font-black text-slate-500 text-sm">No hay ubicaciones con stock para el alcance <strong>'{activeCycleCount.scope_label||activeCycleCount.zone_code}'</strong>.</p>
-                          <p className="text-[11px] text-slate-400">Verifica que las ubicaciones tengan zone_code asignado en el maestro, o reporta un hallazgo manualmente.</p>
-                          <button onClick={()=>setCcAddLineForm({location_id:'',sku:'',qty:'',note:''})} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 mx-auto"><Plus size={11}/> Reportar hallazgo</button>
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
-                          <table className="w-full text-left">
-                            <thead className="bg-slate-50 sticky top-0">
-                              <tr>
-                                <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Ubicación</th>
-                                <th className="p-3 text-[9px] font-black text-slate-400 uppercase">SKU</th>
-                                {showExpected && <th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Esperado</th>}
-                                <th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Contado</th>
-                                <th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Diferencia</th>
-                                <th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Acción</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {cycleLines.map(line=>(
-                                <tr key={line.id} className={`hover:bg-slate-50 ${line.status==='COUNTED'?(parseFloat(line.difference)!==0?'bg-red-50':'bg-emerald-50/50'):''} ${line.line_type==='ENCONTRADO'?'bg-amber-50/60':''}`}>
-                                  <td className="p-3 font-mono text-[10px] font-bold text-slate-600">{line.location_id}</td>
-                                  <td className="p-3 text-xs font-black text-slate-800 uppercase">
-                                    {line.sku}
-                                    {line.line_type==='ENCONTRADO' && <span className="ml-1 text-[8px] bg-amber-200 text-amber-700 px-1.5 py-0.5 rounded font-black">HALLAZGO</span>}
-                                    {line.note && <span className="ml-1 text-[8px] text-slate-400" title={line.note}>📝</span>}
-                                  </td>
-                                  {showExpected && <td className="p-3 text-center font-black text-slate-700">{line.expected_qty??'—'}</td>}
-                                  <td className="p-3 text-center">
-                                    {line.status==='COUNTED'||isPendApproval
-                                      ? <span className="font-black text-slate-800">{line.counted_qty??'—'}</span>
-                                      : <input type="number" min="0" step="0.01" value={cycleCountedQtys[line.id]||''} onChange={e=>setCycleCountedQtys(p=>({...p,[line.id]:e.target.value}))} className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-center text-xs font-black outline-none focus:border-cyan-500" placeholder="0"/>}
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    {(line.status==='COUNTED'||isPendApproval) && <span className={`font-black text-sm ${parseFloat(line.difference)>0?'text-emerald-600':parseFloat(line.difference)<0?'text-red-600':'text-slate-400'}`}>{parseFloat(line.difference)>0?'+':''}{line.difference}</span>}
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    {line.status!=='COUNTED'&&!isPendApproval && <button onClick={async()=>{
-                                      const qty=cycleCountedQtys[line.id]; if(qty===undefined||qty==='')return;
-                                      const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/count`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lineId:line.id,counted_qty:parseFloat(qty),username:currentUser.username})});
-                                      if(r.ok){const r2=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/lines`);const d=await r2.json();setCycleLines(d.lines||d);const upd=cycleCountData.map(c=>c.id===activeCycleCount.id?{...c,counted_lines:(c.counted_lines||0)+1}:c);setCycleCountData(upd);setActiveCycleCount(p=>({...p,counted_lines:(p.counted_lines||0)+1}));}
-                                    }} className="bg-cyan-100 hover:bg-cyan-200 text-cyan-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase">Registrar</button>}
-                                    {line.status==='COUNTED' && <span className="text-[8px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-black uppercase">✓</span>}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })() : (
-                  <>
-                    {/* Bandeja de aprobación */}
-                    {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && cycleCountData.some(c=>c.status==='PENDIENTE_APROBACION') && (
-                      <div className="space-y-3">
-                        <h3 className="text-xs font-black text-amber-700 uppercase flex items-center gap-2"><AlertTriangle size={14}/> Pendientes de aprobación</h3>
-                        {cycleCountData.filter(c=>c.status==='PENDIENTE_APROBACION').map(cc=>(
-                          <div key={cc.id} className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 flex justify-between items-center flex-wrap gap-3">
-                            <div>
-                              <p className="text-xs font-black text-amber-900 uppercase">{cc.id}</p>
-                              <p className="text-[10px] text-amber-700">{cc.scope_label||cc.zone_code} · {cc.diff_lines} líneas con diferencia · Creado por {cc.created_by}</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <button onClick={async()=>{setActiveCycleCount(cc);const r=await apiFetch(`${host}/api/cycle-count/${cc.id}/lines`);const d=await r.json();setCycleLines(d.lines||d);}} className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase">Ver detalle</button>
-                              <button onClick={async()=>{
-                                if(!(await confirm({message:'¿Aprobar y aplicar ajustes al inventario?',danger:true})))return;
-                                const r=await apiFetch(`${host}/api/cycle-count/${cc.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username})});
-                                if(r.ok){showMsg('✅ Aprobado y stock ajustado');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());fetchData();}
-                                else{const e=await r.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);}
-                              }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase">Aprobar</button>
-                              <button onClick={()=>{setCcRejectModal(cc.id);setCcRejectReason('');}} className="bg-white border border-red-200 text-red-600 px-3 py-2 rounded-xl text-[9px] font-black uppercase hover:bg-red-50">Rechazar</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Lista de conteos */}
-                    {cycleCountData.length > 0 && (()=>{
-                      const STATUS_BADGE={PENDING:'bg-slate-100 text-slate-600',EN_PROCESO:'bg-cyan-100 text-cyan-700',PENDIENTE_APROBACION:'bg-amber-100 text-amber-700',COMPLETED:'bg-emerald-100 text-emerald-700',RECHAZADO:'bg-red-100 text-red-700',REVISION:'bg-orange-100 text-orange-700'};
-                      const openable=['PENDING','EN_PROCESO','PENDIENTE_APROBACION'];
-                      return (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {cycleCountData.map(cc=>(
-                            <div key={cc.id} className={`bg-white p-5 rounded-2xl border shadow-sm flex flex-col ${cc.status==='COMPLETED'?'border-emerald-200':cc.status==='RECHAZADO'?'border-red-200':cc.status==='PENDIENTE_APROBACION'?'border-amber-200':'border-cyan-200'}`}>
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="text-xs font-black text-slate-800 uppercase">{cc.id}</p>
-                                    {cc.blind && <span className="text-[8px] bg-violet-100 text-violet-600 border border-violet-200 px-1.5 rounded font-black uppercase">A ciegas</span>}
-                                    <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${STATUS_BADGE[cc.status]||'bg-slate-100 text-slate-600'}`}>{cc.status}</span>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 mt-0.5">{cc.scope_label||cc.zone_code} · {cc.counted_lines}/{cc.total_lines} líneas{cc.diff_lines>0?` · ${cc.diff_lines} dif.`:''}</p>
-                                </div>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-1.5 mb-3"><div className={`h-1.5 rounded-full ${cc.status==='COMPLETED'?'bg-emerald-500':cc.status==='RECHAZADO'?'bg-red-400':'bg-cyan-500'}`} style={{width:`${cc.total_lines>0?(cc.counted_lines/cc.total_lines)*100:0}%`}}></div></div>
-                              {openable.includes(cc.status) && <button onClick={async()=>{setActiveCycleCount(cc);const r=await apiFetch(`${host}/api/cycle-count/${cc.id}/lines`);const d=await r.json();setCycleLines(d.lines||d);}} className="mt-auto w-full bg-cyan-100 hover:bg-cyan-200 text-cyan-700 py-2 rounded-xl text-[10px] font-black uppercase">{cc.status==='PENDIENTE_APROBACION'?'Ver / Aprobar':'Abrir y Contar'}</button>}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <CycleCountTab
+                  cycleCountData={cycleCountData} setCycleCountData={setCycleCountData}
+                  ccFilter={ccFilter} setCcFilter={setCcFilter}
+                  ccBlind={ccBlind} setCcBlind={setCcBlind}
+                  ccPreview={ccPreview} setCcPreview={setCcPreview}
+                  ccPreviewLoading={ccPreviewLoading} setCcPreviewLoading={setCcPreviewLoading}
+                  ccRejectModal={ccRejectModal} setCcRejectModal={setCcRejectModal}
+                  ccRejectReason={ccRejectReason} setCcRejectReason={setCcRejectReason}
+                  activeCycleCount={activeCycleCount} setActiveCycleCount={setActiveCycleCount}
+                  cycleLines={cycleLines} setCycleLines={setCycleLines}
+                  ccAddLineForm={ccAddLineForm} setCcAddLineForm={setCcAddLineForm}
+                  cycleCountedQtys={cycleCountedQtys} setCycleCountedQtys={setCycleCountedQtys}
+                  clients={clients} safeLocs={safeLocs} currentUser={currentUser}
+                  showMsg={showMsg} apiFetch={apiFetch} host={host} confirm={confirm} fetchData={fetchData}
+                />
+              </Suspense>
             )}
 
             {/* SUPERADMIN PANEL */}
@@ -8294,7 +6688,7 @@ export default function App() {
                 {/* TABS INTERNOS */}
                 <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm w-fit">
                   {[['metrics','📊 Estado del servidor'],['modo-modules','🔀 Modo & Módulos'],['config','⚙️ Configuración'],['demo','🎮 Modo de prueba'],['users-sa','👥 Usuarios del sistema'],['passwords','🔑 Contraseñas'],['inventory-sa','📦 Productos en bodega'],['audit-sa','📋 Historial de movimientos'],['backups','💾 Copias de respaldo'],['feedback','💡 Mejoras']].map(([id,label])=>(
-                    <button key={id} onClick={()=>{ setSuperAdminTab(id); if(id==='demo'){ apiFetch(`${host}/api/demo/feedback`).then(r=>r.ok?r.json():[]).then(d=>setDemoFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='backups'){ apiFetch(`${host}/api/system/backups`).then(r=>r.ok?r.json():[]).then(d=>setBackupsList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='feedback'){ apiFetch(`${host}/api/feedback`).then(r=>r.ok?r.json():[]).then(d=>setFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-colors ${superAdminTab===id?'bg-slate-800 text-white shadow-md':'text-slate-500 hover:bg-slate-100'}`}>{label}</button>
+                    <button key={id} onClick={()=>{ setSuperAdminTab(id); if(id==='demo'){ apiFetch(`${host}/api/demo/feedback`).then(r=>r.ok?r.json():[]).then(d=>setDemoFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='backups'){ apiFetch(`${host}/api/system/backups`).then(r=>r.ok?r.json():[]).then(d=>setBackupsList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='feedback'){ apiFetch(`${host}/api/feedback`).then(r=>r.ok?r.json():[]).then(d=>setFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='modo-modules'){ apiFetch(`${host}/api/system/ngrok/status`).then(r=>r.ok?r.json():null).then(d=>setNgrokStatus(d)).catch(()=>{}); } }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-colors ${superAdminTab===id?'bg-slate-800 text-white shadow-md':'text-slate-500 hover:bg-slate-100'}`}>{label}</button>
                   ))}
                 </div>
 
@@ -8469,6 +6863,34 @@ export default function App() {
                         })}
                       </div>
                     </div>
+
+                    <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8 space-y-4">
+                      <div className="flex items-center justify-between border-b pb-4">
+                        <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Globe className="w-5 h-5 mr-2 text-cyan-500"/> Acceso Remoto (ngrok)</h2>
+                        <button onClick={async()=>{ const res=await apiFetch(`${host}/api/system/ngrok/status`); const d=await res.json(); if(res.ok) setNgrokStatus(d); }} className="bg-cyan-100 hover:bg-cyan-200 text-cyan-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium leading-relaxed">Expone esta bodega en internet mediante un túnel ngrok, para acceso remoto sin estar en la red local. Apágalo si no lo necesitas ahora mismo.</p>
+                      <div className="flex items-center justify-between flex-wrap gap-4">
+                        <div className="flex items-center gap-3">
+                          <span className={`w-3 h-3 rounded-full ${ngrokStatus?.status==='online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
+                          <div>
+                            <p className="text-xs font-black uppercase text-slate-800">{ngrokStatus?.status==='online' ? 'Acceso remoto ACTIVO' : ngrokStatus?.status==='stopped' ? 'Acceso remoto APAGADO' : 'Estado desconocido — presiona Actualizar'}</p>
+                            {ngrokStatus?.public_url && <p className="text-[10px] font-mono text-slate-400">{ngrokStatus.public_url}</p>}
+                          </div>
+                        </div>
+                        <button onClick={async()=>{
+                          const enable = ngrokStatus?.status !== 'online';
+                          const res = await apiFetch(`${host}/api/system/ngrok/toggle`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enable})});
+                          const d = await res.json();
+                          if(res.ok){
+                            showMsg(enable ? '🟢 Acceso remoto ACTIVADO' : '🔴 Acceso remoto DESACTIVADO');
+                            const r2 = await apiFetch(`${host}/api/system/ngrok/status`); const d2 = await r2.json(); if(r2.ok) setNgrokStatus(d2);
+                          } else { showMsg(`⛔ ${d.error}`, true); }
+                        }} className={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all ${ngrokStatus?.status==='online' ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+                          {ngrokStatus?.status==='online' ? '🔴 Apagar acceso remoto' : '🟢 Activar acceso remoto'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -8519,6 +6941,28 @@ export default function App() {
                         <button onClick={() => setEditingConfig({})} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[10px] tracking-widest">Descartar</button>
                       )}
                       <span className="text-[10px] font-bold text-slate-400 ml-auto">{Object.keys(editingConfig).length > 0 ? `${Object.keys(editingConfig).length} cambio(s) sin guardar` : 'Sin cambios'}</span>
+                    </div>
+                    {/* ── ZONA DE PELIGRO: formateo de fábrica ── */}
+                    <div className="mt-8 border-t-2 border-red-100 pt-6">
+                      <h3 className="text-sm font-black text-red-600 uppercase tracking-tighter flex items-center gap-2 mb-2"><ShieldAlert className="w-4 h-4"/> Zona de peligro</h3>
+                      <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-black text-red-700 uppercase">Formatear sistema (dejar de 0)</p>
+                          <p className="text-[10px] text-red-500 mt-1 max-w-md">Borra TODOS los datos (inventario, clientes, SKUs, movimientos, usuarios no-SUPERADMIN…) y deja el sistema como recién instalado. Conserva tu SUPERADMIN, la configuración/licencia y los catálogos base. Se crea un backup de seguridad automático antes. Irreversible salvo por ese backup.</p>
+                        </div>
+                        <button onClick={async () => {
+                          const ok = await confirm({ message: '⚠️ FORMATEAR EL SISTEMA borra TODOS los datos y lo deja como recién instalado. Se conservan tu SUPERADMIN, la configuración/licencia y los catálogos base, y se crea un backup de seguridad antes. ¿Continuar?', danger: true });
+                          if (!ok) return;
+                          const phrase = window.prompt('Acción IRREVERSIBLE. Escribe FORMATEAR (en mayúsculas) para confirmar:');
+                          if (phrase !== 'FORMATEAR') { showMsg('Formateo cancelado', true); return; }
+                          try {
+                            const res = await apiFetch(`${host}/api/system/factory-reset`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: 'FORMATEAR', requester: currentUser.username }) });
+                            const d = await res.json().catch(() => ({}));
+                            if (res.ok) { showMsg(`✅ Sistema formateado. Backup de seguridad: ${d.backup || '(creado)'}`); fetchData(); }
+                            else showMsg(`⛔ ${d.error || 'Error al formatear'}`, true);
+                          } catch (e) { showMsg('⛔ Error de red al formatear', true); }
+                        }} className="bg-red-600 hover:bg-red-700 text-white font-black py-3 px-6 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest flex items-center gap-2 shrink-0 whitespace-nowrap"><Trash2 size={14}/> Formatear sistema</button>
+                      </div>
                     </div>
                   </div>
                   );

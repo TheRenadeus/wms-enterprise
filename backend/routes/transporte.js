@@ -358,11 +358,20 @@ router.get('/transporte/solicitudes', requireAuth, async (req, res) => {
     const where = cond.length ? 'WHERE ' + cond.join(' AND ') : '';
     const rows = await pool.query(
       `SELECT s.*, c.name AS cliente_nombre, ct.nombre AS cliente_transporte_nombre,
-              ds.doc_num AS despacho_doc_num
+              ds.doc_num AS despacho_doc_num,
+              e.id AS envio_id, e.estado AS envio_estado, e.fecha_hora_confirmada,
+              tr.nombre_razon_social AS transportista_nombre,
+              v.matricula AS vehiculo_matricula, v.tipo_vehiculo AS vehiculo_tipo,
+              ch.nombre AS chofer_nombre
        FROM solicitud_transporte s
        LEFT JOIN clients c ON s.client_id = c.id
        LEFT JOIN clientes_transporte ct ON s.cliente_transporte_id = ct.id
        LEFT JOIN dispatch_schedules ds ON s.despacho_id = ds.id
+       LEFT JOIN envio_paradas ep ON ep.solicitud_transporte_id = s.id
+       LEFT JOIN envios e ON e.id = ep.envio_id
+       LEFT JOIN transportistas tr ON tr.id = e.transportista_id
+       LEFT JOIN vehiculos v ON v.id = e.vehiculo_id
+       LEFT JOIN choferes ch ON ch.id = e.chofer_id
        ${where} ORDER BY s.created_at DESC LIMIT 500`, params);
     res.json(rows.rows);
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
@@ -865,8 +874,25 @@ router.get('/transporte/despachos', requireAuth, async (req, res) => {
     const cond = ['requiere_transporte = TRUE'], params = []; let i = 1;
     if (status) { cond.push(`status = $${i++}`); params.push(status); }
     const rows = await pool.query(
-      `SELECT ds.*, c.name AS cliente_nombre
-       FROM dispatch_schedules ds LEFT JOIN clients c ON ds.client_id = c.id
+      `SELECT ds.*, c.name AS cliente_nombre,
+              a.envio_id, a.envio_estado, a.fecha_hora_confirmada,
+              a.transportista_nombre, a.vehiculo_matricula, a.vehiculo_tipo, a.chofer_nombre
+       FROM dispatch_schedules ds
+       LEFT JOIN clients c ON ds.client_id = c.id
+       LEFT JOIN LATERAL (
+         SELECT e.id AS envio_id, e.estado AS envio_estado, e.fecha_hora_confirmada,
+                tr.nombre_razon_social AS transportista_nombre,
+                v.matricula AS vehiculo_matricula, v.tipo_vehiculo AS vehiculo_tipo,
+                ch.nombre AS chofer_nombre
+         FROM solicitud_transporte s
+         JOIN envio_paradas ep ON ep.solicitud_transporte_id = s.id
+         JOIN envios e ON e.id = ep.envio_id
+         LEFT JOIN transportistas tr ON tr.id = e.transportista_id
+         LEFT JOIN vehiculos v ON v.id = e.vehiculo_id
+         LEFT JOIN choferes ch ON ch.id = e.chofer_id
+         WHERE s.despacho_id = ds.id
+         ORDER BY e.created_at DESC LIMIT 1
+       ) a ON TRUE
        WHERE ${cond.join(' AND ')} ORDER BY ds.scheduled_date DESC, ds.created_at DESC LIMIT 300`, params);
     res.json(rows.rows);
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }

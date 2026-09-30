@@ -135,9 +135,10 @@ export default function SolicitarTransporteTab({ showMsg = () => {} }) {
             <thead className="bg-slate-50 text-[9px] text-slate-400 uppercase"><tr>
               <th className="text-left px-4 py-2">Despacho</th><th className="text-left px-3 py-2">Cliente</th>
               <th className="text-right px-3 py-2">Peso / Vol.</th><th className="text-left px-3 py-2">Destino</th><th className="text-left px-3 py-2">Estado</th>
+              <th className="text-left px-3 py-2">Asignación</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {recientes.length === 0 && <tr><td colSpan={5} className="text-center text-slate-400 py-6 font-bold">Sin solicitudes desde despacho.</td></tr>}
+              {recientes.length === 0 && <tr><td colSpan={6} className="text-center text-slate-400 py-6 font-bold">Sin solicitudes desde despacho.</td></tr>}
               {recientes.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2 font-mono text-slate-600">{s.despacho_doc_num || '—'}</td>
@@ -145,6 +146,15 @@ export default function SolicitarTransporteTab({ showMsg = () => {} }) {
                   <td className="px-3 py-2 text-right font-mono">{num(s.peso_total).toLocaleString('es-CL')}kg / <span className={s.dims_incompletas ? 'text-rose-600 font-black' : ''}>{num(s.volumen_total).toLocaleString('es-CL')}m³{s.dims_incompletas ? ' ⚠' : ''}</span></td>
                   <td className="px-3 py-2 text-slate-600">{s.destino || '—'}</td>
                   <td className="px-3 py-2"><span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${s.estado === 'pendiente' ? 'bg-amber-100 text-amber-700' : s.estado === 'asignada' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>{s.estado}</span></td>
+                  <td className="px-3 py-2 text-slate-600">
+                    {s.envio_id ? (
+                      <div className="leading-tight">
+                        <div className="font-bold text-slate-700">{s.transportista_nombre || '—'}</div>
+                        <div className="text-[10px] text-slate-500">{[s.vehiculo_matricula, s.vehiculo_tipo].filter(Boolean).join(' · ') || '—'}{s.chofer_nombre ? ` · ${s.chofer_nombre}` : ''}</div>
+                        {s.fecha_hora_confirmada && <div className="text-[9px] text-slate-400">{new Date(s.fecha_hora_confirmada).toLocaleString('es-CL')}</div>}
+                      </div>
+                    ) : <span className="text-[10px] text-slate-300">sin asignar</span>}
+                  </td>
                 </tr>
               ))}
             </tbody>

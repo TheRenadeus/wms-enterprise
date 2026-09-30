@@ -1,6 +1,6 @@
 // Constantes extraídas de App.js (split)
 
-export const initialSkuForm = { sku: '', barcode: '', desc: '', category: 'General', uom: 'UN', weight: '', length: '', width: '', height: '', abc_class: '-', traceability: 'NONE', client_id: '', manufacturer_id: '', manufacturer_code: '', manufacturer_sku: '', brand: '', allow_substitutes: false, substitute_scope: 'any', substitute_threshold: '' };
+export const initialSkuForm = { sku: '', barcode: '', desc: '', category: 'General', uom: 'UN', weight: '', length: '', width: '', height: '', abc_class: '-', requires_lot: false, requires_serial: false, client_id: '', manufacturer_id: '', manufacturer_code: '', manufacturer_sku: '', brand: '', allow_substitutes: false, substitute_scope: 'any', substitute_threshold: '' };
 
 // Módulos que el modo PROPIO oculta automáticamente
 export const MODULES_3PL_ONLY = ['clients', '3pl-billing', 'billing'];
@@ -202,6 +202,11 @@ export const SANDBOX_MISSIONS = {
     { id: 'cl-1', label: 'Ver tu Dashboard', tab: 'dashboard', desc: 'Métricas de tu inventario' },
     { id: 'cl-2', label: 'Consultar tu stock', tab: 'inventory', desc: 'Ve qué tienes almacenado' },
     { id: 'cl-3', label: 'Revisar documentos', tab: 'doc-history', desc: 'Historial de recepciones y despachos' },
+  ],
+  COORDINADOR_TRANSPORTE: [
+    { id: 'ct-1', label: 'Ver el panel de transporte', tab: 'transporte-coord', desc: 'Flota, solicitudes y envíos en un solo lugar' },
+    { id: 'ct-2', label: 'Gestionar solicitudes', tab: 'transporte-coord', desc: 'Revisa y asigna solicitudes de transporte' },
+    { id: 'ct-3', label: 'Planificar un envío', tab: 'transporte-coord', desc: 'Crea un envío con sus paradas y tramos' },
   ],
 };
 

@@ -33,6 +33,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en el .env de la raíz}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-*}
       LOAD_TEST: "${LOAD_TEST:-0}"
+      # SEC-10: cuenta SUPERADMIN fija (ver ensureSuperadmin en server.js). Opcional:
+      # si no se define, simplemente no se re-siembra tras un formateo de la BD.
+      SUPERADMIN_USER: ${SUPERADMIN_USER:-}
+      SUPERADMIN_HASH: ${SUPERADMIN_HASH:-}
+      SUPERADMIN_FULLNAME: ${SUPERADMIN_FULLNAME:-}
   wms-frontend:
     build: ./frontend
     container_name: wms-frontend

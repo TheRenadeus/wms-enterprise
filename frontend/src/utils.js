@@ -113,6 +113,9 @@ export const apiFetch = (url, options = {}) => {
   const token = localStorage.getItem('wms_token');
   const headers = { ...(options.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Evita la página de advertencia de ngrok (ERR_NGROK_6024) en accesos externos:
+  // sin este header, las llamadas fetch/XHR reciben el HTML del interstitial en vez de JSON.
+  headers['ngrok-skip-browser-warning'] = 'true';
   // Timeout de 30 s para evitar requests colgados
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
