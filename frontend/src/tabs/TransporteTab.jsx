@@ -260,7 +260,12 @@ function DashboardView({ showMsg }) {
     finally { setLoading(false); }
   }, [f, showMsg]);
 
-  useEffect(() => { load(); }, [load]);
+  // Debounced: `load` cambia con cada tecla en el buscador (f.buscar), y sin
+  // esto se dispara un fetch al costoso /transporte/dashboard por caracter.
+  useEffect(() => {
+    const t = setTimeout(() => load(), 400);
+    return () => clearTimeout(t);
+  }, [load]);
   useEffect(() => { api('/transporte/transportistas').then(r => r.json()).then(d => setTransportistas(Array.isArray(d) ? d : [])).catch(() => {}); }, []);
 
   const k = data?.kpis || {};
