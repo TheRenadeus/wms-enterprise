@@ -338,7 +338,7 @@ router.post('/invoices/generate', requireJefe, checkClientAccess('write', { requ
     );
     const invNum = `F-${client_id}-${String(seq.rows[0].last_num).padStart(5, '0')}`;
     await client.query(`INSERT INTO invoices (id,invoice_num,client_id,period_start,period_end,tax_rate,created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [id, invNum, client_id, period_start, period_end, parseFloat(tax_rate)||19, req.user.username]);
+      [id, invNum, client_id, period_start, period_end, (tax_rate !== undefined && tax_rate !== null && tax_rate !== '') ? parseFloat(tax_rate) : 19, req.user.username]);
 
     const lines = [];
     // Línea: recepciones del período
@@ -362,7 +362,8 @@ router.post('/invoices/generate', requireJefe, checkClientAccess('write', { requ
       await client.query(`INSERT INTO invoice_lines (invoice_id,concept,unit,qty,unit_price,total) VALUES ($1,$2,$3,$4,$5,$6)`,
         [id, l.concept, l.unit||'UN', parseFloat(l.qty), parseFloat(l.unit_price), total]);
     }
-    const taxAmt = subtotal * (parseFloat(tax_rate)||19) / 100;
+    const taxRateVal = (tax_rate !== undefined && tax_rate !== null && tax_rate !== '') ? parseFloat(tax_rate) : 19;
+    const taxAmt = subtotal * taxRateVal / 100;
     await client.query(`UPDATE invoices SET subtotal=$1, tax_amount=$2, total=$3 WHERE id=$4`,
       [subtotal, taxAmt, subtotal+taxAmt, id]);
     await client.query('COMMIT');

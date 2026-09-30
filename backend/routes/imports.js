@@ -11,6 +11,15 @@ const {
 
 const router = express.Router();
 
+// checkClientAccess/checkBatchSkuClientAccess validan sobre req.body.items[], pero
+// las rutas de import masivo reciben su payload en `rows` (o `data` base64). Sin
+// este puente, esos middlewares nunca ven una sola fila y no bloquean nada.
+const attachRowsAsItems = (req, res, next) => {
+  req._importRows = getImportRows(req.body);
+  req.body.items = req._importRows || [];
+  next();
+};
+
 router.get('/templates/:type', (req, res) => {
   const tpl = TEMPLATES[req.params.type];
   if (!tpl) return res.status(404).json({ error: 'Tipo no válido' });
@@ -259,9 +268,9 @@ router.post('/import/inventory', requireStockWrite, async (req, res) => {
   } finally { client.release(); }
 });
 
-router.post('/import/receive', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
+router.post('/import/receive', stockWriteLimiter, requireStockWrite, attachRowsAsItems, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   const { username, client_id, doc_num } = req.body;
-  const rows = getImportRows(req.body);
+  const rows = req._importRows;
   if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
   if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
   const dbClient = await pool.connect();
@@ -295,9 +304,9 @@ router.post('/import/receive', stockWriteLimiter, requireStockWrite, checkClient
   } finally { dbClient.release(); }
 });
 
-router.post('/import/dispatch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
+router.post('/import/dispatch', stockWriteLimiter, requireStockWrite, attachRowsAsItems, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   const { username, doc_num } = req.body;
-  const rows = getImportRows(req.body);
+  const rows = req._importRows;
   if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
   if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
   const results = { success: 0, errors: [] };

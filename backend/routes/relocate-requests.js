@@ -2,10 +2,39 @@
 // aprueba (ejecuta el movimiento real) o rechaza. Extraído de server.js (COD-02).
 const express = require('express');
 const { pool, mapDbError } = require('../db');
-const { requirePickerOrAbove, requireStockWrite, checkLpnClientAccess } = require('../middleware');
+const { requirePickerOrAbove, requireStockWrite, checkLpnClientAccess, getClientesPermitidos, permIncludes } = require('../middleware');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
+
+// approve/reject reciben el id de la SOLICITUD (no el del LPN), así que
+// checkLpnClientAccess no aplica directo: resolvemos el client_id del LPN
+// asociado antes de dejar aprobar/rechazar una reubicación de otro cliente.
+const checkRelocateRequestClientAccess = async (req, res, next) => {
+  if (!req.user) return res.status(401).json({ error: 'No autenticado' });
+  if (['ADMIN', 'SUPERADMIN'].includes(req.user.role) || req.user.is_demo) return next();
+  try {
+    const r = await pool.query(
+      `SELECT i.client_id FROM relocation_requests rr
+       LEFT JOIN inventory_lpns i ON i.id = rr.lpn_id
+       WHERE rr.id = $1`,
+      [req.params.id]
+    );
+    if (!r.rows.length) return next(); // solicitud inexistente: el handler responde 404
+    const cid = r.rows[0].client_id || 'GENERAL';
+    const perm = req.permitidosClientes || await getClientesPermitidos(req.user.username);
+    req.permitidosClientes = perm;
+    if (perm.scope === 'all') return next();
+    if (perm.scope === 'none') return res.status(403).json({ error: 'Sin clientes asignados. Contactar al administrador.' });
+    if (cid !== 'GENERAL' && !permIncludes(perm, cid)) {
+      return res.status(403).json({ error: `No tienes permiso para operar con el cliente ${cid}.`, tus_clientes: perm.clients });
+    }
+    next();
+  } catch (e) {
+    console.error('[checkRelocateRequestClientAccess]', e.message);
+    return res.status(500).json({ error: 'Error al verificar permisos de cliente.' });
+  }
+};
 
 // ── Picker solicita una reubicación (no mueve stock) ─────────────────────
 router.post('/relocate-requests', requirePickerOrAbove, checkLpnClientAccess('lpn_id'), async (req, res) => {
@@ -15,7 +44,7 @@ router.post('/relocate-requests', requirePickerOrAbove, checkLpnClientAccess('lp
     const lpn = await pool.query('SELECT id, sku, qty, location_id FROM inventory_lpns WHERE id=$1 AND qty>0', [lpn_id]);
     if (!lpn.rows.length) return res.status(404).json({ error: 'LPN no encontrado o sin stock.' });
     const { sku, qty: maxQty, location_id } = lpn.rows[0];
-    const moveQty = qty ? parseFloat(qty) : parseFloat(maxQty);
+    const moveQty = (qty !== undefined && qty !== null && qty !== '') ? parseFloat(qty) : parseFloat(maxQty);
     if (isNaN(moveQty) || moveQty <= 0 || moveQty > parseFloat(maxQty))
       return res.status(400).json({ error: `Cantidad inválida. Disponible: ${maxQty}` });
     if (location_to === (location_id || 'PISO-RECEPCION'))
@@ -59,7 +88,7 @@ router.get('/relocate-requests', requirePickerOrAbove, async (req, res) => {
 
 // ── Supervisor aprueba → ejecuta la reubicación real ─────────────────────
 // PASO 5.5: la reubicación es la excepción — aprueba EJECUTIVO_CUENTA+ (no requiere JEFE).
-router.post('/relocate-requests/:id/approve', requireStockWrite, async (req, res) => {
+router.post('/relocate-requests/:id/approve', requireStockWrite, checkRelocateRequestClientAccess, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -129,7 +158,7 @@ router.post('/relocate-requests/:id/approve', requireStockWrite, async (req, res
 });
 
 // ── Supervisor rechaza ────────────────────────────────────────────────────
-router.post('/relocate-requests/:id/reject', requireStockWrite, async (req, res) => {
+router.post('/relocate-requests/:id/reject', requireStockWrite, checkRelocateRequestClientAccess, async (req, res) => {
   const { reason } = req.body;
   if (!reason) return res.status(400).json({ error: 'reason es requerida para rechazar.' });
   try {

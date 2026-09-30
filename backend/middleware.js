@@ -380,6 +380,7 @@ module.exports = {
   apiDemoBlock,
   apiClienteReadOnly,
   getClientesPermitidos,
+  permIncludes,
   checkClientAccess,
   checkBatchSkuClientAccess,
   checkLpnClientAccess,
