@@ -506,24 +506,32 @@ router.get('/transporte/dashboard', requireAuth, async (req, res) => {
       params.push(`%${buscar}%`); i++;
     }
     const where = 'WHERE ' + cond.join(' AND ');
-    const solicitudes = (await pool.query(
-      `SELECT s.*, c.name AS cliente_nombre, ct.nombre AS cliente_transporte_nombre, ds.doc_num AS despacho_doc_num
-       FROM solicitud_transporte s
-       LEFT JOIN clients c ON s.client_id = c.id
-       LEFT JOIN clientes_transporte ct ON s.cliente_transporte_id = ct.id
-       LEFT JOIN dispatch_schedules ds ON s.despacho_id = ds.id
-       ${where} ORDER BY s.created_at DESC LIMIT 300`, params)).rows;
-
     // ── Flota disponible ──────────────────────────────────────────────────────
     const flotaWhere = transportista ? 'AND transportista_id = $1' : '';
     const fp = transportista ? [transportista] : [];
-    const vehiculos = (await pool.query(
-      `SELECT v.*, t.nombre_razon_social AS transportista_nombre, t.tipo AS transportista_tipo
-       FROM vehiculos v LEFT JOIN transportistas t ON v.transportista_id = t.id
-       WHERE v.activo = TRUE ${transportista ? 'AND v.transportista_id = $1' : ''}
-       ORDER BY v.matricula ASC`, fp)).rows;
-    const choferes = (await pool.query(`SELECT * FROM choferes WHERE activo = TRUE ${flotaWhere} ORDER BY nombre`, fp)).rows;
-    const pionetas = (await pool.query(`SELECT * FROM pionetas WHERE activo = TRUE ${flotaWhere} ORDER BY nombre`, fp)).rows;
+    // Independientes entre sí: se resuelven en paralelo en vez de 5 round-trips en serie.
+    const [solicitudesR, vehiculosR, choferesR, pionetasR, pendientesCountR] = await Promise.all([
+      pool.query(
+        `SELECT s.*, c.name AS cliente_nombre, ct.nombre AS cliente_transporte_nombre, ds.doc_num AS despacho_doc_num
+         FROM solicitud_transporte s
+         LEFT JOIN clients c ON s.client_id = c.id
+         LEFT JOIN clientes_transporte ct ON s.cliente_transporte_id = ct.id
+         LEFT JOIN dispatch_schedules ds ON s.despacho_id = ds.id
+         ${where} ORDER BY s.created_at DESC LIMIT 300`, params),
+      pool.query(
+        `SELECT v.*, t.nombre_razon_social AS transportista_nombre, t.tipo AS transportista_tipo
+         FROM vehiculos v LEFT JOIN transportistas t ON v.transportista_id = t.id
+         WHERE v.activo = TRUE ${transportista ? 'AND v.transportista_id = $1' : ''}
+         ORDER BY v.matricula ASC`, fp),
+      pool.query(`SELECT * FROM choferes WHERE activo = TRUE ${flotaWhere} ORDER BY nombre`, fp),
+      pool.query(`SELECT * FROM pionetas WHERE activo = TRUE ${flotaWhere} ORDER BY nombre`, fp),
+      pool.query(`SELECT COUNT(*)::int AS n FROM solicitud_transporte WHERE estado='pendiente'`),
+    ]);
+    const solicitudes = solicitudesR.rows;
+    const vehiculos = vehiculosR.rows;
+    const choferes = choferesR.rows;
+    const pionetas = pionetasR.rows;
+    const pendientesCount = pendientesCountR.rows[0].n;
 
     // ── Envíos (Fase 6): defensivo mientras no exista la tabla ────────────────
     let envios_hoy = [], enRuta = 0, esperanPod = 0;
@@ -548,7 +556,6 @@ router.get('/transporte/dashboard', requireAuth, async (req, res) => {
     }
 
     // ── KPIs + alertas ────────────────────────────────────────────────────────
-    const pendientesCount = (await pool.query(`SELECT COUNT(*)::int AS n FROM solicitud_transporte WHERE estado='pendiente'`)).rows[0].n;
     const alertas = {
       volumen_incompleto: solicitudes.filter(s => s.dims_incompletas).map(s => ({ id: s.id, despacho_doc_num: s.despacho_doc_num, cliente: s.cliente_nombre || s.cliente_transporte_nombre })),
       en_transito_esperando_pod: esperanPod,

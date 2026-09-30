@@ -1,9 +1,9 @@
 // Transporte: maestro de transportistas (carriers) + envíos (shipments).
 // Extraído de server.js (COD-02).
 const express = require('express');
-const { v4: uuidv4 } = require('uuid');
 const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireAuth, requireStockWrite, checkClientAccess } = require('../middleware');
+const { genLpnId } = require('../helpers');
 
 const router = express.Router();
 
@@ -14,7 +14,7 @@ router.get('/carriers', requireAuth, async (req, res) => {
 router.post('/carriers', requireAuth, async (req, res) => {
   const { id, name, rut, contact, phone, email } = req.body;
   if (!name) return res.status(400).json({ error: 'Nombre requerido' });
-  const carrierId = id || `CAR-${uuidv4().slice(0,8).toUpperCase()}`;
+  const carrierId = id || genLpnId('CAR');
   const rutNorm = rut && String(rut).trim() !== '' ? String(rut).trim() : null;
   try {
     if (rutNorm) {
@@ -58,7 +58,7 @@ router.get('/shipments', requireAuth, async (req, res) => {
 router.post('/shipments', requireAuth, checkClientAccess('write'), async (req, res) => {
   // Acepta tanto el formato legacy (dispatch_doc_id) como el simplificado del frontend (doc_num, client_id, destination)
   const { dispatch_doc_id, doc_num, carrier_id, client_id, driver_name, driver_rut, plate, scheduled_date, destination_address, destination, notes, created_by, username } = req.body;
-  const id = `SHP-${uuidv4().slice(0,8).toUpperCase()}`;
+  const id = genLpnId('SHP');
   try {
     await pool.query(`INSERT INTO shipments(id,dispatch_doc_id,doc_num,client_id,carrier_id,driver_name,driver_rut,plate,scheduled_date,destination_address,destination,notes,created_by)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
