@@ -154,6 +154,10 @@ const apiDemoBlock = (req, res, next) => {
   if (req.path === '/demo/feedback') return next();
   if (req.path === '/demo/reset') return next();
   if (req.path === '/demo/tutorial-progress') return next();
+  // Control del propio sandbox (emiten un JWT nuevo, no mutan datos): deben llegar
+  // al handler real en routes/demo.js, no a la respuesta de "acción simulada".
+  if (req.path === '/demo/switch-role') return next();
+  if (req.path === '/demo/switch-scenario') return next();
   // Intentar resolver un handler específico que mute el overlay
   const fullPath = '/api' + req.path;
   const handler = findWriteHandler(req.method, fullPath);

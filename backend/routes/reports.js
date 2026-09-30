@@ -4,7 +4,7 @@
 // calcBillingCharges (mover cuando se extraiga el dominio billing).
 
 const express = require('express');
-const { pool, mapDbError } = require('../db');
+const { pool, mapDbError, sendDbError } = require('../db');
 const { requireAuth, requireJefeOrAbove } = require('../middleware');
 
 const router = express.Router();
@@ -544,6 +544,15 @@ router.get('/reports/kardex', requireAuth, async (req, res) => {
       movimientos,
     });
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+});
+
+// Contadores rápidos para el dashboard (COD-02)
+router.get('/stats', requireAuth, async (req, res) => {
+  try {
+    const stock = await pool.query('SELECT COUNT(id) as total_lpns, COALESCE(SUM(qty), 0) as total_units FROM inventory_lpns WHERE qty > 0');
+    const skus = await pool.query('SELECT COUNT(*) as total_skus FROM master_skus');
+    res.json({ lpns: parseInt(stock.rows[0].total_lpns), units: parseFloat(stock.rows[0].total_units), skus: parseInt(skus.rows[0].total_skus) });
+  } catch (err) { sendDbError(res, err); }
 });
 
 module.exports = router;

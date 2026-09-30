@@ -16,6 +16,7 @@ import {
   Box, Search, ClipboardList, LayoutDashboard, Boxes, X, ArrowRightLeft, Route, PackageCheck, Container,
 } from 'lucide-react';
 import { apiFetch, isValidRut, formatRut } from '../utils';
+import { useConfirm } from '../useConfirm';
 
 const api = (path, opts) => apiFetch(`/api${path}`, opts);
 const send = (path, method, body) =>
@@ -858,6 +859,7 @@ function ReasignarModal({ envio, showMsg, onClose, onDone }) {
 
 // ── Detalle interactivo del envío: estados, consolidación, ruta y POD (Fase 6) ──
 function EnvioDetalle({ id, showMsg, canWrite, onClose, onChanged }) {
+  const { confirm } = useConfirm();
   const [d, setD] = useState(null);
   const [pendientes, setPendientes] = useState([]);
   const [cons, setCons] = useState({ solicitud_transporte_id: '', destino: '', carga_desc: '' });
@@ -882,7 +884,7 @@ function EnvioDetalle({ id, showMsg, canWrite, onClose, onChanged }) {
     const res = await send(`/transporte/envios/${id}/paradas`, 'POST', { ...cons, confirmar });
     const j = await res.json();
     if (!res.ok) return showMsg(j.error || 'Error', true);
-    if (j.requiere_confirmacion) { if (window.confirm('Aviso de capacidad:\n' + j.avisos.join('\n') + '\n\n¿Consolidar de todos modos?')) return consolidar(true); return; }
+    if (j.requiere_confirmacion) { if (await confirm({ title: 'Aviso de capacidad', message: j.avisos.join('\n') + '\n\n¿Consolidar de todos modos?' })) return consolidar(true); return; }
     showMsg('Parada agregada'); setCons({ solicitud_transporte_id: '', destino: '', carga_desc: '' }); refresh();
   };
   const mover = async (idx, dir) => {
@@ -910,7 +912,7 @@ function EnvioDetalle({ id, showMsg, canWrite, onClose, onChanged }) {
         {estadoEnvioBadge(d.estado)}
         {canWrite && d.estado === 'asignado' && <button onClick={() => setEstado('en_ruta')} className="bg-violet-600 text-white px-3 py-1 rounded text-[10px] font-black uppercase">Marcar en ruta</button>}
         {canWrite && d.estado === 'en_ruta' && <button onClick={() => setEstado('entregado')} className="bg-emerald-600 text-white px-3 py-1 rounded text-[10px] font-black uppercase">Marcar entregado</button>}
-        {canWrite && activo && <button onClick={() => { if (window.confirm('¿Anular el envío?')) setEstado('anulado'); }} className="bg-rose-100 text-rose-700 px-3 py-1 rounded text-[10px] font-black uppercase">Anular</button>}
+        {canWrite && activo && <button onClick={async () => { if (await confirm({ title: 'Anular envío', message: '¿Anular el envío?', danger: true })) setEstado('anulado'); }} className="bg-rose-100 text-rose-700 px-3 py-1 rounded text-[10px] font-black uppercase">Anular</button>}
       </div>
       <div className="text-[11px] text-slate-600"><b>Transportista:</b> {d.transportista_nombre} · <b>Vehículo:</b> {d.matricula} · <b>Chofer:</b> {d.chofer_nombre}<br /><b>Pionetas:</b> {d.pionetas.map(p => p.nombre).join(', ') || '—'}</div>
 

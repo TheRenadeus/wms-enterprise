@@ -12,6 +12,17 @@ const router = express.Router();
 
 const VALID_LOC_TYPES = ['RACK', 'SHELF', 'FLOOR', 'DOCK', 'PALLET'];
 
+// Formato canónico del código de ubicación: 4 segmentos bodega-pasillo-columna-fila.
+// La zona NO va embebida en el código (vive en zone_code). La columna lleva 2 dígitos.
+// Acepta: '1-a-01-1', '3-A-01-1'.  Rechaza: 'B1-RES-A-01-01' (zona embebida, 5 seg),
+// '1-a-1-1' (columna sin padding), 'RACK-A-01' (legacy 3 seg).
+// PISO-RECEPCION y otras ubicaciones de staging se validan aparte (no son racks).
+const CANONICAL_LOC = /^[A-Za-z0-9]+-[A-Za-z]+-\d{2}-\d+$/;
+const isCanonicalLoc = (id) => typeof id === 'string' && CANONICAL_LOC.test(id);
+// Tipos de ubicación de staging/área: usan código libre (no rack direccionable),
+// por lo que se eximen del formato canónico de 4 segmentos.
+const STAGING_LOC_TYPES = ['FLOOR', 'DOCK'];
+
 // Calcula x/y/z automáticamente a partir de aisle/row_num/level.
 // Patrón espaciado: 2.5m entre pasillos, 1.5m entre columnas, 2.2m entre niveles.
 // Acepta pasillo en minúscula, mayúscula o número.
@@ -54,6 +65,13 @@ router.post('/locations', requireJefe, async (req, res) => {
 
   const locType = (b.loc_type && VALID_LOC_TYPES.includes(String(b.loc_type).toUpperCase()))
     ? String(b.loc_type).toUpperCase() : 'RACK';
+
+  // Rechazar formatos no canónicos (zona embebida, sin padding, legacy) en ubicaciones
+  // direccionables (rack/estante/pallet). Las de staging/área (FLOOR/DOCK, ej. PISO-RECEPCION)
+  // usan código libre y se eximen de la regla de 4 segmentos.
+  if (!STAGING_LOC_TYPES.includes(locType) && !isCanonicalLoc(locId)) {
+    return res.status(400).json({ error: `Formato de ubicación inválido: '${locId}'. Debe ser bodega-pasillo-columna-fila (ej: 1-a-01-1). La zona va en zone_code, no en el código.` });
+  }
 
   // Coordenadas 3D — calcular siempre desde aisle/row/level si no vienen explícitas
   const auto = autoCoords(aisle, rowNum, lvl);
@@ -286,6 +304,23 @@ router.post('/locations/bulk', requireJefe, async (req, res) => {
   const { locations, overwrite } = req.body;
   if (!Array.isArray(locations) || locations.length === 0) return res.status(400).json({ error: 'Enviar array locations.' });
   if (locations.length > 5000) return res.status(400).json({ error: 'Máximo 5.000 ubicaciones por operación.' });
+
+  // Validación previa: todos los códigos deben ser canónicos. Si alguno falla, se rechaza
+  // el lote completo (no se inserta nada) para no reintroducir formatos duplicados.
+  const invalid = [];
+  for (const loc of locations) {
+    const id = loc.location_id
+      ? String(loc.location_id).trim()
+      : (loc.warehouse && loc.aisle != null && loc.row_num != null && loc.level != null
+          ? buildLocId(loc.warehouse, loc.aisle, loc.row_num, loc.level)
+          : null);
+    const lt = (loc.loc_type || 'RACK').toUpperCase();
+    if (!id || (!STAGING_LOC_TYPES.includes(lt) && !isCanonicalLoc(id))) invalid.push(id || '(incompleto)');
+  }
+  if (invalid.length) {
+    return res.status(400).json({ error: `Se rechazó el lote: ${invalid.length} código(s) con formato no canónico (ej: ${invalid.slice(0, 3).join(', ')}). Debe ser bodega-pasillo-columna-fila como 1-a-01-1.` });
+  }
+
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');

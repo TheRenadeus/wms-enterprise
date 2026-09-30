@@ -342,6 +342,42 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
     return codes.map(code => zones?.find(z => z.id === code) || { id: code, name: code });
   }, [locations, zones, activeWH]);
 
+  // Bodegas a mostrar en el selector: unión de las configuradas (prop/localStorage)
+  // con las que existen realmente en la BD (parts[0] del código de 4 seg). Así una
+  // bodega creada por seed/migración (ej. '1') aparece aunque no esté en la lista local.
+  const derivedWarehouses = useMemo(() => {
+    const fromLocs = [...new Set(locations
+      .map(l => (l.location_id || '').split('-'))
+      .filter(p => p.length === 4)
+      .map(p => p[0])
+      .filter(Boolean))];
+    const byId = new Map((warehouses || []).map(w => [w.id, w]));
+    fromLocs.forEach(id => { if (!byId.has(id)) byId.set(id, { id, name: `Bodega ${id}` }); });
+    return [...byId.values()];
+  }, [locations, warehouses]);
+
+  // Si la bodega activa no tiene ubicaciones reales (ej. default 'B1' tras consolidar
+  // todo en bodega '1'), saltar a la primera bodega que sí tenga ubicaciones.
+  useEffect(() => {
+    const withLocs = new Set(locations
+      .map(l => (l.location_id || '').split('-'))
+      .filter(p => p.length === 4)
+      .map(p => p[0]));
+    if (withLocs.size && !withLocs.has(activeWH)) {
+      setActiveWH([...withLocs][0]);
+    }
+  }, [locations, activeWH]);
+
+  // Si la zona activa no existe entre las zonas reales, seleccionar la primera real.
+  // Necesario porque activeZ se inicializa antes de que carguen las locations (async):
+  // arranca en el default 'RES' mientras la BD usa otra zona (p.ej. 'ALM'), y sin esto
+  // el grid filtra por una zona inexistente y no muestra ninguna casilla.
+  useEffect(() => {
+    if (derivedZones.length && !derivedZones.some(z => z.id === activeZ)) {
+      setActiveZ(derivedZones[0].id);
+    }
+  }, [derivedZones, activeZ]);
+
   const [editMode, setEditMode] = useState(false);
   const [blockedLocs, setBlockedLocs] = useState(new Set());
   const [editSelection, setEditSelection] = useState(new Set());
@@ -585,7 +621,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                if (firstZoneForWH) setActiveZ(firstZoneForWH);
                setSelectedLoc(null);
              }} className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer uppercase max-w-[120px]">
-               {warehouses.map(w => <option key={w.id} value={w.id}>{w.id} - {w.name}</option>)}
+               {derivedWarehouses.map(w => <option key={w.id} value={w.id}>{w.id} - {w.name}</option>)}
              </select>
            </div>
            <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
@@ -1269,7 +1305,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
     setLoading(roleId);
     try {
       const res = await fetch(`${host}/api/demo/login`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({ scenario: selectedScenario, role: roleId }),
       });
       if (res.ok) {
@@ -1296,7 +1332,12 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
     blue:   { border: 'border-blue-300 hover:border-blue-400', bg: 'bg-blue-50', badge: 'bg-blue-100 text-blue-700', glow: 'hover:shadow-blue-200/60' },
     violet: { border: 'border-violet-300 hover:border-violet-400', bg: 'bg-violet-50', badge: 'bg-violet-100 text-violet-700', glow: 'hover:shadow-violet-200/60' },
     cyan:   { border: 'border-cyan-300 hover:border-cyan-400', bg: 'bg-cyan-50', badge: 'bg-cyan-100 text-cyan-700', glow: 'hover:shadow-cyan-200/60' },
+    amber:  { border: 'border-amber-300 hover:border-amber-400', bg: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700', glow: 'hover:shadow-amber-200/60' },
   };
+  // Fallback para roles/escenarios cuyo color no esté mapeado (evita que un color
+  // nuevo en constants.js tumbe el panel del sandbox).
+  const FALLBACK_ROLE_COLOR = roleColors.blue;
+  const FALLBACK_SCENARIO_COLOR = scenarioColors.blue;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
@@ -1317,7 +1358,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
             </p>
             <div className="grid gap-4 md:grid-cols-3">
               {scenarios.map(sc => {
-                const c = scenarioColors[sc.color];
+                const c = scenarioColors[sc.color] || FALLBACK_SCENARIO_COLOR;
                 return (
                   <button key={sc.id} onClick={() => { setSelectedScenario(sc.id); setStep('role'); }}
                     className={`group relative bg-gradient-to-br ${c.card} rounded-3xl p-6 text-left shadow-2xl ${c.glow} transition-all hover:scale-[1.03] hover:-translate-y-1 active:scale-[0.98]`}>
@@ -1346,7 +1387,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
               </div>
               {selectedScenario && (() => {
                 const sc = SANDBOX_SCENARIOS[selectedScenario];
-                const c = scenarioColors[sc.color];
+                const c = scenarioColors[sc.color] || FALLBACK_SCENARIO_COLOR;
                 return <span className={`${c.bg} ${c.text} px-3 py-1 rounded-full text-[10px] font-black uppercase`}>{sc.icon} {sc.label}</span>;
               })()}
             </div>
@@ -1356,7 +1397,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
                 if (selectedScenario === 'PROPIO' && r.id === 'CLIENTE') return false;
                 return true;
               }).map(r => {
-                const c = roleColors[r.color];
+                const c = roleColors[r.color] || FALLBACK_ROLE_COLOR;
                 const isLoading = loading === r.id;
                 return (
                   <button key={r.id} onClick={() => handleStart(r.id)} disabled={!!loading}

@@ -27,6 +27,7 @@ const SANDBOX_ROLES = {
   ADMIN:             { label: 'Administrador',      icon: '🏢', desc: 'Control total del sistema' },
   JEFE_BODEGA:       { label: 'Jefe de Bodega',     icon: '📦', desc: 'Supervisión y operaciones de almacén' },
   EJECUTIVO_CUENTA:  { label: 'Ejecutivo de Cuenta', icon: '📋', desc: 'Operario: recibe, despacha, reubica' },
+  COORDINADOR_TRANSPORTE: { label: 'Coordinador de Transporte', icon: '🚚', desc: 'Gestiona flota, solicitudes y envíos; lectura de despachos' },
   AUDITOR:           { label: 'Auditor',            icon: '🔎', desc: 'Vista de solo lectura para control' },
   PICKER:            { label: 'Picker',             icon: '📱', desc: 'Tareas de picking en el piso' },
   CLIENTE:           { label: 'Cliente 3PL',        icon: '🏪', desc: 'Portal de solo lectura para clientes' },
