@@ -133,15 +133,23 @@ router.get('/kitting/disponibilidad', requireAuth, async (req, res) => {
   try {
     const qtyN = parseInt(qty) || 1;
     const components = await pool.query('SELECT * FROM kit_components WHERE kit_sku=$1 AND kit_client_id=$2', [kit_sku, client_id]);
+    // Una sola query para todos los componentes en vez de una por componente.
+    const compSkus = components.rows.map(c => c.component_sku);
+    const allLpns = compSkus.length ? (await pool.query(
+      `SELECT i.sku, i.id, i.location_id, i.batch_number, i.serial_number, i.expiry_date, i.qty
+         FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
+        WHERE i.sku = ANY($1) AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
+        ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC`,
+      [compSkus, client_id])).rows : [];
+    const lpnsBySku = new Map();
+    for (const r of allLpns) {
+      if (!lpnsBySku.has(r.sku)) lpnsBySku.set(r.sku, []);
+      lpnsBySku.get(r.sku).push({ id: r.id, location_id: r.location_id, batch_number: r.batch_number, serial_number: r.serial_number, expiry_date: r.expiry_date, qty: r.qty });
+    }
     let maxKits = Infinity;
     const result = [];
     for (const comp of components.rows) {
-      const lpnRows = (await pool.query(
-        `SELECT i.id, i.location_id, i.batch_number, i.serial_number, i.expiry_date, i.qty
-           FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
-          WHERE i.sku=$1 AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
-          ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC`,
-        [comp.component_sku, client_id])).rows;
+      const lpnRows = lpnsBySku.get(comp.component_sku) || [];
       const available = lpnRows.reduce((s, r) => s + parseFloat(r.qty), 0);
       const needed = parseFloat(comp.qty) * qtyN;
       const possible = comp.qty > 0 ? Math.floor(available / comp.qty) : 0;
@@ -241,13 +249,21 @@ router.get('/kitting/ordenes/:id', requirePicking, async (req, res) => {
         ORDER BY kc.component_sku`,
       [ord.kit_sku, ord.client_id, ord.cantidad_kits])).rows;
     // LPN disponibles por componente (FEFO) para que el picker elija/escanee.
+    // Una sola query para todos los componentes en vez de una por componente.
+    const recetaSkus = receta.map(r => r.component_sku);
+    const allLpns = recetaSkus.length ? (await pool.query(
+      `SELECT i.sku, i.id, i.location_id, i.batch_number, i.serial_number, i.expiry_date, i.qty
+         FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
+        WHERE i.sku = ANY($1) AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
+        ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC`,
+      [recetaSkus, ord.client_id])).rows : [];
+    const lpnsBySku = new Map();
+    for (const l of allLpns) {
+      if (!lpnsBySku.has(l.sku)) lpnsBySku.set(l.sku, []);
+      lpnsBySku.get(l.sku).push({ id: l.id, location_id: l.location_id, batch_number: l.batch_number, serial_number: l.serial_number, expiry_date: l.expiry_date, qty: l.qty });
+    }
     for (const r of receta) {
-      r.lpns = (await pool.query(
-        `SELECT i.id, i.location_id, i.batch_number, i.serial_number, i.expiry_date, i.qty
-           FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
-          WHERE i.sku=$1 AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
-          ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC`,
-        [r.component_sku, ord.client_id])).rows;
+      r.lpns = lpnsBySku.get(r.component_sku) || [];
       r.disponible = r.lpns.reduce((s, l) => s + parseFloat(l.qty), 0);
     }
     const sugeridos = (await pool.query('SELECT * FROM kit_origen_sugerido WHERE kit_orden_id=$1 ORDER BY componente_sku', [ord.id])).rows;
