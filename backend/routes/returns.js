@@ -3,14 +3,14 @@
 // La inspección puede repostear stock si disposition=RESTOCK.
 
 const express = require('express');
-const { pool, mapDbError } = require('../db');
+const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireAuth, requireJefeOrAbove, checkClientAccess } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
 
-router.post('/returns', requireAuth, checkClientAccess('write'), async (req, res) => {
+router.post('/returns', requireAuth, checkClientAccess('write', { required: true }), async (req, res) => {
   const { doc_num, doc_type, client_id, reason, glosa, items, username } = req.body;
   if (!items || items.length === 0) return res.status(400).json({ error: 'Debe incluir al menos un ítem.' });
   const client = await pool.connect();
@@ -58,6 +58,7 @@ router.post('/returns', requireAuth, checkClientAccess('write'), async (req, res
     res.json({ success: true, returnId });
   } catch(e) {
     await client.query('ROLLBACK');
+    if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe una devolución con el número '${doc_num}' para este cliente y tipo.` });
     res.status(400).json({ error: e.message || mapDbError(e) });
   } finally { client.release(); }
 });

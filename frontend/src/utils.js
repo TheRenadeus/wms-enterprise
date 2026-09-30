@@ -3,6 +3,33 @@ import { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 
 /**
+ * Parsea un archivo .xlsx/.csv en el navegador (client-side) con SheetJS.
+ * Devuelve { headers, rows } donde rows es un array de objetos por fila.
+ * Usa defval:'' para que las celdas vacías sean '' (no undefined) y raw:false
+ * para obtener valores formateados como string.
+ * @param {File} file
+ * @returns {Promise<{ headers: string[], rows: object[] }>}
+ */
+export function parseSpreadsheet(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) { reject(new Error('No se recibió ningún archivo')); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        if (!ws) { resolve({ headers: [], rows: [] }); return; }
+        const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+        const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+        resolve({ headers, rows });
+      } catch (err) { reject(err); }
+    };
+    reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/**
  * Exporta un array de objetos a un archivo .xlsx.
  * @param {object[]} rows      - Filas ya filtradas (lo que se ve en pantalla).
  * @param {Array}    columns   - [{ key, header, format? }] donde format = 'date'|'number'|'text'
@@ -86,6 +113,9 @@ export const apiFetch = (url, options = {}) => {
   const token = localStorage.getItem('wms_token');
   const headers = { ...(options.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  // Evita la página de advertencia de ngrok (ERR_NGROK_6024) en accesos externos:
+  // sin este header, las llamadas fetch/XHR reciben el HTML del interstitial en vez de JSON.
+  headers['ngrok-skip-browser-warning'] = 'true';
   // Timeout de 30 s para evitar requests colgados
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -110,6 +140,39 @@ export const apiFetch = (url, options = {}) => {
     });
 };
 
+/**
+ * Descarga un archivo desde un endpoint protegido del backend CON el token
+ * adjunto. Reemplaza el patrón roto window.open/location.href/<a href> hacia
+ * endpoints `requireAuth` (que no envían el header Authorization → 401 y baja un
+ * archivo con el JSON de error adentro).
+ *
+ * Se construye sobre apiFetch, así reutiliza la MISMA fuente de token y el mismo
+ * manejo de expiración: en 401 apiFetch ya hace logout + reload (no se baja un
+ * archivo corrupto). Hace fetch autenticado → blob → <a> temporal → click → revoke.
+ *
+ * @param {string} host     base del backend ('' = mismo origen)
+ * @param {string} path     ruta del endpoint, ej. '/api/export/inventory'
+ * @param {string} filename nombre del archivo a guardar (con extensión)
+ */
+export async function descargarArchivoAutenticado(host, path, filename) {
+  const res = await apiFetch(`${host}${path}`);
+  if (!res.ok) {
+    // apiFetch ya gestionó el 401 (logout). Para el resto, propagar el motivo.
+    let msg = `No se pudo descargar (HTTP ${res.status})`;
+    try { const j = await res.json(); if (j?.error) msg = j.error; } catch {}
+    throw new Error(msg);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // UX-06: Calcula tiempo relativo para mostrar antigüedad de documentos
 export const timeAgo = (dateStr) => {
   if (!dateStr) return '';
@@ -132,4 +195,25 @@ export const timeAgo = (dateStr) => {
     const diffD = Math.floor(diffH / 24);
     return diffD === 1 ? 'ayer' : `hace ${diffD} días`;
   } catch(e) { return dateStr; }
+};
+
+// ── RUT chileno (módulo 11) — espejo del validador backend (helpers.js) para
+// feedback inline en formularios. El backend revalida siempre.
+export const normalizeRut = (rut) => String(rut || '').replace(/[.\-\s]/g, '').toUpperCase();
+export const isValidRut = (rut) => {
+  const clean = normalizeRut(rut);
+  if (clean.length < 2) return false;
+  const body = clean.slice(0, -1);
+  const dv = clean.slice(-1);
+  if (!/^\d+$/.test(body)) return false;
+  let sum = 0, mul = 2;
+  for (let k = body.length - 1; k >= 0; k--) { sum += parseInt(body[k], 10) * mul; mul = mul === 7 ? 2 : mul + 1; }
+  const res = 11 - (sum % 11);
+  const calc = res === 11 ? '0' : res === 10 ? 'K' : String(res);
+  return calc === dv;
+};
+export const formatRut = (rut) => {
+  const clean = normalizeRut(rut);
+  if (clean.length < 2) return clean;
+  return clean.slice(0, -1).replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + clean.slice(-1);
 };

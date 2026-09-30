@@ -3,11 +3,11 @@ import {
   LayoutDashboard, Package, Box, Map as MapIcon, ArrowDownRight,
   ArrowUpRight, Search, CheckCircle2, X, FileText,
   Calendar, Tag, Sliders, MessageSquare, ArrowRightLeft, History, ClipboardCheck,
-  Trash2, Plus, ListPlus, MinusCircle, FolderOpen, ArrowLeft, Pause, PlaySquare, Database, Warehouse, ShieldCheck, Truck, Loader2, Users, Building2, Pencil, Activity, RefreshCcw, ShieldAlert, FileType, UserCog, ArrowDownUp, LogOut, Eye, EyeOff, Settings2, Globe, Combine, Split, Edit, Layers, Scan, XCircle, PieChart, ChevronRight, BarChart3, Printer, Download, Upload, Menu, Bell, Key, Info, Lightbulb, ChevronDown, ChevronUp, Play,
+  Trash2, Plus, ListPlus, MinusCircle, FolderOpen, ArrowLeft, Pause, PlaySquare, Database, Warehouse, ShieldCheck, Truck, Loader2, Users, Building2, Pencil, Activity, RefreshCcw, ShieldAlert, FileType, UserCog, ArrowDownUp, LogOut, Eye, EyeOff, Settings2, Globe, Combine, Split, Edit, Layers, Scan, PieChart, ChevronRight, BarChart3, Printer, Download, Upload, Menu, Bell, Key, Info, Lightbulb, ChevronDown, ChevronUp, Play,
   ClipboardList, UserCheck, AlertTriangle, SkipForward, CheckCheck, ListTodo, CalendarClock, Clock, Send,
   HardHat, Wrench, Timer, Moon, Sun, BookOpen
 } from 'lucide-react';
-import { useAutoSaveState, apiFetch, setDemoMode, timeAgo, exportToExcel } from './utils';
+import { useAutoSaveState, apiFetch, setDemoMode, timeAgo, exportToExcel, descargarArchivoAutenticado } from './utils';
 import { useConfirm } from './useConfirm';
 import {
   initialSkuForm, MODULES_3PL_ONLY, APP_MODULES, colorMap, statusLabel,
@@ -15,7 +15,7 @@ import {
 } from './constants';
 import {
   GlobalStyles, SimpleDonut, DocTrayView, LocPicker,
-  DigitalTwinView, ImportModal, ConfirmModal, DemoHint,
+  DigitalTwinView, BulkImportModal, ConfirmModal, DemoHint,
   SandboxWelcome, SandboxLauncher, SandboxSwitcher
 } from './components';
 import VirtualizedScrollList from './VirtualizedScrollList';
@@ -30,6 +30,21 @@ const ChangeStatusTab = lazy(() => import('./tabs/ChangeStatusTab'));
 const DigitalTwinTab = lazy(() => import('./tabs/DigitalTwinTab'));
 const SkuMovementTab = lazy(() => import('./tabs/SkuMovementTab'));
 const KardexTab      = lazy(() => import('./tabs/KardexTab'));
+const TransporteTab  = lazy(() => import('./tabs/TransporteTab'));
+const CierreDespachosTab = lazy(() => import('./tabs/CierreDespachosTab'));
+const SolicitarTransporteTab = lazy(() => import('./tabs/SolicitarTransporteTab'));
+const StatusesTab = lazy(() => import('./tabs/StatusesTab'));
+const DocTypesTab = lazy(() => import('./tabs/DocTypesTab'));
+const ReturnsTab = lazy(() => import('./tabs/ReturnsTab'));
+const TransportLegacyTab = lazy(() => import('./tabs/TransportLegacyTab'));
+const ClientsTab = lazy(() => import('./tabs/ClientsTab'));
+const AuditTab = lazy(() => import('./tabs/AuditTab'));
+const AccessLogTab = lazy(() => import('./tabs/AccessLogTab'));
+const PurchaseOrdersTab = lazy(() => import('./tabs/PurchaseOrdersTab'));
+const DocHistoryTab = lazy(() => import('./tabs/DocHistoryTab'));
+const CycleCountTab = lazy(() => import('./tabs/CycleCountTab'));
+const UsersTab = lazy(() => import('./tabs/UsersTab'));
+const KitsTab = lazy(() => import('./tabs/KitsTab'));
 
 // Fallback compartido mientras carga el chunk. Mantiene el layout calmo (sin saltos).
 const TabLoader = () => (
@@ -84,13 +99,25 @@ export default function App() {
   const [generatedKey, setGeneratedKey] = useState(null);
   const [loginHistory, setLoginHistory] = useState([]);
   const [showLoginHistory, setShowLoginHistory] = useState(false);
-  // Kit orders y build
-  const [kitOrders, setKitOrders] = useState([]);
-  const [kitBuildForm, setKitBuildForm] = useState({ kit_sku:'', client_id:'', qty:1, location:'PISO-RECEPCION' });
-  const [kitAvailability, setKitAvailability] = useState(null);
-  const [kitDispatchForm, setKitDispatchForm] = useState({ kit_sku:'', client_id:'', qty:1, doc_num:'', glosa:'' });
-  const [kitDispatchAvail, setKitDispatchAvail] = useState(null);
+  // Modo A — kit explotado al vuelo DENTRO de un despacho normal.
+  // Origen de cada componente: { [compSku]: { mode:'auto'|'manual', picks:{ [lpnId]: qtyStr } } }
+  const [dispKitForm, setDispKitForm] = useState({ kit_sku: '', qty: 1 });
+  const [dispKitAvail, setDispKitAvail] = useState(null);
+  const [dispKitSources, setDispKitSources] = useState({});
   const [kittingTab, setKittingTab] = useState('definitions');
+  // Kitting v2 — órdenes de armado
+  const [ordForm, setOrdForm] = useState({ client_id:'', kit_sku:'', cantidad_kits:1, notas:'' });
+  const [ordSugeridos, setOrdSugeridos] = useState({}); // { compSku: { ubicacion, lote, serie } }
+  const [ordenesV2, setOrdenesV2] = useState([]);
+  const [creatingOrden, setCreatingOrden] = useState(false);
+  const [armOrden, setArmOrden] = useState(null);      // detalle de la orden a armar | null
+  const [armSources, setArmSources] = useState({});     // origen por componente (reusa el picker)
+  const [armDest, setArmDest] = useState({ ubicacion:'PISO-RECEPCION', lote:'', serie:'' });
+  const [armBusy, setArmBusy] = useState(false);
+  const [desarmOrden, setDesarmOrden] = useState(null); // detalle de la orden a desarmar | null
+  const [desarmDest, setDesarmDest] = useState('');      // ubicación destino opcional
+  const [desarmBusy, setDesarmBusy] = useState(false);
+  const [traceOrden, setTraceOrden] = useState(null); // detalle para ver trazabilidad | null
   // Portal de clientes
   const [portalUser, setPortalUser] = useState(() => { try { return JSON.parse(localStorage.getItem('wms_portal_user')||'null'); } catch{return null;} });
   const [portalToken] = useState(() => localStorage.getItem('wms_portal_token')||'');
@@ -159,11 +186,6 @@ export default function App() {
   const [waveForm, setWaveForm] = useState({ name: '', strategy: 'FIFO', notes: '', line_ids: [] });
   const [waveView, setWaveView] = useState('list'); // 'list' | 'new'
   const [waveLineSelection, setWaveLineSelection] = useState(new Set());
-  // ── Empaque ───────────────────────────────────────────────────────
-  const [packingOrders, setPackingOrders] = useState([]);
-  const [activePackingOrder, setActivePackingOrder] = useState(null);
-  const [packingLineQtys, setPackingLineQtys] = useState({});
-  const [packingCartons, setPackingCartons] = useState({});
   // ── Devoluciones ──────────────────────────────────────────────────
   const [returns, setReturns] = useState([]);
   const [returnInspectId, setReturnInspectId] = useState(null);
@@ -194,7 +216,9 @@ export default function App() {
   const [manufacturers, setManufacturers] = useState([]);
   const [manufacturerForm, setManufacturerForm] = useState({ code:'', name:'', country:'', contact:'', email:'', phone:'', website:'', notes:'' });
   const [editingMfrId, setEditingMfrId] = useState(null);
-  const [mfrSearchTerm, setMfrSearchTerm] = useState('');
+  // Filtros individuales combinables (AND) para fabricantes.
+  const [mfrCodeFilter, setMfrCodeFilter] = useState('');
+  const [mfrNameFilter, setMfrNameFilter] = useState('');
   const [showMfrQuickForm, setShowMfrQuickForm] = useState(false);
   const [skuMfrFilter, setSkuMfrFilter] = useState('');
   const [mfrDetail, setMfrDetail] = useState(null);
@@ -267,7 +291,7 @@ export default function App() {
       // Picking (role-based — sin cambios)
       try {
         const isPicker = currentUser?.role === 'PICKER';
-        const isSup = ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+        const isSup = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
         const [rPT, rPQ, rPS] = await Promise.all([
           isSup ? apiFetch(`${host}/api/pick-tasks`).catch(()=>null) : Promise.resolve(null),
           (isPicker || isSup) ? apiFetch(`${host}/api/picker/queue`).catch(()=>null) : Promise.resolve(null),
@@ -278,14 +302,14 @@ export default function App() {
         if (rPS?.ok) setPickStats(await rPS.json());
       } catch(e) {}
       try {
-        const isSup = ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+        const isSup = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
         if (isSup) {
           const rDS = await apiFetch(`${host}/api/dispatch-schedules`).catch(()=>null);
           if (rDS?.ok) setDispatchSchedules(await rDS.json());
         }
       } catch(e) {}
       try {
-        const isAdmin = ['ADMIN','SUPERADMIN'].includes(currentUser?.role);
+        const isAdmin = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
         const isEjec = currentUser?.role === 'EJECUTIVO_CUENTA';
         if (isAdmin || isEjec) {
           const rAR = await apiFetch(`${host}/api/adjust-requests${isAdmin ? '?status=PENDIENTE' : ''}`).catch(()=>null);
@@ -308,7 +332,7 @@ export default function App() {
         apiFetch(`${host}/api/statuses`).catch(logFetchErr('statuses')),
         apiFetch(`${host}/api/document_types`).catch(logFetchErr('document_types')),
         apiFetch(`${host}/api/users`).catch(logFetchErr('users')),
-        apiFetch(`${host}/api/kits`).catch(logFetchErr('kits')),
+        apiFetch(`${host}/api/kitting/recetas`).catch(logFetchErr('recetas')),
       ]);
       if (resSku?.ok) {
         const arr = await resSku.json();
@@ -325,6 +349,7 @@ export default function App() {
       if (resDocTypes?.ok) setDocumentTypes(await resDocTypes.json());
       if (resUsers?.ok) setUsers(await resUsers.json());
       if (resKits?.ok) setKits(await resKits.json());
+      try { const rIns = await apiFetch(`${host}/api/insumos?all=1`).catch(()=>null); if (rIns?.ok) setInsumos(await rIns.json()); } catch(e) {}
       // Cargar config global
       try {
         const resCfg = await apiFetch(`${host}/api/system/config`).catch(()=>null);
@@ -340,26 +365,23 @@ export default function App() {
       } catch(e) {}
       try { const resMfr = await apiFetch(`${host}/api/manufacturers`).catch(()=>null); if (resMfr?.ok) setManufacturers(await resMfr.json()); } catch(e) {}
       try {
-        const [rC, rS, rK, rKO] = await Promise.all([
+        const [rC, rS, rK] = await Promise.all([
           apiFetch(`${host}/api/carriers`).catch(()=>null),
           apiFetch(`${host}/api/shipments`).catch(()=>null),
           apiFetch(`${host}/api/keys`).catch(()=>null),
-          apiFetch(`${host}/api/kit-orders`).catch(()=>null),
         ]);
         if (rC?.ok) setCarriers(await rC.json());
         if (rS?.ok) setShipments(await rS.json());
         if (rK?.ok) setApiKeys(await rK.json());
-        if (rKO?.ok) setKitOrders(await rKO.json());
       } catch(e) {}
       // Sistemas avanzados (solo supervisores+)
       try {
-        const isSup = ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+        const isSup = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
         if (isSup) {
-          const [rSup, rAsn, rWave, rPack, rRet, rDocks, rAppts, rInv2] = await Promise.all([
+          const [rSup, rAsn, rWave, rRet, rDocks, rAppts, rInv2] = await Promise.all([
             apiFetch(`${host}/api/suppliers`).catch(()=>null),
             apiFetch(`${host}/api/asns`).catch(()=>null),
             apiFetch(`${host}/api/pick-waves`).catch(()=>null),
-            apiFetch(`${host}/api/packing-orders`).catch(()=>null),
             apiFetch(`${host}/api/returns`).catch(()=>null),
             apiFetch(`${host}/api/docks`).catch(()=>null),
             apiFetch(`${host}/api/dock-appointments`).catch(()=>null),
@@ -368,7 +390,6 @@ export default function App() {
           if (rSup?.ok) setSuppliers(await rSup.json());
           if (rAsn?.ok) setAsns(await rAsn.json());
           if (rWave?.ok) setWaves(await rWave.json());
-          if (rPack?.ok) setPackingOrders(await rPack.json());
           if (rRet?.ok) setReturns(await rRet.json());
           if (rDocks?.ok) setDocks(await rDocks.json());
           if (rAppts?.ok) setDockAppointments(await rAppts.json());
@@ -428,11 +449,24 @@ export default function App() {
     if (currentUser.role === 'PICKER') return ['picker-queue','digital-twin','relocate','inventory'].includes(tabId);
     // CLIENTE: portal de solo lectura — ve su inventario, documentos y facturación
     if (currentUser.role === 'CLIENTE') return ['dashboard','inventory','doc-history','returns','shipments','purchase-orders','master-skus'].includes(tabId);
-    // EJECUTIVO_CUENTA: operaciones de bodega + solicitud de ajuste (sin users, superadmin, audit)
+    // JEFE_BODEGA: operaciones + supervisión completa de bodega (sin users/superadmin/audit).
+    if (currentUser.role === 'JEFE_BODEGA') {
+      if (disabledModules.includes(tabId)) return false;
+      if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','cierre-transporte','solicitar-transporte','purchase-orders','cycle-count','suppliers','waves','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history','clients','statuses','doc-types','manufacturers','insumos'].includes(tabId);
+    }
+    // EJECUTIVO_CUENTA (operario de piso): operaciones de stock y SKUs; sin gestión 3PL
+    // (clientes, facturación, proveedores, docks) ni supervisión avanzada.
     if (currentUser.role === 'EJECUTIVO_CUENTA') {
       if (disabledModules.includes(tabId)) return false;
       if (licenseModules.length > 0 && !licenseModules.includes(tabId) && tabId !== 'dashboard') return false;
-      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','transport','dispatch-schedule','purchase-orders','cycle-count','suppliers','waves','packing','returns','docks','billing','3pl-billing','advanced-reports','occupation','rep-report','lpn-history'].includes(tabId);
+      return ['dashboard','inventory','master-skus','receive','dispatch','picking-monitor','picker-queue','relocate','change-status','adjust','doc-history','cierre-transporte','solicitar-transporte','cycle-count','waves','returns','occupation','lpn-history','insumos'].includes(tabId);
+    }
+    // COORDINADOR_TRANSPORTE: su módulo de transporte + lectura sobre inventario,
+    // SKUs y despachos. No opera stock ni confirma despachos.
+    if (currentUser.role === 'COORDINADOR_TRANSPORTE') {
+      if (disabledModules.includes(tabId)) return false;
+      return ['dashboard','transporte-coord','inventory','master-skus','doc-history'].includes(tabId);
     }
     // DEMO role legado ve todo excepto superadmin y users
     if (currentUser.role === 'DEMO') return tabId !== 'users' && tabId !== 'superadmin';
@@ -449,10 +483,10 @@ export default function App() {
     if (currentUser.role === 'ADMIN') return true;
     if (currentUser.allowed_modules === 'ALL' || !currentUser.allowed_modules) {
        if (tabId === 'users') return false;
-       if (tabId === 'picking-monitor') return ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser.role);
+       if (tabId === 'picking-monitor') return ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser.role);
        if (tabId === 'audit') return ['AUDITOR','ADMIN','SUPERADMIN'].includes(currentUser.role);
        if (['clients', 'master-skus', 'conversions', 'warehouse', 'digital-twin', 'statuses', 'doc-types', 'occupation', 'rep-report', 'lpn-history', '3pl-billing'].includes(tabId)) {
-          return ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser.role);
+          return ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser.role);
        }
        return true;
     }
@@ -547,10 +581,49 @@ export default function App() {
   const [isSavingClient, setIsSavingClient] = useState(false);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
+  // PASO 4 — re-autenticación (step-up): antes de confirmar recepción/despacho se pide
+  // la contraseña del usuario. promptReauth abre el modal y resuelve con la clave (o null).
+  const [reauthPrompt, setReauthPrompt] = useState(null); // { resolve, label } | null
+  const promptReauth = (label) => new Promise((resolve) => setReauthPrompt({ resolve, label }));
 
   const [newDocNum, setNewDocNum] = useState('');
   const [newDocGlosa, setNewDocGlosa] = useState('');
   const [newDocType, setNewDocType] = useState('');
+  // Cliente del movimiento: se elige al CREAR el documento (recepción/despacho/ajuste).
+  const [newDocClient, setNewDocClient] = useState('');
+  // ── Módulo INSUMOS (materiales de bodega) ──
+  const [insumos, setInsumos] = useState([]);
+  const [insumosTab, setInsumosTab] = useState('materiales');
+  const [insumoForm, setInsumoForm] = useState({ codigo:'', nombre:'', categoria:'embalaje', unidad:'UN', costo_unitario:'', stock_minimo:'', lead_time_dias:'' });
+  const [isEditingInsumo, setIsEditingInsumo] = useState(false);
+  const [isSavingInsumo, setIsSavingInsumo] = useState(false);
+  const [docSearch, setDocSearch] = useState({ tipo:'', q:'' });
+  const [docResults, setDocResults] = useState([]);
+  const [docSearching, setDocSearching] = useState(false);
+  const [selectedDoc, setSelectedDoc] = useState(null);
+  const [docInsumos, setDocInsumos] = useState([]);
+  const [docInsumoLine, setDocInsumoLine] = useState({ insumo_id:'', cantidad:'' });
+  const [savingDocInsumo, setSavingDocInsumo] = useState(false);
+  const [repRange, setRepRange] = useState({ from:'', to:'' });
+  const [repRows, setRepRows] = useState([]);
+  const [repLoading, setRepLoading] = useState(false);
+  const [repGroup, setRepGroup] = useState('insumo');
+  const [insumoMove, setInsumoMove] = useState(null); // { insumo, tipo } | null
+  const [insumoMoveQty, setInsumoMoveQty] = useState('');
+  const [insumoMoveResult, setInsumoMoveResult] = useState(null);
+  const [isMovingInsumo, setIsMovingInsumo] = useState(false);
+  // Análisis de inventario (solo lectura)
+  const [anDias, setAnDias] = useState(30);
+  const [anClient, setAnClient] = useState('');
+  const [anData, setAnData] = useState(null);       // { periodo, kpis, items } | null
+  const [anLoading, setAnLoading] = useState(false);
+  const [anSelected, setAnSelected] = useState(null); // insumo seleccionado para desglose
+  const [anClientes, setAnClientes] = useState([]);   // desglose por cliente del seleccionado
+  const [anClientesLoading, setAnClientesLoading] = useState(false);
+  const [insumoMoveFecha, setInsumoMoveFecha] = useState(''); // fecha de ingreso opcional (entrada)
+  const [histInsumo, setHistInsumo] = useState(null); // insumo cuyo histórico se ve | null
+  const [histRows, setHistRows] = useState([]);
+  const [histLoading, setHistLoading] = useState(false);
   const [newDocDate, setNewDocDate] = useState('');
   const [newDocRef, setNewDocRef] = useState('');
   const [newDocEnteredAt, setNewDocEnteredAt] = useState(() => new Date().toISOString().slice(0,16));
@@ -578,12 +651,24 @@ export default function App() {
 
   const [showDispatchConfirm, setShowDispatchConfirm] = useState(false);
   const [shipQtys, setShipQtys] = useState({});
-  const [importModal, setImportModal] = useState(null); // null | { type, extraParams }
+  // Solicitud de transporte desde un despacho (botón extra en el panel de salida).
+  const transReqEmpty = { destino:'', sentido:'SALIDA', tipo_vehiculo_sugerido:'', n_cajas:'', n_cajones:'', n_pallets:'', hora_carga_habilitada:'', fecha_hora_recepcion_destino:'' };
+  const [showTransportReq, setShowTransportReq] = useState(false);
+  const [transportReqForm, setTransportReqForm] = useState(transReqEmpty);
+  const [transportReqBusy, setTransportReqBusy] = useState(false);
+  const [transportReqResult, setTransportReqResult] = useState(null);
+  const [transportTipos, setTransportTipos] = useState([]);
+  const [importModal, setImportModal] = useState(null); // null | { type, extraParams } → BulkImportModal
   const [confirmDialog, setConfirmDialog] = useState(null); // null | { title, message, confirmText, danger, onConfirm }
   const openConfirm = (opts) => setConfirmDialog(opts);
   const closeConfirm = () => setConfirmDialog(null);
 
-  const [relSearchTerm, setRelSearchTerm] = useState('');
+  // Filtros individuales combinables (AND) para reubicación y cambio de estado.
+  const [relLpnFilter, setRelLpnFilter] = useState('');
+  const [relSkuFilter, setRelSkuFilter] = useState('');
+  const [relLocFilter, setRelLocFilter] = useState('');
+  // Filtro "trabajar por cliente" para reubicación y cambio de estado (operan sobre LPN existentes).
+  const [relClientFilter, setRelClientFilter] = useState('');
   const [destinations, setDestinations] = useState({});
   const [glosas, setGlosas] = useState({});
   const [relocateQtys, setRelocateQtys] = useState({});
@@ -597,10 +682,15 @@ export default function App() {
   const [skuForm, setSkuForm] = useState(initialSkuForm);
   const [skuSearchTerm, setSkuSearchTerm] = useState('');
   const [isEditingSku, setIsEditingSku] = useState(false);
-  const [locSearchTerm, setLocSearchTerm] = useState('');
+  // Filtros individuales combinables (AND) para ubicaciones.
+  const [locCodeFilter, setLocCodeFilter] = useState('');
+  const [locZoneFilter, setLocZoneFilter] = useState('');
 
   const [clientForm, setClientForm] = useState({ id: '', name: '', contact: '', email: '' });
-  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  // Filtros individuales combinables (AND) para la lista de clientes.
+  const [clientIdFilter, setClientIdFilter] = useState('');
+  const [clientNameFilter, setClientNameFilter] = useState('');
+  const [clientContactFilter, setClientContactFilter] = useState('');
 
   const [invSearchTerm, setInvSearchTerm] = useState('');
   const [invStatusFilter, setInvStatusFilter] = useState('');
@@ -657,6 +747,9 @@ export default function App() {
   const [resTab, setResTab] = useState('config');
   const [resSku, setResSku] = useState('');
   const [resSkuFilter, setResSkuFilter] = useState('');
+  // Filtros individuales combinables (AND) para el selector de SKU por recurso.
+  const [resDescFilter, setResDescFilter] = useState('');
+  const [resCliFilter, setResCliFilter] = useState('');
   const [resClientId, setResClientId] = useState('');
   const [resResources, setResResources] = useState([]);
   const [resForm, setResForm] = useState({ resource_type:'MATERIAL', resource_name:'', qty_per_unit:'1', unit:'UN', hours_per_unit:'0', time_unit:'HORAS', personnel_count:'1', notes:'' });
@@ -690,11 +783,12 @@ export default function App() {
   const [kitForm, setKitForm] = useState({ kit_sku: '', client_id: '', description: '', components: [] });
   const [kitComponentLine, setKitComponentLine] = useState({ sku: '', qty: '' });
   const [systemMetrics, setSystemMetrics] = useState(null);
+  const [ngrokStatus, setNgrokStatus] = useState(null);
   const [systemConfig, setSystemConfig] = useState({});
   // Cargar config pública antes del login (para mostrar nombre de empresa)
   useEffect(() => {
     const h = customHost || '';
-    fetch(`${h}/api/system/config`).then(r => r.ok ? r.json() : {}).then(cfg => setSystemConfig(prev => ({...cfg, ...prev}))).catch(() => {});
+    fetch(`${h}/api/system/config`, { headers: { 'ngrok-skip-browser-warning': 'true' } }).then(r => r.ok ? r.json() : {}).then(cfg => setSystemConfig(prev => ({...cfg, ...prev}))).catch(() => {});
   }, [customHost]);
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
@@ -739,7 +833,10 @@ export default function App() {
   // En 3PL puro el cliente debe elegirse explícitamente; en PROPIO se fuerza siempre.
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN';
   const isDemo = currentUser?.role === 'DEMO' || currentUser?.is_demo === true;
-  const canManageMasters = isAdmin || currentUser?.role === 'EJECUTIVO_CUENTA' || isDemo;
+  const canManageMasters = isAdmin || currentUser?.role === 'JEFE_BODEGA' || isDemo;
+  // Maestro/entradas/ajuste de INSUMOS: JEFE_BODEGA+. Consumo: EJECUTIVO_CUENTA+.
+  const canManageInsumos = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) || isDemo;
+  const canConsumeInsumos = ['EJECUTIVO_CUENTA','JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) || isDemo;
 
   // COD-05: solo resetear selección activa y sidebar — preservar formularios para que el
   // usuario no pierda datos al cambiar de tab accidentalmente
@@ -797,13 +894,26 @@ export default function App() {
 
   const getStatusBadge = (statusId) => { if (!statusId || statusId === 'DISPONIBLE') return colorMap.emerald; const st = statuses.find(s => s.id === statusId); return colorMap[st?.color] || colorMap.slate; };
 
-  const handleCreateDoc = (e, module) => {
+  const handleCreateDoc = async (e, module) => {
     e.preventDefault(); if (!newDocNum) return showMsg("Ingrese un número de documento", true);
     if (module !== 'adjust' && !newDocType) return showMsg("Seleccione un Tipo de Documento", true);
+    // En 3PL/HYBRID el cliente del movimiento es obligatorio y se elige aquí.
+    if (is3PLMode && !newDocClient) return showMsg("Seleccione el cliente del movimiento", true);
+    if (newDocClient && !canOperateClient(newDocClient)) return showMsg("No tiene permiso para operar con ese cliente", true);
+    const docClient = is3PLMode ? newDocClient : (systemConfig.own_client_id || 'PROPIO');
+    // Un documento ya cerrado no se puede reutilizar ni reabrir para agregar movimientos.
+    if (module === 'receive' || module === 'dispatch' || module === 'adjust') {
+      try {
+        const checkType = module === 'adjust' ? 'ADJ' : (newDocType || '');
+        const qs = new URLSearchParams({ doc_num: newDocNum, doc_type: checkType, client_id: docClient || '' });
+        const r = await apiFetch(`${host}/api/processed-docs/exists?${qs.toString()}`);
+        if (r.ok) { const d = await r.json(); if (d.exists) return showMsg(`⛔ El documento ${newDocNum} ya fue cerrado para este cliente; no se puede reutilizar.`, true); }
+      } catch (err) { /* si falla la verificación, el backend igualmente bloquea el cierre (409) */ }
+    }
     const id = `${module.toUpperCase()}-${Date.now()}`;
-    const newDoc = { id, docNum: newDocNum, docType: newDocType, glosa: newDocGlosa, docDate: newDocDate, docRef: newDocRef, docEnteredAt: newDocEnteredAt || new Date().toISOString().slice(0,16), items: [], createdAt: new Date().toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) };
+    const newDoc = { id, docNum: newDocNum, docType: newDocType, client: docClient, glosa: newDocGlosa, docDate: newDocDate, docRef: newDocRef, docEnteredAt: newDocEnteredAt || new Date().toISOString().slice(0,16), items: [], createdAt: new Date().toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) };
     setWorkspaces(prev => ({ ...prev, [module]: [newDoc, ...prev[module]] }));
-    setNewDocNum(''); setNewDocType(''); setNewDocGlosa(''); setNewDocDate(''); setNewDocRef(''); setNewDocEnteredAt(new Date().toISOString().slice(0,16)); setActiveDocId(id);
+    setNewDocNum(''); setNewDocType(''); setNewDocClient(''); setNewDocGlosa(''); setNewDocDate(''); setNewDocRef(''); setNewDocEnteredAt(new Date().toISOString().slice(0,16)); setActiveDocId(id);
     showMsg('📄 Documento iniciado y autoguardado.');
   };
 
@@ -815,9 +925,11 @@ export default function App() {
   const handleCommitAPI = async (endpoint, module) => {
     if (!activeDoc || activeDoc.items.length === 0) return;
     if (isCommitting) return; // evitar doble submit
+    // El cierre de recepción/despacho ya NO pide re-clave (step-up desactivado).
+    const reauthPw = '';
     setIsCommitting(true);
     try {
-      const res = await apiFetch(`${host}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...activeDoc, username: currentUser.username }) });
+      const res = await apiFetch(`${host}/api/${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...activeDoc, client_id: activeDoc.client, username: currentUser.username, ...(reauthPw ? { reauth_password: reauthPw } : {}) }) });
       if (res.ok) {
         const moduleMsg = {
           receive: 'Mercancía recibida en bodega',
@@ -854,6 +966,8 @@ export default function App() {
           return;
         }
         showMsg(`⛔ ${errBody?.error || `Error ${res.status}`}`, true);
+        // Documento ya cerrado/procesado: descartar el borrador (no se reabre).
+        if (res.status === 409) { removeDoc(module, activeDocId); setActiveDocId(null); fetchData(); }
       }
     } catch(err) { showMsg(`⛔ Error de red`, true); }
     finally { setIsCommitting(false); }
@@ -887,6 +1001,35 @@ export default function App() {
       setUsePickConf(allConfirmed);
     }
     setShowDispatchConfirm(true);
+  };
+
+  // Abrir el modal de solicitud de transporte para el despacho activo. Prefija
+  // destino con la glosa del documento (si la hay) y carga tipos de vehículo.
+  const openTransportReq = () => {
+    if (!activeDoc || activeDoc.items.length === 0) return;
+    setTransportReqResult(null);
+    setTransportReqForm({ ...transReqEmpty, destino: activeDoc.glosa || '' });
+    setShowTransportReq(true);
+    apiFetch(`${host}/api/transporte/tipos-vehiculo`).then(r => r.ok ? r.json() : []).then(d => setTransportTipos(Array.isArray(d) ? d : [])).catch(() => {});
+  };
+
+  const submitTransportReq = async () => {
+    if (!activeDoc) return;
+    // Líneas del carrito → {sku, qty}. Para kits se usa la cantidad de kits.
+    const items = activeDoc.items.map(it => ({ sku: it.sku, qty: it.isKit ? Number(it.qtyKits) || 0 : Number(it.qtyToPick) || 0 })).filter(l => l.sku && l.qty > 0);
+    if (items.length === 0) return showMsg('El despacho no tiene líneas con cantidad para solicitar transporte', true);
+    setTransportReqBusy(true);
+    try {
+      const res = await apiFetch(`${host}/api/transporte/solicitudes/desde-despacho`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...transportReqForm, client_id: activeDoc.client || '', items }),
+      });
+      const d = await res.json();
+      if (!res.ok) { showMsg(d.error || 'Error al solicitar transporte', true); return; }
+      setTransportReqResult(d);
+      showMsg('✅ Solicitud de transporte creada. El coordinador la verá en su cola.');
+    } catch (e) { showMsg('Error de red al solicitar transporte', true); }
+    finally { setTransportReqBusy(false); }
   };
 
   const loadDocPickLines = useCallback(async (docNum) => {
@@ -928,11 +1071,13 @@ export default function App() {
       if (!res.ok) throw new Error('Error de conexión');
       const latestInventory = await res.json();
       for (const item of itemsToValidate) {
+        if (item.isKit) continue; // los kits se validan por componente en el backend (transacción)
         const currentLpn = latestInventory.find(i => i.id === item.lpnId);
         if (!currentLpn) { showMsg(`❌ Error: El LPN ${item.lpnId} ya no existe.`, true); return false; }
-        const inThisCart = activeDoc?.items.filter(it => it.lpnId === item.lpnId).reduce((sum, it) => sum + parseFloat(it.qtyToPick || it.qty), 0) || 0;
-        const effectiveAvailable = parseFloat(currentLpn.qty) - inThisCart;
-        if (effectiveAvailable < item.qtyToPick) { showMsg(`❌ Stock Insuficiente: LPN ${item.lpnId} solo tiene ${effectiveAvailable}.`, true); return false; }
+        // Total que este despacho saca de ESTE LPN (suma de todas sus líneas en el carrito).
+        // Se compara UNA vez contra el stock físico; restar el propio carrito lo contaba doble.
+        const inThisCart = itemsToValidate.filter(it => it.lpnId === item.lpnId).reduce((sum, it) => sum + parseFloat(it.qtyToPick || it.qty), 0) || 0;
+        if (parseFloat(currentLpn.qty) < inThisCart) { showMsg(`❌ Stock Insuficiente: LPN ${item.lpnId} solo tiene ${currentLpn.qty}, requerido ${inThisCart}.`, true); return false; }
       }
       return true;
     } catch (error) { showMsg(`⛔ Error al validar stock`, true); return false; } finally { setIsValidating(false); }
@@ -940,24 +1085,27 @@ export default function App() {
 
   const handleCommitDispatchPartial = async () => {
     if (!activeDoc || activeDoc.items.length === 0) return;
-    const itemsToShip = activeDoc.items.map((it, idx) => ({ ...it, qtyToPick: shipQtys[idx] || 0 })).filter(it => it.qtyToPick > 0);
+    // Las líneas de kit van completas (no admiten parcial por LPN); las normales usan shipQtys.
+    const itemsToShip = activeDoc.items.map((it, idx) => it.isKit ? it : ({ ...it, qtyToPick: shipQtys[idx] || 0 })).filter(it => it.isKit || it.qtyToPick > 0);
     if (itemsToShip.length === 0) return showMsg('⚠️ Ingrese cantidad mayor a 0', true);
     if (isCommitting) return;
+    const reauthPw = ''; // cierre de despacho sin re-clave
     const isValid = await validateRealTimeStock(itemsToShip);
     if (!isValid) { fetchData(); return; }
     setIsCommitting(true);
     try {
-      const res = await apiFetch(`${host}/api/dispatch_batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docNum: activeDoc.docNum, docType: activeDoc.docType, glosa: activeDoc.glosa, items: itemsToShip, username: currentUser.username, usePickConfirmations: usePickConf }) });
+      const res = await apiFetch(`${host}/api/dispatch_batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docNum: activeDoc.docNum, docType: activeDoc.docType, client_id: activeDoc.client, glosa: activeDoc.glosa, items: itemsToShip, username: currentUser.username, usePickConfirmations: usePickConf, reauth_password: reauthPw }) });
       if (res.ok) {
         // Guardar en historial de documentos con client_id del primer LPN
         try {
-          const firstLpn = (Array.isArray(data) ? data : []).find(i => i.id === itemsToShip[0]?.lpnId);
-          const dispClientId = firstLpn?.client_id || '';
+          const firstNormal = itemsToShip.find(it => !it.isKit && it.lpnId);
+          const firstLpn = (Array.isArray(data) ? data : []).find(i => i.id === firstNormal?.lpnId);
+          const dispClientId = firstLpn?.client_id || activeDoc.client || '';
           await apiFetch(`${host}/api/document-history`, { method: 'POST', headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ id: activeDoc.id, module: 'dispatch', doc_num: activeDoc.docNum, doc_type: activeDoc.docType, glosa: activeDoc.glosa, username: currentUser.username, items: itemsToShip, client_id: dispClientId }) });
         } catch(e) {}
         let remainingItems = [];
-        activeDoc.items.forEach((it, idx) => { const shipped = shipQtys[idx] || 0; const remaining = parseFloat(it.qtyToPick) - parseFloat(shipped); if (remaining > 0) remainingItems.push({ ...it, qtyToPick: remaining }); });
+        activeDoc.items.forEach((it, idx) => { if (it.isKit) return; const shipped = shipQtys[idx] || 0; const remaining = parseFloat(it.qtyToPick) - parseFloat(shipped); if (remaining > 0) remainingItems.push({ ...it, qtyToPick: remaining }); });
         if (remainingItems.length === 0) { showMsg('✅ Pedido despachado completo'); removeDoc('dispatch', activeDocId); setActiveDocId(null); }
         else { showMsg('⚠️ Despacho Parcial completado.'); setWorkspaces(prev => ({ ...prev, dispatch: prev.dispatch.map(d => d.id === activeDocId ? { ...d, items: remainingItems } : d) })); }
         setShowDispatchConfirm(false); fetchData();
@@ -1000,13 +1148,23 @@ export default function App() {
     setIsSavingLoc(true);
     const allLocs = buildLocsList();
     const locsToCreate = allLocs.filter(l => !whExcluded.has(l.location_id));
+    if (locsToCreate.length === 0) {
+      showMsg('⚠️ No hay ubicaciones para generar. Revisa el rango de pasillos, columnas y filas.', true);
+      setIsSavingLoc(false);
+      return;
+    }
     try {
       const res = await apiFetch(`${host}/api/locations/bulk`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ locations: locsToCreate, overwrite: whOverwrite })
       });
-      const d = await res.json();
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showMsg(`⛔ ${d.error || 'No se pudieron generar las ubicaciones.'}`, true);
+        setIsSavingLoc(false);
+        return;
+      }
       fetchData();
       showMsg(`✅ Se generaron ${d.generated || 0} ubicaciones${d.skipped ? ` (${d.skipped} omitidas por duplicado)` : ''}.`);
       setWhShowPreview(false); setWhExcluded(new Set());
@@ -1101,7 +1259,7 @@ export default function App() {
     e.preventDefault();
     if (isSavingSku) return;
     setIsSavingSku(true);
-    const payload = { ...skuForm, requires_lot: skuForm.traceability === 'LOT', requires_serial: skuForm.traceability === 'SERIAL', username: currentUser?.username };
+    const payload = { ...skuForm, username: currentUser?.username };
     if ((!is3PLMode || isHybridMode) && !payload.client_id) payload.client_id = systemConfig.own_client_id || 'PROPIO';
     try {
       // En edición → PUT (puede versionar). En creación → POST.
@@ -1129,7 +1287,7 @@ export default function App() {
   const handleEditSku = (s) => {
     const snapshot = { sku: s.sku, requires_lot: !!s.requires_lot, requires_serial: !!s.requires_serial, stock_total: parseFloat(s.stock_total) || 0 };
     setEditingSkuOriginal(snapshot);
-    setSkuForm({ sku: s.sku, barcode: s.barcode || '', desc: s.desc || '', category: s.category || 'General', uom: s.uom || 'UN', weight: s.weight || '', length: s.length || '', width: s.width || '', height: s.height || '', abc_class: s.abc_class || '-', traceability: s.requires_serial ? 'SERIAL' : (s.requires_lot ? 'LOT' : 'NONE'), client_id: s.client_id || '', manufacturer_id: s.manufacturer?.id || s.manufacturer_id || '', manufacturer_code: s.manufacturer?.code || s.manufacturer_code || '', manufacturer_sku: s.manufacturer_sku || '', brand: s.brand || '', allow_substitutes: !!s.allow_substitutes, substitute_scope: s.substitute_scope || 'any', substitute_threshold: s.substitute_threshold !== null && s.substitute_threshold !== undefined && s.substitute_threshold !== '' ? Math.round(parseFloat(s.substitute_threshold) * 100) : '' });
+    setSkuForm({ sku: s.sku, barcode: s.barcode || '', desc: s.desc || '', category: s.category || 'General', uom: s.uom || 'UN', weight: s.weight || '', length: s.length || '', width: s.width || '', height: s.height || '', abc_class: s.abc_class || '-', requires_lot: !!s.requires_lot, requires_serial: !!s.requires_serial, client_id: s.client_id || '', manufacturer_id: s.manufacturer?.id || s.manufacturer_id || '', manufacturer_code: s.manufacturer?.code || s.manufacturer_code || '', manufacturer_sku: s.manufacturer_sku || '', brand: s.brand || '', allow_substitutes: !!s.allow_substitutes, substitute_scope: s.substitute_scope || 'any', substitute_threshold: s.substitute_threshold !== null && s.substitute_threshold !== undefined && s.substitute_threshold !== '' ? Math.round(parseFloat(s.substitute_threshold) * 100) : '' });
     setIsEditingSku(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -1229,6 +1387,24 @@ export default function App() {
   };
   const handleEditUser = (u) => { const isAllCl = u.allowed_clients === 'ALL'; const isAllMod = u.allowed_modules === 'ALL' || !u.allowed_modules; setUserForm({ username: u.username, full_name: u.full_name, password: '', role: u.role, status: u.status || 'ACTIVE', allowed_clients: isAllCl ? 'ALL' : 'RESTRICTED', clientSelection: isAllCl ? [] : JSON.parse(u.allowed_clients || '[]'), allowed_modules_type: isAllMod ? 'ROLE' : 'CUSTOM', moduleSelection: isAllMod ? [] : JSON.parse(u.allowed_modules || '[]'), client_scope: u.client_scope || 'all', assigned_clients: Array.isArray(u.assigned_clients) ? u.assigned_clients : [] }); setIsEditingUser(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const handleDeleteUser = async (id) => { if(!(await confirm({ message: `¿Eliminar al usuario ${id}?`, danger: true }))) return; try { const res = await apiFetch(`${host}/api/users/${id}`, { method: 'DELETE' }); if (res.ok) { showMsg('✅ Usuario eliminado'); fetchData(); } else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); } } catch(e) { showMsg('⛔ Error de red', true); } };
+  // Inhabilitar/activar usuario. Inhabilitar libera un cupo de licencia; activar lo
+  // consume y el backend (POST /api/users) rechaza con 403 si no hay cupo disponible.
+  const handleToggleUserStatus = async (u) => {
+    const newStatus = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
+    const enabling = newStatus === 'ACTIVE';
+    const ok = await confirm({
+      message: enabling
+        ? `¿Activar al usuario ${u.username}? Ocupará un cupo de licencia (debe haber uno disponible).`
+        : `¿Inhabilitar al usuario ${u.username}? No podrá iniciar sesión y se liberará su cupo de licencia.`,
+      danger: !enabling,
+    });
+    if (!ok) return;
+    try {
+      const res = await apiFetch(`${host}/api/users`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: u.username, full_name: u.full_name, role: u.role, status: newStatus, allowed_clients: u.allowed_clients, allowed_modules: u.allowed_modules }) });
+      if (res.ok) { showMsg(enabling ? '✅ Usuario activado' : '✅ Usuario inhabilitado'); fetchData(); }
+      else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
+    } catch (e) { showMsg('⛔ Error de red', true); }
+  };
 
   const addKitComponent = () => {
     if (!kitComponentLine.sku || !kitComponentLine.qty || parseFloat(kitComponentLine.qty) <= 0) return;
@@ -1237,21 +1413,270 @@ export default function App() {
     setKitComponentLine({ sku: '', qty: '' });
   };
   const removeKitComponent = (sku) => setKitForm(prev => ({ ...prev, components: prev.components.filter(c => c.sku !== sku) }));
+  // ── INSUMOS: maestro de materiales ──
+  const fetchInsumos = async () => {
+    try { const r = await apiFetch(`${host}/api/insumos?all=1`); if (r.ok) setInsumos(await r.json()); } catch(e) {}
+  };
+  const handleSaveInsumo = async (e) => {
+    e.preventDefault();
+    if (isSavingInsumo) return;
+    if (!insumoForm.codigo.trim() || !insumoForm.nombre.trim()) return showMsg('⚠️ Código y nombre son requeridos', true);
+    setIsSavingInsumo(true);
+    try {
+      const url = isEditingInsumo ? `${host}/api/insumos/${isEditingInsumo}` : `${host}/api/insumos`;
+      const method = isEditingInsumo ? 'PUT' : 'POST';
+      const res = await apiFetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(insumoForm) });
+      if (res.ok) {
+        showMsg(isEditingInsumo ? '✅ Insumo actualizado' : '✅ Insumo creado');
+        setInsumoForm({ codigo:'', nombre:'', categoria:'embalaje', unidad:'UN', costo_unitario:'', stock_minimo:'', lead_time_dias:'' });
+        setIsEditingInsumo(false); fetchInsumos();
+      } else { const err = await res.json().catch(()=>({})); showMsg(`⛔ ${err.error||'Error'}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setIsSavingInsumo(false); }
+  };
+  const handleEditInsumo = (i) => {
+    setInsumoForm({ codigo:i.codigo, nombre:i.nombre, categoria:i.categoria, unidad:i.unidad, costo_unitario:i.costo_unitario, stock_minimo:i.stock_minimo, lead_time_dias: i.lead_time_dias ?? '' });
+    setIsEditingInsumo(i.id); window.scrollTo({ top:0, behavior:'smooth' });
+  };
+  const loadInsumoReport = async () => {
+    setRepLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      if (repRange.from) qs.set('from', repRange.from);
+      if (repRange.to) qs.set('to', repRange.to);
+      const r = await apiFetch(`${host}/api/insumos/reportes/consumo?${qs.toString()}`);
+      setRepRows(r.ok ? await r.json() : []);
+    } catch(e) { setRepRows([]); } finally { setRepLoading(false); }
+  };
+  // Agrupación del reporte (por insumo o por cliente) con totales de cantidad y costo.
+  const repGrouped = useMemo(() => {
+    const acc = {};
+    for (const x of repRows) {
+      const key = repGroup === 'cliente' ? (x.client_name || x.client_id || 'Sin cliente')
+                : repGroup === 'documento' ? (x.doc_num ? `[${(x.doc_type || x.documento_tipo || '').toString().toUpperCase()}] ${x.doc_num}` : 'Consumo directo (sin documento)')
+                : `${x.codigo} — ${x.nombre}`;
+      if (!acc[key]) acc[key] = { key, cantidad: 0, costo: 0, unidad: x.unidad };
+      acc[key].cantidad += parseFloat(x.cantidad) || 0;
+      acc[key].costo += parseFloat(x.costo) || 0;
+    }
+    return Object.values(acc).sort((a,b)=>b.costo-a.costo);
+  }, [repRows, repGroup]);
+  const exportInsumoReport = () => {
+    const rows = repGrouped.map(g => ({ grupo: g.key, cantidad: g.cantidad, costo: Math.round(g.costo) }));
+    exportToExcel(rows, [
+      { key:'grupo', header: repGroup==='cliente'?'Cliente':repGroup==='documento'?'Documento':'Insumo', format:'text' },
+      { key:'cantidad', header:'Cantidad', format:'number' },
+      { key:'costo', header:'Costo total', format:'number' },
+    ], `consumo_insumos_${repGroup}_${repRange.from||'inicio'}_${repRange.to||'hoy'}`, 'Consumo insumos');
+  };
+  // ── Análisis de inventario (solo lectura) ──
+  const loadAnalisis = async () => {
+    setAnLoading(true); setAnSelected(null); setAnClientes([]);
+    try {
+      const qs = new URLSearchParams({ dias: String(anDias) });
+      if (anClient) qs.set('client_id', anClient);
+      const r = await apiFetch(`${host}/api/insumos/analisis?${qs.toString()}`);
+      setAnData(r.ok ? await r.json() : null);
+      if (!r.ok) { const e = await r.json().catch(()=>({})); showMsg(`⛔ ${e.error || 'Error al cargar análisis'}`, true); }
+    } catch(e) { setAnData(null); showMsg('⛔ Error de red', true); } finally { setAnLoading(false); }
+  };
+  const loadAnalisisClientes = async (insumo) => {
+    setAnSelected(insumo); setAnClientes([]); setAnClientesLoading(true);
+    try {
+      const r = await apiFetch(`${host}/api/insumos/${insumo.id}/consumo-clientes?dias=${anDias}`);
+      setAnClientes(r.ok ? await r.json() : []);
+    } catch(e) { setAnClientes([]); } finally { setAnClientesLoading(false); }
+  };
+  const exportAnalisis = () => {
+    const rows = (anData?.items || []).map(i => ({
+      codigo: i.codigo, nombre: i.nombre, stock: parseFloat(i.stock_actual),
+      prom_dia: parseFloat(i.consumo_prom_diario), cobertura: i.dias_cobertura != null ? parseFloat(i.dias_cobertura) : '',
+      quiebre: i.quiebre_estimado ? String(i.quiebre_estimado).slice(0,10) : '', estado: i.estado,
+    }));
+    exportToExcel(rows, [
+      { key:'codigo', header:'Código', format:'text' },
+      { key:'nombre', header:'Insumo', format:'text' },
+      { key:'stock', header:'Stock', format:'number' },
+      { key:'prom_dia', header:'Prom./día', format:'number' },
+      { key:'cobertura', header:'Días cobertura', format:'number' },
+      { key:'quiebre', header:'Quiebre estimado', format:'text' },
+      { key:'estado', header:'Estado', format:'text' },
+    ], `analisis_insumos_${anDias}d${anClient?'_'+anClient:''}`, 'Análisis insumos');
+  };
+  const ESTADO_INSUMO = {
+    critico:     { label:'Crítico',     badge:'bg-red-100 text-red-700 border-red-200',       dot:'bg-red-500' },
+    por_quebrar: { label:'Por quebrar', badge:'bg-amber-100 text-amber-700 border-amber-200', dot:'bg-amber-500' },
+    ok:          { label:'OK',          badge:'bg-emerald-100 text-emerald-700 border-emerald-200', dot:'bg-emerald-500' },
+  };
+
+  const lowStockInsumos = insumos.filter(i => i.activo && parseFloat(i.stock_actual) < parseFloat(i.stock_minimo));
+
+  const fetchDocInsumos = async (doc) => {
+    if (!doc) { setDocInsumos([]); return; }
+    try { const r = await apiFetch(`${host}/api/documentos/${doc.module}/${doc.id}/insumos`); setDocInsumos(r.ok ? await r.json() : []); } catch(e) { setDocInsumos([]); }
+  };
+  useEffect(() => { fetchDocInsumos(selectedDoc); /* eslint-disable-next-line */ }, [selectedDoc?.id]);
+  const addDocInsumo = async () => {
+    if (!selectedDoc || savingDocInsumo) return;
+    const cantidad = parseFloat(docInsumoLine.cantidad);
+    if (!docInsumoLine.insumo_id || !(cantidad > 0)) return showMsg('⚠️ Elige un insumo y cantidad > 0', true);
+    setSavingDocInsumo(true);
+    try {
+      const res = await apiFetch(`${host}/api/documentos/${selectedDoc.module}/${selectedDoc.id}/insumos`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ lineas: [{ insumo_id: parseFloat(docInsumoLine.insumo_id), cantidad }] }) });
+      const d = await res.json().catch(()=>({}));
+      if (res.ok) {
+        const r0 = d.resumenes?.[0];
+        if (r0) showMsg(`✅ ${r0.insumo.codigo}: −${r0.cantidad} ${r0.insumo.unidad} (stock ${r0.stock_antes}→${r0.stock_despues})`);
+        setDocInsumoLine({ insumo_id:'', cantidad:'' }); fetchDocInsumos(selectedDoc); fetchInsumos();
+      } else showMsg(`⛔ ${d.error||'Error'}`, true);
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setSavingDocInsumo(false); }
+  };
+  const removeDocInsumo = async (movId) => {
+    if (!selectedDoc) return;
+    if (!(await confirm({ message: '¿Quitar este consumo y reintegrar el stock?' }))) return;
+    try {
+      const res = await apiFetch(`${host}/api/documentos/${selectedDoc.module}/${selectedDoc.id}/insumos/${movId}`, { method:'DELETE' });
+      const d = await res.json().catch(()=>({}));
+      if (res.ok) { showMsg(`✅ Reintegrado ${d.reintegrado}`); fetchDocInsumos(selectedDoc); fetchInsumos(); }
+      else showMsg(`⛔ ${d.error||'Error'}`, true);
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+
+  const searchInsumoDocs = async () => {
+    setDocSearching(true);
+    try {
+      const qs = new URLSearchParams();
+      if (docSearch.tipo) qs.set('tipo', docSearch.tipo);
+      if (docSearch.q.trim()) qs.set('q', docSearch.q.trim());
+      const r = await apiFetch(`${host}/api/insumos/documentos?${qs.toString()}`);
+      setDocResults(r.ok ? await r.json() : []);
+    } catch(e) { setDocResults([]); } finally { setDocSearching(false); }
+  };
+
+  const submitInsumoMove = async () => {
+    if (!insumoMove || isMovingInsumo) return;
+    const { insumo, tipo } = insumoMove;
+    const qty = parseFloat(insumoMoveQty);
+    if (isNaN(qty) || (tipo !== 'ajuste' && qty <= 0) || (tipo === 'ajuste' && qty < 0)) return showMsg('⚠️ Cantidad inválida', true);
+    setIsMovingInsumo(true);
+    try {
+      const path = tipo === 'entrada' ? 'entrada' : tipo === 'consumo' ? 'consumo' : 'ajuste';
+      const body = tipo === 'ajuste' ? { nueva_cantidad: qty } : { cantidad: qty };
+      // Fecha de ingreso opcional, solo aplica a entradas.
+      if (tipo === 'entrada' && insumoMoveFecha) body.fecha = insumoMoveFecha;
+      const res = await apiFetch(`${host}/api/insumos/${insumo.id}/${path}`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+      const d = await res.json().catch(()=>({}));
+      if (res.ok) { setInsumoMoveResult(d.resumen); setInsumoMove(null); setInsumoMoveQty(''); setInsumoMoveFecha(''); fetchInsumos(); if (histInsumo?.id === insumo.id) loadHistorial(insumo); }
+      else showMsg(`⛔ ${d.error||'Error'}`, true);
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setIsMovingInsumo(false); }
+  };
+  // Histórico de movimientos de un insumo (entrada/consumo/ajuste), incluye anulados.
+  const loadHistorial = async (insumo) => {
+    setHistInsumo(insumo); setHistLoading(true);
+    try {
+      const r = await apiFetch(`${host}/api/insumos/${insumo.id}/movimientos`);
+      setHistRows(r.ok ? await r.json() : []);
+    } catch(e) { setHistRows([]); } finally { setHistLoading(false); }
+  };
+
+  const handleToggleInsumo = async (i) => {
+    if (i.activo && !(await confirm({ message: `¿Desactivar el insumo ${i.nombre}?`, danger: true }))) return;
+    try {
+      const res = i.activo
+        ? await apiFetch(`${host}/api/insumos/${i.id}`, { method:'DELETE' })
+        : await apiFetch(`${host}/api/insumos/${i.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ activo: true }) });
+      if (res.ok) { showMsg(i.activo ? '✅ Insumo desactivado' : '✅ Insumo reactivado'); fetchInsumos(); }
+      else { const err = await res.json().catch(()=>({})); showMsg(`⛔ ${err.error||'Error'}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+
   const handleSaveKit = async (e) => {
     e.preventDefault();
     if (kitForm.components.length === 0) return showMsg('⚠️ Agrega al menos un componente', true);
     try {
       const kitPayload = { ...kitForm };
       if ((!is3PLMode || isHybridMode) && !kitPayload.client_id) kitPayload.client_id = systemConfig.own_client_id || 'PROPIO';
-      const res = await apiFetch(`${host}/api/kits`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(kitPayload) });
+      // Receta vía kitting v2: marca es_kit y valida que kit y componentes existan en el maestro del cliente.
+      const res = await apiFetch(`${host}/api/kitting/receta`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(kitPayload) });
       if (res.ok) { showMsg('✅ Kit guardado'); setKitForm({ kit_sku: '', client_id: '', description: '', components: [] }); setKitComponentLine({ sku: '', qty: '' }); fetchData(); }
       else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
     } catch (e) { showMsg('⛔ Error de red', true); }
   };
+  // ── Kitting v2: órdenes de armado ──
+  const loadOrdenesV2 = useCallback(async () => {
+    try { const r = await apiFetch(`${host}/api/kitting/ordenes`); setOrdenesV2(r.ok ? await r.json() : []); } catch(e) { setOrdenesV2([]); }
+  }, [host]);
+  // Receta seleccionada para la orden (de la lista de kits ya cargada, por cliente).
+  const ordKit = (kits || []).find(k => k.kit_sku === ordForm.kit_sku && k.client_id === ordForm.client_id);
+  const handleCreateOrden = async () => {
+    if (creatingOrden) return;
+    if (!ordForm.client_id || !ordForm.kit_sku) return showMsg('⚠️ Elige cliente y kit', true);
+    const n = parseInt(ordForm.cantidad_kits);
+    if (!(n >= 1)) return showMsg('⚠️ Cantidad de kits inválida', true);
+    setCreatingOrden(true);
+    try {
+      const sugeridos = Object.entries(ordSugeridos).map(([componente_sku, v]) => ({ componente_sku, ...v }))
+        .filter(s => s.ubicacion || s.lote || s.serie);
+      const res = await apiFetch(`${host}/api/kitting/ordenes`, { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ kit_sku: ordForm.kit_sku, client_id: ordForm.client_id, cantidad_kits: n, notas: ordForm.notas || '', sugeridos }) });
+      if (res.ok) { const d = await res.json(); showMsg(`✅ Orden creada: ${d.id}`); setOrdForm({ client_id:'', kit_sku:'', cantidad_kits:1, notas:'' }); setOrdSugeridos({}); loadOrdenesV2(); }
+      else { const e = await res.json(); showMsg(`⛔ ${e.error}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setCreatingOrden(false); }
+  };
+  useEffect(() => { if (kittingTab === 'ordenes') loadOrdenesV2(); }, [kittingTab, loadOrdenesV2]);
+  // Abrir la pantalla de armado: trae el detalle (receta + LPN disponibles + sugeridos).
+  const openArmar = async (orderId) => {
+    try {
+      const r = await apiFetch(`${host}/api/kitting/ordenes/${orderId}`);
+      if (!r.ok) { const e = await r.json().catch(()=>({})); return showMsg(`⛔ ${e.error||'No se pudo abrir la orden'}`, true); }
+      const d = await r.json();
+      const init = {}; (d.receta||[]).forEach(c => { init[c.component_sku] = { mode:'auto', picks:{} }; });
+      setArmOrden(d); setArmSources(init); setArmDest({ ubicacion:'PISO-RECEPCION', lote:'', serie:'' });
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+  const handleArmar = async () => {
+    if (!armOrden || armBusy) return;
+    // Reusa la validación del picker de origen (suma exacta por componente en modo manual).
+    const avail = { components: (armOrden.receta||[]).map(r => ({ component_sku: r.component_sku, needed: parseFloat(r.qty_necesaria) })) };
+    const { ok, sources } = buildKitSourcesPayload(avail, armSources);
+    if (!ok) return;
+    setArmBusy(true);
+    try {
+      const res = await apiFetch(`${host}/api/kitting/ordenes/${armOrden.orden.id}/armar`, { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ consumos: sources, kit_ubicacion: armDest.ubicacion || null, kit_lote: armDest.lote || null, kit_serie: armDest.serie || null }) });
+      if (res.ok) { const d = await res.json(); showMsg(`✅ Kit armado — kit_stock ${d.kit_stock_id}`); setArmOrden(null); setArmSources({}); loadOrdenesV2(); fetchData(); }
+      else { const e = await res.json(); showMsg(`⛔ ${e.error}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setArmBusy(false); }
+  };
+  // Trazabilidad: dado un kit, ver sus componentes con ubicación/lote/serie de origen.
+  const openTrace = async (orderId) => {
+    try {
+      const r = await apiFetch(`${host}/api/kitting/ordenes/${orderId}`);
+      if (!r.ok) { const e = await r.json().catch(()=>({})); return showMsg(`⛔ ${e.error||'No se pudo abrir'}`, true); }
+      setTraceOrden(await r.json());
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+  // Desarmar: abre el detalle para mostrar qué componentes se reintegran y a dónde.
+  const openDesarmar = async (orderId) => {
+    try {
+      const r = await apiFetch(`${host}/api/kitting/ordenes/${orderId}`);
+      if (!r.ok) { const e = await r.json().catch(()=>({})); return showMsg(`⛔ ${e.error||'No se pudo abrir'}`, true); }
+      setDesarmOrden(await r.json()); setDesarmDest('');
+    } catch(e) { showMsg('⛔ Error de red', true); }
+  };
+  const handleDesarmar = async () => {
+    if (!desarmOrden || desarmBusy) return;
+    setDesarmBusy(true);
+    try {
+      const res = await apiFetch(`${host}/api/kitting/ordenes/${desarmOrden.orden.id}/desarmar`, { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ destino_ubicacion: desarmDest || null }) });
+      if (res.ok) { showMsg('✅ Kit desarmado — componentes reintegrados'); setDesarmOrden(null); loadOrdenesV2(); fetchData(); }
+      else { const e = await res.json(); showMsg(`⛔ ${e.error}`, true); }
+    } catch(e) { showMsg('⛔ Error de red', true); } finally { setDesarmBusy(false); }
+  };
   const handleDeleteKit = async (kit_sku, client_id) => {
     if (!(await confirm({ message: `¿Eliminar kit ${kit_sku}?`, danger: true }))) return;
     try {
-      const res = await apiFetch(`${host}/api/kits/${encodeURIComponent(kit_sku)}/${encodeURIComponent(client_id)}`, { method: 'DELETE' });
+      const res = await apiFetch(`${host}/api/kitting/receta/${encodeURIComponent(kit_sku)}/${encodeURIComponent(client_id)}`, { method: 'DELETE' });
       if (res.ok) { showMsg('✅ Kit eliminado'); fetchData(); }
       else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
     } catch (e) { showMsg('⛔ Error de red', true); }
@@ -1314,10 +1739,24 @@ export default function App() {
   })();
   const permittedSkus = isAllClients ? safeSkus : safeSkus.filter(s => userClientsArray.includes(s.client_id) || !s.client_id || s.client_id === 'GENERAL');
   const permittedInventory = isAllClients ? safeData : safeData.filter(i => userClientsArray.includes(i.client_id) || !i.client_id || i.client_id === 'GENERAL');
-  
+
+  // Catálogo de SKUs e inventario acotados al CLIENTE del documento activo
+  // (el cliente se elige al crear el movimiento). Si el doc no tiene cliente
+  // (modo PROPIO o sin elegir), no se acota.
+  const docClient = activeDoc?.client || null;
+  const docSkus = docClient ? permittedSkus.filter(s => (s.client_id || '') === docClient) : permittedSkus;
+  const docInventory = docClient ? permittedInventory.filter(i => (i.client_id || '') === docClient) : permittedInventory;
+
+  // SKUs elegibles como componentes de un kit: acotados al cliente seleccionado del
+  // kit (en 3PL). El armado busca el stock del componente por client_id del kit, así
+  // que un componente de otro cliente haría el kit inarmable.
+  const kitClientSkus = (is3PLMode && kitForm.client_id)
+    ? permittedSkus.filter(s => (s.client_id || '') === kitForm.client_id)
+    : permittedSkus;
+
   const selSku = permittedSkus.find(s => s.sku === lineItem.sku) || {};
-  
-  const stockForDisp = permittedInventory.filter(i => {
+
+  const stockForDisp = docInventory.filter(i => {
     if (i.sku !== lineItem.sku) return false;
     if (!i.status || i.status === 'DISPONIBLE') return true;
     const st = statuses.find(s => s.id === i.status);
@@ -1344,13 +1783,17 @@ export default function App() {
       const res = await apiFetch(`${host}/api/skus/barcode/${encodeURIComponent(barcode.trim())}`);
       const data = await res.json();
       if (data.found) {
-        setLineItem(prev => ({ ...prev, sku: data.sku.sku }));
-        showMsg(`✅ SKU encontrado: ${data.sku.sku} — ${data.sku.desc}`);
+        if (docClient && (data.sku.client_id || '') !== docClient) {
+          showMsg(`⛔ El SKU ${data.sku.sku} no pertenece al cliente del documento`, true);
+        } else {
+          setLineItem(prev => ({ ...prev, sku: data.sku.sku }));
+          showMsg(`✅ SKU encontrado: ${data.sku.sku} — ${data.sku.desc}`);
+        }
       } else {
-        // Buscar por SKU directo si no hay barcode
-        const bySku = permittedSkus.find(s => s.sku === barcode.trim().toUpperCase());
+        // Buscar por SKU directo si no hay barcode (acotado al cliente del documento)
+        const bySku = docSkus.find(s => s.sku === barcode.trim().toUpperCase());
         if (bySku) { setLineItem(prev => ({ ...prev, sku: bySku.sku })); showMsg(`✅ SKU: ${bySku.sku}`); }
-        else showMsg(`⚠️ Código "${barcode}" no encontrado`, true);
+        else showMsg(`⚠️ Código "${barcode}" no encontrado para este cliente`, true);
       }
     } catch(e) { showMsg('⛔ Error al buscar código', true); }
     finally { setIsScanning(false); setBarcodeInput(''); }
@@ -1359,7 +1802,7 @@ export default function App() {
 
   const addDispatchLineManual = async () => {
     const newItems = Object.entries(lineItem.selectedLpns).filter(([_, qty]) => qty > 0).map(([lpnId, qty]) => {
-        const lpn = permittedInventory.find(i => i.id === lpnId);
+        const lpn = docInventory.find(i => i.id === lpnId);
         return { sku: lpn.sku, desc: lpn.desc, lpnId, location: lpn.location_id, qtyToPick: qty, serial: lpn.serial_number };
     });
     if (newItems.length === 0) return;
@@ -1392,9 +1835,22 @@ export default function App() {
 
   const addAdjustLine = () => { if (!lineItem.sku || !lineItem.qty) return; addLineToDoc({ ...lineItem, desc: selSku.desc }); };
 
+  // Lista de clientes con filtros individuales combinables (AND).
+  const filteredClients = useMemo(() => permittedClients.filter(c => {
+    const matchesId = clientIdFilter ? (c.id || '').toLowerCase().includes(clientIdFilter.toLowerCase()) : true;
+    const matchesName = clientNameFilter ? (c.name || '').toLowerCase().includes(clientNameFilter.toLowerCase()) : true;
+    const matchesContact = clientContactFilter
+      ? ((c.contact || '').toLowerCase().includes(clientContactFilter.toLowerCase()) || (c.email || '').toLowerCase().includes(clientContactFilter.toLowerCase()))
+      : true;
+    return matchesId && matchesName && matchesContact;
+  }), [permittedClients, clientIdFilter, clientNameFilter, clientContactFilter]);
+
   const filteredRelData = permittedInventory.filter(i => {
-    const term = relSearchTerm.toLowerCase();
-    return i.id.toLowerCase().includes(term) || i.sku.toLowerCase().includes(term) || (i.location_id || '').toLowerCase().includes(term);
+    const matchesLpn = relLpnFilter ? i.id.toLowerCase().includes(relLpnFilter.toLowerCase()) : true;
+    const matchesSku = relSkuFilter ? i.sku.toLowerCase().includes(relSkuFilter.toLowerCase()) : true;
+    const matchesLoc = relLocFilter ? (i.location_id || '').toLowerCase().includes(relLocFilter.toLowerCase()) : true;
+    const matchesClient = relClientFilter ? (i.client_id || '') === relClientFilter : true;
+    return matchesLpn && matchesSku && matchesLoc && matchesClient;
   });
   
   const filteredSkusList = useMemo(() => permittedSkus.filter(s => {
@@ -1407,9 +1863,9 @@ export default function App() {
   }), [permittedSkus, skuSearchTerm, skuClientFilter, skuCategoryFilter, skuAbcFilter]);
   
   const filteredLocs = safeLocs.filter(l => {
-    const term = locSearchTerm.toLowerCase();
-    if (term && !l.location_id.toLowerCase().includes(term) && !(l.zone_code || '').toLowerCase().includes(term)) return false;
-    if (whZoneFilter && (l.zone_code || '') !== whZoneFilter) return false;
+    if (locCodeFilter && !l.location_id.toLowerCase().includes(locCodeFilter.toLowerCase())) return false;
+    if (locZoneFilter && !(l.zone_code || '').toLowerCase().includes(locZoneFilter.toLowerCase())) return false;
+    if (whZoneFilter && (l.zone_code || 'SIN ZONA') !== whZoneFilter) return false;
     if (whBodegaFilter && !l.location_id.startsWith(whBodegaFilter)) return false;
     return true;
   });
@@ -1555,7 +2011,7 @@ export default function App() {
   const handlePortalLogin = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${host}/api/portal/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(portalLoginForm) });
+      const res = await fetch(`${host}/api/portal/login`, { method:'POST', headers:{'Content-Type':'application/json', 'ngrok-skip-browser-warning':'true'}, body: JSON.stringify(portalLoginForm) });
       const d = await res.json();
       if (res.ok) { localStorage.setItem('wms_portal_token', d.token); setPortalUser(d); }
       else setPortalLoginError(d.error || 'Credenciales incorrectas');
@@ -1569,54 +2025,95 @@ export default function App() {
     } catch(e) { showMsg('⛔ Error de red', true); }
   };
 
-  // HANDLERS KITTING BUILD
-  const handleCheckKitAvailability = async () => {
-    const buildClientId = (!is3PLMode || (isHybridMode && !kitBuildForm.client_id)) ? (systemConfig.own_client_id || 'PROPIO') : kitBuildForm.client_id;
-    if (!kitBuildForm.kit_sku || !buildClientId) return showMsg('⛔ Selecciona un Kit', true);
-    try {
-      const res = await apiFetch(`${host}/api/kit-availability?kit_sku=${encodeURIComponent(kitBuildForm.kit_sku)}&client_id=${encodeURIComponent(buildClientId)}&qty=${kitBuildForm.qty}`);
-      if (res.ok) setKitAvailability(await res.json());
-      else showMsg('⛔ No se pudo verificar disponibilidad', true);
-    } catch(e) { showMsg('⛔ Error de red', true); }
+  // Inicializa el origen de cada componente en modo automático (FEFO).
+  const initKitSources = (avail) => {
+    const o = {}; (avail?.components || []).forEach(c => { o[c.component_sku] = { mode: 'auto', picks: {} }; }); return o;
   };
-  const handleBuildKit = async () => {
-    if (!kitAvailability?.can_build) return;
-    if (!(await confirm({ message: `¿Armar ${kitBuildForm.qty} unidades de ${kitBuildForm.kit_sku}?`, danger: true }))) return;
-    try {
-      const buildPayload = { ...kitBuildForm, username: currentUser.username };
-      if ((!is3PLMode || isHybridMode) && !buildPayload.client_id) buildPayload.client_id = systemConfig.own_client_id || 'PROPIO';
-      const res = await apiFetch(`${host}/api/kit-build`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(buildPayload) });
-      if (res.ok) { const d = await res.json(); showMsg(`✅ Kit armado — LPN: ${d.lpn}`); setKitBuildForm({ kit_sku:'', client_id:'', qty:1, location:'PISO-RECEPCION' }); setKitAvailability(null); fetchData(); }
-      else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
-    } catch(e) { showMsg('⛔ Error de red', true); }
+  // Construye el payload `sources` (solo componentes en manual) validando que cada uno
+  // sume exactamente lo necesario. Devuelve { ok, sources }.
+  const buildKitSourcesPayload = (avail, srcState) => {
+    const sources = {};
+    for (const c of (avail?.components || [])) {
+      const st = srcState[c.component_sku];
+      if (st?.mode !== 'manual') continue;
+      const picks = Object.entries(st.picks || {}).map(([lpn_id, q]) => ({ lpn_id, qty: parseFloat(q) || 0 })).filter(p => p.qty > 0);
+      const sum = picks.reduce((s, p) => s + p.qty, 0);
+      if (Math.abs(sum - c.needed) > 1e-6) { showMsg(`⛔ ${c.component_sku}: selecciona exactamente ${c.needed} (llevas ${sum})`, true); return { ok: false }; }
+      sources[c.component_sku] = picks;
+    }
+    return { ok: true, sources };
+  };
+  // Selector de origen de UN componente: toggle Automático(FEFO)/Elegir, y en manual
+  // la lista de LPN con ubicación, lote y serie + cuánto tomar de cada uno.
+  const renderKitSourcePicker = (c, srcState, setSrcState) => {
+    const st = srcState[c.component_sku] || { mode: 'auto', picks: {} };
+    const setMode = (mode) => setSrcState(prev => ({ ...prev, [c.component_sku]: { ...(prev[c.component_sku] || { picks: {} }), mode } }));
+    const setPick = (lpnId, val) => setSrcState(prev => { const cur = prev[c.component_sku] || { mode: 'manual', picks: {} }; return { ...prev, [c.component_sku]: { ...cur, picks: { ...cur.picks, [lpnId]: val } } }; });
+    const sum = Object.values(st.picks || {}).reduce((s, q) => s + (parseFloat(q) || 0), 0);
+    const ok = Math.abs(sum - c.needed) < 1e-6;
+    const tBtn = (active) => `text-[9px] font-black uppercase px-2 py-1 rounded-lg border ${active ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}`;
+    return (
+      <div className="mt-2 border-t border-slate-100 pt-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
+          <span className="text-[9px] font-black text-slate-400 uppercase">Origen:</span>
+          <button type="button" onClick={()=>setMode('auto')} className={tBtn(st.mode !== 'manual')}>Automático (FEFO)</button>
+          <button type="button" onClick={()=>setMode('manual')} className={tBtn(st.mode === 'manual')}>Elegir origen</button>
+          {st.mode === 'manual' && <span className={`text-[10px] font-black ml-auto ${ok ? 'text-emerald-600' : 'text-red-500'}`}>{sum} / {c.needed}</span>}
+        </div>
+        {st.mode === 'manual' && (
+          <div className="space-y-1">
+            {(c.lpns || []).map(l => (
+              <div key={l.id} className="flex items-center gap-2 text-[10px] bg-slate-50 rounded-lg px-2 py-1">
+                <span className="font-mono font-bold text-slate-600 truncate max-w-[90px]" title={l.id}>{l.id}</span>
+                <span className="text-slate-500">📍 {l.location_id || '—'}</span>
+                {l.batch_number && <span className="text-amber-600 font-bold">Lote {l.batch_number}</span>}
+                {l.serial_number && <span className="text-violet-600 font-bold">S/N {l.serial_number}</span>}
+                <span className="text-slate-400 ml-auto">disp {parseFloat(l.qty)}</span>
+                <input type="number" min="0" max={parseFloat(l.qty)} step="0.01" value={st.picks[l.id] || ''} onChange={e=>setPick(l.id, e.target.value)} placeholder="0" className="w-16 border border-slate-200 rounded px-1.5 py-1 text-center font-black outline-none focus:border-slate-500"/>
+              </div>
+            ))}
+            {(c.lpns || []).length === 0 && <p className="text-[10px] text-slate-400">Sin LPN disponibles para este componente.</p>}
+          </div>
+        )}
+      </div>
+    );
   };
 
-  const handleCheckKitDispatchAvail = async () => {
-    const dispClientId = (!is3PLMode || (isHybridMode && !kitDispatchForm.client_id)) ? (systemConfig.own_client_id || 'PROPIO') : kitDispatchForm.client_id;
-    if (!kitDispatchForm.kit_sku || !dispClientId) return showMsg('⛔ Selecciona un Kit', true);
+  // ── Modo A: verificar disponibilidad de un kit para agregarlo al despacho ──
+  const checkDispKitAvail = async () => {
+    if (!activeDoc) return;
+    const client_id = activeDoc.client;
+    if (!dispKitForm.kit_sku || !client_id) return showMsg('⚠️ Selecciona un kit', true);
+    const n = parseInt(dispKitForm.qty);
+    if (!(n >= 1)) return showMsg('⚠️ Cantidad de kits inválida', true);
     try {
-      const r = await apiFetch(`${host}/api/kit-availability?kit_sku=${encodeURIComponent(kitDispatchForm.kit_sku)}&client_id=${encodeURIComponent(dispClientId)}&qty=${kitDispatchForm.qty}`);
-      if (r.ok) setKitDispatchAvail(await r.json());
-      else showMsg('⛔ No se pudo verificar disponibilidad', true);
-    } catch(e) { showMsg('⛔ Error de red', true); }
+      const r = await apiFetch(`${host}/api/kitting/disponibilidad?kit_sku=${encodeURIComponent(dispKitForm.kit_sku)}&client_id=${encodeURIComponent(client_id)}&qty=${n}`);
+      if (r.ok) { const d = await r.json(); setDispKitAvail(d); setDispKitSources(initKitSources(d)); }
+      else { const e = await r.json(); showMsg(`⛔ ${e.error}`, true); }
+    } catch (e) { showMsg('⛔ Error al verificar disponibilidad', true); }
   };
 
-  const handleDirectKitDispatch = async () => {
-    if (!kitDispatchAvail?.can_build) return;
-    if (!(await confirm({ message: `¿Despachar directamente ${kitDispatchForm.qty}x ${kitDispatchForm.kit_sku}? Se consumirán los componentes ahora.`, danger: true }))) return;
-    try {
-      const dispPayload = { ...kitDispatchForm, username: currentUser.username };
-      if ((!is3PLMode || isHybridMode) && !dispPayload.client_id) dispPayload.client_id = systemConfig.own_client_id || 'PROPIO';
-      const r = await apiFetch(`${host}/api/kits/direct-dispatch`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(dispPayload) });
-      if (r.ok) {
-        const d = await r.json();
-        showMsg(`✅ Despacho directo completado — Orden: ${d.order_id}`);
-        setKitDispatchForm({ kit_sku:'', client_id:'', qty:1, doc_num:'', glosa:'' });
-        setKitDispatchAvail(null);
-        fetchData();
-      } else { const err = await r.json(); showMsg(`⛔ ${err.error}`, true); }
-    } catch(e) { showMsg('⛔ Error de red', true); }
+  // ── Modo A: agregar la línea de kit (con orígenes por componente) al carro ──
+  const addKitLineToDispatch = () => {
+    if (!dispKitAvail?.can_build) return showMsg('⛔ Stock insuficiente para este kit', true);
+    const { ok, sources } = buildKitSourcesPayload(dispKitAvail, dispKitSources);
+    if (!ok) return;
+    const components = (dispKitAvail.components || []).map(c => {
+      const st = dispKitSources[c.component_sku] || { mode: 'auto' };
+      return st.mode === 'manual'
+        ? { component_sku: c.component_sku, mode: 'manual', sources: sources[c.component_sku] || [] }
+        : { component_sku: c.component_sku, mode: 'auto' };
+    });
+    const kitInfo = (kits || []).find(k => k.kit_sku === dispKitForm.kit_sku && k.client_id === activeDoc.client);
+    addLineToDoc({
+      isKit: true, sku: dispKitForm.kit_sku, desc: kitInfo?.description || 'Kit',
+      client_id: activeDoc.client, qtyKits: parseInt(dispKitForm.qty), components,
+      _compSummary: (dispKitAvail.components || []).map(c => `${c.needed}× ${c.component_sku}`).join(', '),
+    });
+    setDispKitForm({ kit_sku: '', qty: 1 }); setDispKitAvail(null); setDispKitSources({});
+    showMsg('✅ Kit agregado al carro de despacho');
   };
+
 
   // VISTA MANTENIMIENTO (si está activo y no es superadmin)
   if (maintenanceMode && currentUser && currentUser.role !== 'SUPERADMIN') {
@@ -1884,16 +2381,33 @@ export default function App() {
   return (
     <>
       <GlobalStyles />
-      {/* MODAL DE IMPORTACIÓN */}
+      {/* MODAL DE CARGA MASIVA (editable + validación + duplicados) — los 5 flujos */}
       {importModal && (
-        <ImportModal
+        <BulkImportModal
           type={importModal.type}
           host={host}
           currentUser={currentUser}
+          skus={skus}
           extraParams={importModal.extraParams || {}}
           onClose={() => setImportModal(null)}
           onSuccess={() => { fetchData(); }}
         />
+      )}
+      {/* PASO 4 — Modal de re-autenticación (step-up) para recepción/despacho */}
+      {reauthPrompt && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ShieldAlert size={18} className="text-amber-500"/> Confirmar {reauthPrompt.label}</h3>
+            <p className="text-xs text-slate-500 mt-1">Por seguridad, reingresa tu contraseña para autorizar esta operación.</p>
+            <form onSubmit={(e) => { e.preventDefault(); const pw = e.target.elements.reauthpw.value; reauthPrompt.resolve(pw); setReauthPrompt(null); }}>
+              <input name="reauthpw" type="password" autoFocus autoComplete="current-password" className="w-full mt-4 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Tu contraseña"/>
+              <div className="flex gap-2 mt-4">
+                <button type="button" onClick={() => { reauthPrompt.resolve(null); setReauthPrompt(null); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest">Cancelar</button>
+                <button type="submit" className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl uppercase text-[10px] tracking-widest">Confirmar</button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
       {confirmDialog && (
         <ConfirmModal
@@ -2001,7 +2515,7 @@ export default function App() {
                 {canView('digital-twin') && <button onClick={() => switchTab('digital-twin')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'digital-twin' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Mapa 3D Bodega</button>}
 
                 {/* ─── OPERACIONES DIARIAS ─── */}
-                {(canView('receive') || canView('dispatch') || canView('relocate') || canView('change-status') || canView('adjust') || canView('returns')) && (<>
+                {(canView('receive') || canView('dispatch') || canView('insumos') || canView('relocate') || canView('change-status') || canView('adjust') || canView('returns')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
                   <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Operaciones Diarias</p>
                   {canView('receive') && <button data-tutorial-target="receive-tab" onClick={() => switchTab('receive')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'receive' ? 'bg-emerald-500/20 text-emerald-400 font-black' : 'hover:bg-slate-800'}`}><ArrowDownRight size={18} className="mr-3"/> Recepciones (In)</button>}
@@ -2013,6 +2527,7 @@ export default function App() {
                       )}
                     </button>
                   )}
+                  {canView('insumos') && <button onClick={() => switchTab('insumos')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'insumos' ? 'bg-orange-500/20 text-orange-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Insumos de Bodega</button>}
                   {canView('relocate') && (
                     <button data-tutorial-target="relocate-tab" onClick={() => switchTab('relocate')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'relocate' ? 'bg-purple-500/20 text-purple-400 font-black' : 'hover:bg-slate-800'}`}>
                       <ArrowRightLeft size={18} className="mr-3"/> Reubicar Stock
@@ -2026,10 +2541,10 @@ export default function App() {
                   {canView('returns') && <button onClick={() => switchTab('returns')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'returns' ? 'bg-orange-500/20 text-orange-400 font-black' : 'hover:bg-slate-800 text-slate-300'}`}><ArrowLeft size={18} className="mr-3"/> Devoluciones</button>}
                 </>)}
 
-                {/* ─── PICKING & EMPAQUE ─── */}
-                {(canView('picking-monitor') || canView('waves') || canView('packing')) && (<>
+                {/* ─── PICKING ─── */}
+                {(canView('picking-monitor') || canView('waves')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Picking & Empaque</p>
+                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Picking</p>
                   {canView('picking-monitor') && (
                     <button data-tutorial-target="picking-tab" onClick={() => switchTab('picking-monitor')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'picking-monitor' ? 'bg-violet-500/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}>
                       <ClipboardList size={18} className="mr-3"/> Monitor de Picking
@@ -2039,13 +2554,12 @@ export default function App() {
                     </button>
                   )}
                   {canView('waves') && <button onClick={() => switchTab('waves')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'waves' ? 'bg-violet-500/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Olas de Picking</button>}
-                  {canView('packing') && <button onClick={() => switchTab('packing')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'packing' ? 'bg-violet-500/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}><Package size={18} className="mr-3"/> Estación Empaque</button>}
                 </>)}
 
-                {/* ─── PROGRAMACIÓN & LOGÍSTICA ─── */}
-                {(canView('dispatch-schedule') || canView('docks') || canView('transport') || canView('purchase-orders') || canView('suppliers')) && (<>
+                {/* ─── TRANSPORTE ─── */}
+                {(canView('dispatch-schedule') || canView('docks') || canView('transport') || canView('transporte-coord') || canView('solicitar-transporte') || canView('cierre-transporte')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Programación & Logística</p>
+                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Transporte</p>
                   {canView('dispatch-schedule') && (
                     <button onClick={() => switchTab('dispatch-schedule')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'dispatch-schedule' ? 'bg-teal-500/20 text-teal-400 font-black' : 'hover:bg-slate-800'}`}>
                       <CalendarClock size={18} className="mr-3"/> Prog. de Salidas
@@ -2056,6 +2570,15 @@ export default function App() {
                   )}
                   {canView('docks') && <button onClick={() => switchTab('docks')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'docks' ? 'bg-teal-500/20 text-teal-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Muelles / Yard</button>}
                   {canView('transport') && <button onClick={() => switchTab('transport')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'transport' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte</button>}
+                  {canView('transporte-coord') && <button onClick={() => switchTab('transporte-coord')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'transporte-coord' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte y Logística</button>}
+                  {canView('solicitar-transporte') && <button onClick={() => switchTab('solicitar-transporte')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'solicitar-transporte' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Solicitar transporte</button>}
+                  {canView('cierre-transporte') && <button onClick={() => switchTab('cierre-transporte')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'cierre-transporte' ? 'bg-teal-500/20 text-teal-400 font-black' : 'hover:bg-slate-800'}`}><Truck size={18} className="mr-3"/> Transporte (bodega)</button>}
+                </>)}
+
+                {/* ─── ABASTECIMIENTO ─── */}
+                {(canView('purchase-orders') || canView('suppliers') || canView('manufacturers')) && (<>
+                  <div className="my-4 border-t border-slate-800"></div>
+                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Abastecimiento</p>
                   {canView('purchase-orders') && <button onClick={() => switchTab('purchase-orders')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'purchase-orders' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800 text-slate-300'}`}><FileText size={18} className="mr-3"/> Órdenes de Compra</button>}
                   {canView('suppliers') && <button onClick={() => switchTab('suppliers')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'suppliers' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Building2 size={18} className="mr-3"/> Proveedores & ASN</button>}
                   {canView('manufacturers') && <button onClick={() => switchTab('manufacturers')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'manufacturers' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><HardHat size={18} className="mr-3"/> Fabricantes</button>}
@@ -2633,985 +3156,109 @@ export default function App() {
                   zones={zones}
                   getStatusBadge={getStatusBadge}
                   clients={clients}
+                  userRole={currentUser?.role}
                 />
               </Suspense>
             )}
             
             {/* REGISTRO DE ACCESOS ──────────────────────────── */}
-            {activeTab === 'access-log' && isAdmin && (() => {
-              const loadAccessLog = async (filt = accessLogFilter, page = accessLogPage) => {
-                setAccessLogBusy(true);
-                try {
-                  const qs = new URLSearchParams();
-                  if (filt.username) qs.set('username', filt.username);
-                  if (filt.ip) qs.set('ip', filt.ip);
-                  if (filt.success) qs.set('success', filt.success);
-                  if (filt.from) qs.set('from', filt.from);
-                  if (filt.to) qs.set('to', filt.to);
-                  qs.set('limit', '100');
-                  qs.set('offset', String(page * 100));
-                  const r = await apiFetch(`${host}/api/login-history?${qs}`);
-                  if (r.ok) setAccessLogData(await r.json());
-                } catch (e) {} finally { setAccessLogBusy(false); }
-              };
-              const stats = accessLogData.stats || {};
-              const rows = accessLogData.rows || [];
-              const total = accessLogData.total || 0;
-              const totalPages = Math.max(1, Math.ceil(total / 100));
-              return (
-                <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div className="flex items-center gap-4">
-                      <div className="p-3 bg-indigo-100 rounded-2xl"><Key className="w-7 h-7 text-indigo-600"/></div>
-                      <div>
-                        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Registro de accesos</h1>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quién entró al sistema, cuándo y desde qué IP</p>
-                      </div>
-                    </div>
-                    <button onClick={() => loadAccessLog()} disabled={accessLogBusy} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-md disabled:opacity-50">
-                      {accessLogBusy ? <Loader2 size={12} className="animate-spin"/> : <RefreshCcw size={12}/>}
-                      Actualizar
-                    </button>
-                  </div>
-
-                  {/* Tarjetas de estadísticas */}
-                  <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Accesos OK total</p><p className="text-2xl font-black text-emerald-600 mt-1">{stats.ok_total || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Intentos fallidos</p><p className="text-2xl font-black text-red-600 mt-1">{stats.fail_total || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">OK hoy</p><p className="text-2xl font-black text-emerald-600 mt-1">{stats.ok_today || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fallidos hoy</p><p className="text-2xl font-black text-red-600 mt-1">{stats.fail_today || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Activos 24h</p><p className="text-2xl font-black text-indigo-600 mt-1">{stats.active_24h || 0}</p></div>
-                    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm"><p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">IPs únicas</p><p className="text-2xl font-black text-slate-700 mt-1">{stats.distinct_ips || 0}</p></div>
-                  </div>
-
-                  {/* Filtros */}
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-4">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Filtrar</p>
-                    <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
-                      <input type="text" placeholder="Usuario" value={accessLogFilter.username} onChange={e=>setAccessLogFilter(p=>({...p, username:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/>
-                      <input type="text" placeholder="IP" value={accessLogFilter.ip} onChange={e=>setAccessLogFilter(p=>({...p, ip:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/>
-                      <select value={accessLogFilter.success} onChange={e=>setAccessLogFilter(p=>({...p, success:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white focus:border-indigo-500">
-                        <option value="">Todos</option>
-                        <option value="true">Solo accesos OK</option>
-                        <option value="false">Solo fallidos</option>
-                      </select>
-                      <input type="date" value={accessLogFilter.from} onChange={e=>setAccessLogFilter(p=>({...p, from:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500" title="Desde"/>
-                      <input type="date" value={accessLogFilter.to} onChange={e=>setAccessLogFilter(p=>({...p, to:e.target.value}))} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500" title="Hasta"/>
-                      <div className="flex gap-2">
-                        <button onClick={()=>{setAccessLogPage(0);loadAccessLog(accessLogFilter, 0);}} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-xl text-[10px] font-black uppercase">Aplicar</button>
-                        <button onClick={()=>{const empty={username:'',ip:'',success:'',from:'',to:''};setAccessLogFilter(empty);setAccessLogPage(0);loadAccessLog(empty,0);}} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase">Limpiar</button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Tabla */}
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left">
-                        <thead className="bg-slate-50 border-b border-slate-200">
-                          <tr>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase">Fecha / Hora</th>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase">Usuario</th>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase">Rol</th>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase">IP de origen</th>
-                            <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase text-center">Resultado</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {rows.length === 0 && (
-                            <tr><td colSpan="5" className="p-8 text-center text-slate-400 text-sm">Sin accesos para los filtros aplicados. Presiona "Actualizar" para cargar el historial.</td></tr>
-                          )}
-                          {rows.map(r => (
-                            <tr key={r.id} className="hover:bg-indigo-50/30 transition-colors">
-                              <td className="px-5 py-3 text-xs font-bold text-slate-700">
-                                <p>{new Date(r.created_at).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'medium' })}</p>
-                                <p className="text-[9px] text-slate-400 font-medium">{timeAgo(r.created_at)}</p>
-                              </td>
-                              <td className="px-5 py-3">
-                                <p className="font-mono text-xs font-black text-slate-800">@{r.username}</p>
-                                {r.full_name && <p className="text-[10px] text-slate-500">{r.full_name}</p>}
-                              </td>
-                              <td className="px-5 py-3">
-                                {r.role ? <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${r.role === 'SUPERADMIN' ? 'bg-red-100 text-red-700' : r.role === 'ADMIN' ? 'bg-orange-100 text-orange-700' : r.role === 'CLIENTE' ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600'}`}>{r.role}</span> : <span className="text-[10px] text-slate-400">(usuario eliminado)</span>}
-                              </td>
-                              <td className="px-5 py-3 font-mono text-xs text-slate-600">{r.ip || '—'}</td>
-                              <td className="px-5 py-3 text-center">
-                                {r.success
-                                  ? <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1"><CheckCircle2 size={10}/> Acceso OK</span>
-                                  : <span className="bg-red-100 text-red-700 border border-red-200 px-3 py-1 rounded-full text-[10px] font-black uppercase inline-flex items-center gap-1"><XCircle size={10}/> Fallido</span>}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {/* Paginación */}
-                    {total > 0 && (
-                      <div className="flex items-center justify-between p-4 border-t border-slate-100 bg-slate-50">
-                        <p className="text-[10px] font-bold text-slate-500">Mostrando {accessLogPage*100+1}–{Math.min((accessLogPage+1)*100, total)} de {total}</p>
-                        <div className="flex gap-2">
-                          <button disabled={accessLogPage===0} onClick={()=>{const p=accessLogPage-1;setAccessLogPage(p);loadAccessLog(accessLogFilter,p);}} className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-[10px] font-black text-slate-600 disabled:opacity-30">← Anterior</button>
-                          <span className="px-3 py-1.5 text-[10px] font-black text-slate-500">Pág {accessLogPage+1} / {totalPages}</span>
-                          <button disabled={accessLogPage+1>=totalPages} onClick={()=>{const p=accessLogPage+1;setAccessLogPage(p);loadAccessLog(accessLogFilter,p);}} className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-[10px] font-black text-slate-600 disabled:opacity-30">Siguiente →</button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
+            {activeTab === 'access-log' && isAdmin && (
+              <Suspense fallback={<TabLoader />}>
+                <AccessLogTab
+                  accessLogFilter={accessLogFilter} setAccessLogFilter={setAccessLogFilter}
+                  accessLogPage={accessLogPage} setAccessLogPage={setAccessLogPage}
+                  accessLogData={accessLogData} setAccessLogData={setAccessLogData}
+                  accessLogBusy={accessLogBusy} setAccessLogBusy={setAccessLogBusy}
+                  apiFetch={apiFetch} host={host} timeAgo={timeAgo}
+                />
+              </Suspense>
+            )}
 
             {/* USUARIOS CON SELECCIÓN DE MÓDULOS */}
             {activeTab === 'users' && isAdmin && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center">
-                        <UserCog className="w-5 h-5 mr-2 text-indigo-500"/> 
-                        {isEditingUser ? 'Editando Perfil' : 'Gestión de Usuarios'}
-                      </h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Crear accesos, suspender y definir permisos</p>
-                    </div>
-                    <form onSubmit={handleSaveUser} className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Username *</label><input type="text" value={userForm.username} onChange={e=>setUserForm({...userForm, username: e.target.value.toLowerCase().replace(/\s/g, '')})} required disabled={isEditingUser} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 lowercase ${isEditingUser ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : ''}`} placeholder="Ej: jlopez"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Contraseña {isEditingUser ? '' : '*'}</label><input type="password" value={userForm.password} onChange={e=>setUserForm({...userForm, password: e.target.value})} required={!isEditingUser} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder={isEditingUser ? "(Vacío para no cambiar)" : "******"}/></div>
-                        </div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Nombre Completo *</label><input type="text" value={userForm.full_name} onChange={e=>setUserForm({...userForm, full_name: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Ej: Juan López"/></div>
-                        
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                             <label className="text-[10px] font-black text-slate-400 uppercase">Rol de Seguridad Base</label>
-                             <select value={userForm.role} onChange={e=>setUserForm({...userForm, role: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                               <option value="CLIENTE">CLIENTE (Portal solo lectura)</option>
-                               <option value="PICKER">PICKER (Bodega)</option>
-                               <option value="EJECUTIVO_CUENTA">EJECUTIVO DE CUENTA</option>
-                               <option value="AUDITOR">AUDITOR</option>
-                               {isAdmin && <option value="ADMIN">ADMINISTRADOR</option>}
-                             </select>
-                          </div>
-                          <div className="space-y-1">
-                             <label className="text-[10px] font-black text-slate-400 uppercase">Estado de la Cuenta</label>
-                             <select value={userForm.status} onChange={e=>setUserForm({...userForm, status: e.target.value})} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white ${userForm.status === 'SUSPENDED' ? 'text-red-600' : 'text-emerald-600'}`}>
-                               <option value="ACTIVE">🟢 Activa (Permitir Acceso)</option>
-                               <option value="SUSPENDED">🔴 Suspendida (Bloqueado)</option>
-                             </select>
-                          </div>
-                        </div>
-
-                        {/* ── ACCESO A CLIENTES (modo 3PL) ─────────────── */}
-                        <div className="space-y-3 pt-4 border-t border-slate-100">
-                          <label className="text-[10px] font-black text-indigo-600 uppercase flex items-center"><Users className="w-3 h-3 mr-1"/> Acceso a clientes (operaciones)</label>
-                          {['ADMIN','SUPERADMIN'].includes(userForm.role) ? (
-                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
-                              <p className="text-xs font-black text-indigo-700">🛡 Todos los clientes</p>
-                              <p className="text-[10px] text-indigo-600 font-bold mt-0.5">Los administradores siempre acceden a todos los clientes.</p>
-                            </div>
-                          ) : (
-                            <>
-                              <p className="text-[10px] text-slate-500 font-bold">Define sobre qué clientes este usuario puede crear operaciones (recibir, despachar, ajustar). La <strong>consulta</strong> de stock e inventario sigue siendo global.</p>
-                              <div className="space-y-2">
-                                {[
-                                  ['all','Todos los clientes','admin, jefe de bodega'],
-                                  ['assigned','Solo clientes asignados','operador específico'],
-                                  ['none','Sin acceso a clientes','usuario bloqueado'],
-                                ].map(([id,label,desc]) => (
-                                  <label key={id} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${userForm.client_scope === id ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'}`}>
-                                    <input type="radio" name="client_scope" value={id} checked={userForm.client_scope === id} onChange={()=>setUserForm(p=>({...p, client_scope: id}))} className="mt-0.5 accent-indigo-600"/>
-                                    <div>
-                                      <p className="text-xs font-black text-slate-800">{label}</p>
-                                      <p className="text-[10px] text-slate-500 font-medium">{desc}</p>
-                                    </div>
-                                  </label>
-                                ))}
-                              </div>
-
-                              {userForm.client_scope === 'assigned' && (
-                                <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-2 animate-in fade-in">
-                                  <div className="flex items-center justify-between">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase">Clientes asignados ({(userForm.assigned_clients||[]).length})</p>
-                                    <div className="flex gap-2">
-                                      <button type="button" onClick={()=>setUserForm(p=>({...p, assigned_clients: clients.map(c=>c.id)}))} className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 underline">Seleccionar todos</button>
-                                      <button type="button" onClick={()=>setUserForm(p=>({...p, assigned_clients: []}))} className="text-[9px] font-black text-slate-500 hover:text-slate-700 underline">Deseleccionar todos</button>
-                                    </div>
-                                  </div>
-                                  <div className="max-h-48 overflow-y-auto space-y-1 bg-white border border-slate-200 rounded-lg p-2">
-                                    {clients.length === 0 && <p className="text-[10px] text-slate-400 text-center py-3">Sin clientes registrados aún.</p>}
-                                    {clients.map(c => {
-                                      const checked = (userForm.assigned_clients || []).includes(c.id);
-                                      return (
-                                        <label key={c.id} className="flex items-center gap-2 cursor-pointer p-1.5 hover:bg-slate-50 rounded">
-                                          <input type="checkbox" checked={checked} onChange={()=>setUserForm(p=>({...p, assigned_clients: checked ? p.assigned_clients.filter(x=>x!==c.id) : [...(p.assigned_clients||[]), c.id]}))} className="w-3.5 h-3.5 accent-indigo-600"/>
-                                          <span className="font-mono text-[10px] font-black text-indigo-700">{c.id}</span>
-                                          <span className="text-[10px] text-slate-600">· {c.name}</span>
-                                        </label>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </div>
-
-                        {/* SELECCIÓN DE MÓDULOS */}
-                        <div className="space-y-1 pt-4 border-t border-slate-100">
-                           <label className="text-[10px] font-black text-indigo-600 uppercase flex items-center"><LayoutDashboard className="w-3 h-3 mr-1"/> Permisos de Visualización (Menú)</label>
-                           <select value={userForm.allowed_modules_type} onChange={e=>{setUserForm({...userForm, allowed_modules_type: e.target.value, moduleSelection: []})}} className="w-full border-2 border-indigo-100 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 text-indigo-800">
-                             <option value="ROLE">Por Defecto (Basado en Rol Base)</option>
-                             <option value="CUSTOM">Personalizado (Elegir qué módulos ve)</option>
-                           </select>
-                        </div>
-
-                        {userForm.allowed_modules_type === 'CUSTOM' && (
-                           <div className="grid grid-cols-2 gap-2 mt-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                              {APP_MODULES.map(m => {
-                                const is3PLMod = MODULES_3PL_ONLY.includes(m.id);
-                                const hiddenByMode = is3PLMod && !is3PLMode;
-                                return (
-                                  <label key={m.id} className={`flex items-center gap-2 bg-white px-3 py-2 rounded-lg border shadow-sm cursor-pointer ${hiddenByMode ? 'border-cyan-100 bg-cyan-50/30' : 'border-slate-100 hover:border-indigo-300'}`} title={m.label}>
-                                    <input type="checkbox" checked={userForm.moduleSelection.includes(m.id)} onChange={e => { const sel = e.target.checked ? [...userForm.moduleSelection, m.id] : userForm.moduleSelection.filter(id => id !== m.id); setUserForm({...userForm, moduleSelection: sel}); }} className="w-4 h-4 text-indigo-600 rounded" />
-                                    <span className="text-[10px] font-black text-slate-700 truncate">{m.label}</span>
-                                    {is3PLMod && <span className="ml-auto text-[7px] bg-cyan-100 text-cyan-600 px-1 rounded font-black uppercase shrink-0">{hiddenByMode ? 'oculto' : '3PL'}</span>}
-                                  </label>
-                                );
-                              })}
-                           </div>
-                        )}
-
-                        {/* SELECCIÓN DE CLIENTES */}
-                        <div className="space-y-1 pt-4 border-t border-slate-100">
-                           <label className="text-[10px] font-black text-indigo-600 uppercase flex items-center"><Building2 className="w-3 h-3 mr-1"/> Aislamiento de Datos por Cliente</label>
-                           <select value={userForm.allowed_clients} onChange={e=>{setUserForm({...userForm, allowed_clients: e.target.value, clientSelection: []})}} className="w-full border-2 border-indigo-100 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 text-indigo-800">
-                             <option value="ALL">Sin restricciones (Ve inventario de todos)</option>
-                             <option value="RESTRICTED">Restringir (Solo ve clientes seleccionados)</option>
-                           </select>
-                        </div>
-                        
-                        {userForm.allowed_clients === 'RESTRICTED' && (
-                           <div className="grid grid-cols-2 gap-2 mt-2 bg-slate-50 p-4 rounded-xl border border-slate-200 custom-scrollbar max-h-40 overflow-y-auto">
-                              {clients.map(c => (
-                                 <label key={c.id} className="flex items-center gap-2 cursor-pointer bg-white px-3 py-2 rounded-lg border border-slate-100 shadow-sm hover:border-indigo-300">
-                                   <input type="checkbox" checked={userForm.clientSelection.includes(c.id)} onChange={e => { const sel = e.target.checked ? [...userForm.clientSelection, c.id] : userForm.clientSelection.filter(id => id !== c.id); setUserForm({...userForm, clientSelection: sel}); }} className="w-4 h-4 text-indigo-600 rounded" />
-                                   <span className="text-[10px] font-black text-slate-700 truncate" title={c.name}>{c.id}</span>
-                                 </label>
-                              ))}
-                              {clients.length === 0 && <p className="text-[10px] text-slate-400 col-span-2">No hay clientes registrados.</p>}
-                           </div>
-                        )}
-                      </div>
-
-                      <div className="flex gap-4 mt-4">
-                        <button type="submit" disabled={isSavingUser} className={`flex-[2] text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center ${isEditingUser ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-200' : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'}`}>
-                          {isSavingUser ? <><Loader2 size={14} className="mr-2 animate-spin"/> Guardando...</> : (isEditingUser ? 'Actualizar Usuario' : 'Crear Usuario')}
-                        </button>
-                        {isEditingUser && (
-                          <button type="button" onClick={() => {setUserForm({ username: '', full_name: '', password: '', role: 'EJECUTIVO_CUENTA', status: 'ACTIVE', allowed_clients: 'ALL', clientSelection: [], allowed_modules_type: 'ROLE', moduleSelection: [] }); setIsEditingUser(false);}} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-4 rounded-2xl shadow-sm uppercase text-xs tracking-widest transition-colors">
-                            Cancelar
-                          </button>
-                        )}
-                      </div>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
-                    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Usuarios del Sistema ({users.length})</p>
-                    </div>
-                    <div className="space-y-3">
-                      {users.map(u => (
-                        <div key={u.username} className={`p-4 border rounded-2xl flex flex-col hover:bg-slate-50 transition-colors shadow-sm ${u.status === 'SUSPENDED' ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-white border-slate-200'}`}>
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="text-sm font-black text-slate-800 flex items-center gap-2">
-                                {u.full_name} 
-                                {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase">Suspendido</span>}
-                              </p>
-                              <p className="text-[10px] font-mono text-slate-500 mt-1">@{u.username}</p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <span className={`px-2 py-1 rounded text-[9px] font-black uppercase border ${u.role === 'ADMIN' || u.role === 'SUPERADMIN' ? 'bg-red-50 text-red-600 border-red-200' : u.role === 'EJECUTIVO_CUENTA' ? 'bg-teal-50 text-teal-600 border-teal-200' : u.role === 'AUDITOR' ? 'bg-blue-50 text-blue-600 border-blue-200' : u.role === 'PICKER' ? 'bg-violet-50 text-violet-600 border-violet-200' : u.role === 'CLIENTE' ? 'bg-cyan-50 text-cyan-600 border-cyan-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{u.role === 'EJECUTIVO_CUENTA' ? 'EJECUTIVO' : u.role}</span>
-                              <button onClick={() => handleEditUser(u)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all ml-2" title="Editar Usuario"><Pencil size={14}/></button>
-                              <button onClick={() => handleDeleteUser(u.username)} disabled={u.username === 'admin'} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 shadow-sm transition-all ml-1 disabled:opacity-30"><Trash2 size={14}/></button>
-                            </div>
-                          </div>
-                          <div className="mt-2 pt-2 border-t border-slate-100 flex flex-wrap gap-2">
-                            {u.allowed_modules !== 'ALL' && (
-                              <p className="text-[9px] text-indigo-600 font-bold uppercase tracking-widest flex items-center"><LayoutDashboard size={10} className="mr-1"/> Vistas: {JSON.parse(u.allowed_modules || '[]').length} act</p>
-                            )}
-                            {/* Badge de scope de clientes */}
-                            {(() => {
-                              const isAdminRole = ['ADMIN','SUPERADMIN'].includes(u.role);
-                              const scope = isAdminRole ? 'all' : (u.client_scope || 'all');
-                              if (scope === 'all') return <button onClick={()=>handleEditUser(u)} className="bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[9px] font-black uppercase hover:bg-blue-200">🏢 Todos los clientes</button>;
-                              if (scope === 'none') return <button onClick={()=>handleEditUser(u)} className="bg-red-100 text-red-700 border border-red-200 px-2 py-0.5 rounded text-[9px] font-black uppercase hover:bg-red-200">⛔ Sin acceso</button>;
-                              const ac = Array.isArray(u.assigned_clients) ? u.assigned_clients : [];
-                              if (ac.length === 0) return <button onClick={()=>handleEditUser(u)} className="bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-black uppercase hover:bg-amber-200">⚠ Sin clientes asignados</button>;
-                              const shown = ac.slice(0,3);
-                              const extra = ac.length - shown.length;
-                              return (
-                                <div className="flex flex-wrap gap-1 items-center" title={ac.join(', ')}>
-                                  {shown.map(cid => <button key={cid} onClick={()=>handleEditUser(u)} className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[9px] font-mono font-black hover:bg-emerald-200">{cid}</button>)}
-                                  {extra > 0 && <button onClick={()=>handleEditUser(u)} className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded text-[9px] font-black">+{extra} más</button>}
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* API KEYS */}
-            {activeTab === 'users' && isAdmin && isSuperAdmin && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8">
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center mb-6"><Key className="w-5 h-5 mr-2 text-indigo-500"/> API Keys para Integración ERP</h2>
-                  <div className="grid md:grid-cols-2 gap-8">
-                    <div className="space-y-4">
-                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Generar Nueva Key</h3>
-                      <form onSubmit={handleGenerateKey} className="space-y-4">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Nombre / Descripción *</label>
-                          <input type="text" required value={newKeyName} onChange={e=>setNewKeyName(e.target.value)} placeholder="Ej: ERP-SAP-Producción" className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500"/>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Cliente (opcional)</label>
-                          <select value={newKeyClient} onChange={e=>setNewKeyClient(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                            <option value="">-- Todos los clientes --</option>
-                            {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        </div>
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Permisos</label>
-                          <select value={newKeyPerms} onChange={e=>setNewKeyPerms(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                            <option value="read">Solo Lectura</option>
-                            <option value="write">Lectura + Escritura</option>
-                          </select>
-                        </div>
-                        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-indigo-200 transition-colors flex items-center justify-center gap-2"><Key size={14}/> Generar API Key</button>
-                      </form>
-                      {generatedKey && (
-                        <div className="bg-emerald-50 border-2 border-emerald-300 rounded-2xl p-4 animate-in fade-in">
-                          <p className="text-[10px] font-black text-emerald-700 uppercase tracking-widest mb-2">⚠️ Copia esta key ahora — no se mostrará de nuevo</p>
-                          <code className="block bg-white border border-emerald-200 rounded-xl px-4 py-3 font-mono text-xs text-slate-800 break-all select-all">{generatedKey}</code>
-                          <button onClick={()=>{navigator.clipboard.writeText(generatedKey); showMsg('✅ Copiado');}} className="mt-2 text-[10px] font-black text-emerald-600 hover:text-emerald-800 uppercase tracking-widest">Copiar al portapapeles</button>
-                        </div>
-                      )}
-                    </div>
-                    <div className="space-y-3">
-                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Keys Activas ({apiKeys.length})</h3>
-                      {apiKeys.map(k=>(
-                        <div key={k.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-black text-slate-800">{k.name}</p>
-                              <p className="font-mono text-[10px] text-slate-500 mt-1">{k.key_prefix}••••••••</p>
-                              <div className="flex gap-2 mt-2">
-                                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${k.permissions==='write'?'bg-amber-100 text-amber-700':'bg-blue-100 text-blue-700'}`}>{k.permissions}</span>
-                                {k.client_id && <span className="text-[9px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{k.client_id}</span>}
-                              </div>
-                            </div>
-                            <button onClick={()=>handleRevokeKey(k.id)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                          </div>
-                          <p className="text-[9px] text-slate-400 mt-2">Creada: {new Date(k.created_at).toLocaleDateString('es-ES')}</p>
-                        </div>
-                      ))}
-                      {apiKeys.length===0 && <div className="p-6 text-center text-slate-400"><Key className="w-10 h-10 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase font-bold">Sin keys activas</p></div>}
-                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Endpoints Disponibles</p>
-                        <div className="space-y-1 font-mono text-[9px] text-slate-600">
-                          <p>GET /v1/inventory</p>
-                          <p>GET /v1/inventory/:sku/stock</p>
-                          <p>GET /v1/skus</p>
-                          <p>GET /v1/movements</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* HISTORIAL DE LOGINS */}
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><History className="w-4 h-4 text-slate-500"/> Historial de Accesos</h2>
-                    <button onClick={async()=>{ const res=await apiFetch(`${host}/api/login-history`); const d=await res.json(); setLoginHistory(Array.isArray(d)?d:[]); setShowLoginHistory(true); }} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Cargar</button>
-                  </div>
-                  {showLoginHistory && loginHistory.length > 0 && (
-                    <div className="overflow-x-auto max-h-64 overflow-y-auto custom-scrollbar">
-                      <table className="w-full text-left">
-                        <thead className="bg-slate-50 sticky top-0"><tr>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Fecha</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Usuario</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">IP</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Estado</th>
-                        </tr></thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {loginHistory.map(h=>(
-                            <tr key={h.id} className={`hover:bg-slate-50 ${!h.success?'bg-red-50/50':''}`}>
-                              <td className="p-3 text-[10px] text-slate-400">{new Date(h.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
-                              <td className="p-3 font-mono text-xs font-black text-slate-700">@{h.username}</td>
-                              <td className="p-3 font-mono text-[10px] text-slate-500">{h.ip}</td>
-                              <td className="p-3"><span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${h.success?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{h.success?'OK':'Fallido'}</span></td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                  {showLoginHistory && loginHistory.length===0 && <p className="text-center text-xs text-slate-400 py-4">Sin registros</p>}
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <UsersTab
+                  isAdmin={isAdmin} isSuperAdmin={isSuperAdmin} is3PLMode={is3PLMode}
+                  clients={clients} systemConfig={systemConfig} users={users} currentUser={currentUser}
+                  userForm={userForm} setUserForm={setUserForm}
+                  isEditingUser={isEditingUser} setIsEditingUser={setIsEditingUser} isSavingUser={isSavingUser}
+                  handleSaveUser={handleSaveUser} handleEditUser={handleEditUser}
+                  handleDeleteUser={handleDeleteUser} handleToggleUserStatus={handleToggleUserStatus}
+                  apiKeys={apiKeys} newKeyName={newKeyName} setNewKeyName={setNewKeyName}
+                  newKeyClient={newKeyClient} setNewKeyClient={setNewKeyClient}
+                  newKeyPerms={newKeyPerms} setNewKeyPerms={setNewKeyPerms}
+                  generatedKey={generatedKey} handleGenerateKey={handleGenerateKey} handleRevokeKey={handleRevokeKey}
+                  loginHistory={loginHistory} setLoginHistory={setLoginHistory}
+                  showLoginHistory={showLoginHistory} setShowLoginHistory={setShowLoginHistory}
+                  showMsg={showMsg} apiFetch={apiFetch} host={host}
+                />
+              </Suspense>
             )}
 
             {/* CONVERSIONES */}
             {activeTab === 'kits' && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                {/* Sub-tabs kitting */}
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit flex-wrap">
-                  {[['definitions','Definiciones'],['build','Armar Kit'],['dispatch','Despacho Directo'],['orders','Historial']].map(([id,label])=>(
-                    <button key={id} onClick={()=>setKittingTab(id)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${kittingTab===id?(id==='dispatch'?'bg-emerald-600 text-white shadow-sm':'bg-white text-indigo-700 shadow-sm'):'text-slate-500 hover:text-slate-700'}`}>{label}</button>
-                  ))}
-                </div>
-
-                {/* SUB-TAB DEFINICIONES (original) */}
-                {kittingTab === 'definitions' && (
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  {/* Panel izquierdo: formulario */}
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Package className="w-5 h-5 mr-2 text-indigo-500"/> Nuevo Kit</h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Agrupa SKUs en un producto compuesto</p>
-                    </div>
-                    <form onSubmit={handleSaveKit} className="space-y-5">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">ID del Kit (SKU) *</label>
-                        <input type="text" value={kitForm.kit_sku} onChange={e=>setKitForm({...kitForm, kit_sku: e.target.value.toUpperCase()})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: KIT-BASICO-001"/>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
-                        {is3PLMode ? (
-                          <select value={kitForm.client_id} onChange={e=>setKitForm({...kitForm, client_id: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
-                            <option value="">-- Seleccionar --</option>
-                            {permittedClients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        ) : (
-                          <div className="w-full border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                            <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Descripción</label>
-                        <input type="text" value={kitForm.description} onChange={e=>setKitForm({...kitForm, description: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Ej: Kit de bienvenida"/>
-                      </div>
-
-                      {/* Agregar componente */}
-                      <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-200">
-                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Agregar Componente</p>
-                        <div className="flex gap-2">
-                          <select value={kitComponentLine.sku} onChange={e=>setKitComponentLine({...kitComponentLine, sku: e.target.value})} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                            <option value="">-- SKU --</option>
-                            {permittedSkus.map(s => <option key={s.sku} value={s.sku}>{s.sku} — {s.desc}</option>)}
-                          </select>
-                          <input type="number" min="0.01" step="0.01" value={kitComponentLine.qty} onChange={e=>setKitComponentLine({...kitComponentLine, qty: e.target.value})} className="w-20 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-indigo-500 text-center" placeholder="Qty"/>
-                          <button type="button" onClick={addKitComponent} className="bg-indigo-600 text-white px-3 py-2 rounded-xl hover:bg-indigo-700 transition-colors"><Plus size={16}/></button>
-                        </div>
-                      </div>
-
-                      {/* Lista de componentes del kit */}
-                      {kitForm.components.length > 0 && (
-                        <div className="space-y-2">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Componentes ({kitForm.components.length})</p>
-                          {kitForm.components.map(c => {
-                            const skuInfo = permittedSkus.find(s => s.sku === c.sku);
-                            return (
-                              <div key={c.sku} className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2">
-                                <div>
-                                  <span className="text-sm font-black text-indigo-800 uppercase">{c.sku}</span>
-                                  {skuInfo && <span className="text-[10px] text-indigo-500 ml-2">{skuInfo.desc}</span>}
-                                </div>
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-black text-indigo-700 bg-indigo-100 px-3 py-0.5 rounded-full">× {c.qty}</span>
-                                  <button type="button" onClick={() => removeKitComponent(c.sku)} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest hover:bg-indigo-700 transition-colors flex justify-center items-center"><Plus size={16} className="mr-2"/> Guardar Kit</button>
-                    </form>
-                  </div>
-
-                  {/* Panel derecho: lista de kits */}
-                  <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
-                    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kits Definidos ({kits.length})</p>
-                    </div>
-                    <div className="space-y-4">
-                      {kits.map(k => (
-                        <div key={`${k.kit_sku}-${k.client_id}`} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-start mb-3">
-                            <div>
-                              <p className="text-sm font-black text-slate-800 uppercase">{k.kit_sku}</p>
-                              {k.description && <p className="text-[10px] text-slate-500 mt-0.5">{k.description}</p>}
-                              <span className="text-[9px] font-black bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full uppercase mt-1 inline-block">{k.client_id}</span>
-                            </div>
-                            <button onClick={() => handleDeleteKit(k.kit_sku, k.client_id)} className="text-slate-300 hover:text-red-500 transition-colors mt-1"><Trash2 size={14}/></button>
-                          </div>
-                          <div className="space-y-1">
-                            {(k.components || []).map(c => {
-                              const skuInfo = safeSkus.find(s => s.sku === c.component_sku);
-                              return (
-                                <div key={c.component_sku} className="flex items-center justify-between text-[11px] bg-white border border-slate-100 rounded-lg px-3 py-1.5">
-                                  <span className="font-black text-slate-700 uppercase">{c.component_sku}</span>
-                                  <span className="text-slate-400">{skuInfo?.desc}</span>
-                                  <span className="font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">× {c.qty}</span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ))}
-                      {kits.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay kits definidos</p></div>}
-                    </div>
-                  </div>
-                </div>
-                )}
-
-                {/* SUB-TAB ARMAR KIT */}
-                {kittingTab === 'build' && (
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 max-w-2xl">
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center mb-6"><Package className="w-5 h-5 mr-2 text-indigo-500"/> Armar Kit</h2>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Kit (SKU) *</label>
-                        <select value={kitBuildForm.kit_sku} onChange={e=>{ setKitBuildForm({...kitBuildForm,kit_sku:e.target.value}); setKitAvailability(null); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
-                          <option value="">-- Seleccionar --</option>
-                          {kits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
-                        {is3PLMode ? (
-                          <select value={kitBuildForm.client_id} onChange={e=>{ setKitBuildForm({...kitBuildForm,client_id:e.target.value}); setKitAvailability(null); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
-                            <option value="">-- Seleccionar --</option>
-                            {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        ) : (
-                          <div className="w-full border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                            <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad *</label>
-                        <input type="number" min="1" value={kitBuildForm.qty} onChange={e=>{ setKitBuildForm({...kitBuildForm,qty:parseInt(e.target.value)||1}); setKitAvailability(null); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500"/>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Ubicación Destino</label>
-                        <input type="text" value={kitBuildForm.location} onChange={e=>setKitBuildForm({...kitBuildForm,location:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase"/>
-                      </div>
-                    </div>
-                    <button onClick={handleCheckKitAvailability} className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3 rounded-2xl uppercase text-xs tracking-widest transition-colors flex items-center justify-center gap-2"><RefreshCcw size={14}/> Verificar Disponibilidad</button>
-                    {kitAvailability && (
-                      <div className={`rounded-2xl p-5 border-2 ${kitAvailability.can_build?'bg-emerald-50 border-emerald-300':'bg-red-50 border-red-300'}`}>
-                        <p className={`text-sm font-black uppercase tracking-tighter mb-3 ${kitAvailability.can_build?'text-emerald-700':'text-red-700'}`}>{kitAvailability.can_build?'✅ Stock suficiente para armar':'⛔ Stock insuficiente'}</p>
-                        <div className="space-y-2">
-                          {(kitAvailability.components||[]).map(c=>(
-                            <div key={c.component_sku} className="flex items-center justify-between text-[11px] bg-white rounded-xl px-4 py-2 border border-slate-100">
-                              <span className="font-black uppercase text-slate-700">{c.component_sku}</span>
-                              <span className="text-slate-500">Necesario: <strong>{c.needed}</strong></span>
-                              <span className={`font-black ${c.available>=c.needed?'text-emerald-600':'text-red-600'}`}>Disponible: {c.available}</span>
-                            </div>
-                          ))}
-                        </div>
-                        {kitAvailability.can_build && (
-                          <button onClick={handleBuildKit} className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-indigo-200 transition-colors flex items-center justify-center gap-2"><Package size={16}/> Confirmar Armado</button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                )}
-
-                {/* SUB-TAB DESPACHO DIRECTO */}
-                {kittingTab === 'dispatch' && (
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 max-w-2xl">
-                  <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center mb-2">
-                    <ArrowRightLeft className="w-5 h-5 mr-2 text-emerald-500"/> Despacho Directo de Kit
-                  </h2>
-                  <p className="text-xs text-slate-400 font-bold mb-6">Consume los componentes directamente sin crear un LPN de kit previo.</p>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Kit (SKU) *</label>
-                        <select value={kitDispatchForm.kit_sku}
-                          onChange={e=>{ setKitDispatchForm({...kitDispatchForm, kit_sku:e.target.value}); setKitDispatchAvail(null); }}
-                          className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 bg-white">
-                          <option value="">-- Seleccionar --</option>
-                          {kits.map(k=><option key={`${k.kit_sku}-${k.client_id}`} value={k.kit_sku}>{k.kit_sku}</option>)}
-                        </select>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
-                        {is3PLMode ? (
-                          <select value={kitDispatchForm.client_id}
-                            onChange={e=>{ setKitDispatchForm({...kitDispatchForm, client_id:e.target.value}); setKitDispatchAvail(null); }}
-                            className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 bg-white">
-                            <option value="">-- Seleccionar --</option>
-                            {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                        ) : (
-                          <div className="w-full border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                            <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad *</label>
-                        <input type="number" min="1"
-                          value={kitDispatchForm.qty}
-                          onChange={e=>{ setKitDispatchForm({...kitDispatchForm, qty:parseInt(e.target.value)||1}); setKitDispatchAvail(null); }}
-                          className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500"/>
-                      </div>
-                      <div className="col-span-2 space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">N° Documento</label>
-                        <input type="text"
-                          value={kitDispatchForm.doc_num}
-                          onChange={e=>setKitDispatchForm({...kitDispatchForm, doc_num:e.target.value.toUpperCase()})}
-                          placeholder="Ej: GD-2024-001"
-                          className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 uppercase"/>
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Glosa / Motivo</label>
-                      <input type="text"
-                        value={kitDispatchForm.glosa}
-                        onChange={e=>setKitDispatchForm({...kitDispatchForm, glosa:e.target.value})}
-                        placeholder="Ej: Pedido cliente, orden de producción, etc."
-                        className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-medium outline-none focus:border-emerald-500"/>
-                    </div>
-
-                    <button onClick={handleCheckKitDispatchAvail}
-                      className="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3 rounded-2xl uppercase text-xs tracking-widest transition-colors flex items-center justify-center gap-2">
-                      <RefreshCcw size={14}/> Verificar Stock de Componentes
-                    </button>
-
-                    {kitDispatchAvail && (
-                      <div className={`rounded-2xl p-5 border-2 ${kitDispatchAvail.can_build ? 'bg-emerald-50 border-emerald-300' : 'bg-red-50 border-red-300'}`}>
-                        <p className={`text-sm font-black uppercase tracking-tighter mb-3 ${kitDispatchAvail.can_build ? 'text-emerald-700' : 'text-red-700'}`}>
-                          {kitDispatchAvail.can_build ? '✅ Stock suficiente — listo para despachar' : '⛔ Stock insuficiente para despachar'}
-                        </p>
-
-                        {/* Tabla de componentes */}
-                        <div className="space-y-2 mb-4">
-                          {(kitDispatchAvail.components || []).map(c => {
-                            const ok = c.available >= c.needed;
-                            return (
-                              <div key={c.component_sku} className="flex items-center justify-between text-[11px] bg-white rounded-xl px-4 py-2.5 border border-slate-100 gap-3">
-                                <span className="font-black uppercase text-slate-700 flex-1 truncate">{c.component_sku}</span>
-                                <span className="text-slate-400 shrink-0">×{c.required_per_kit} por kit</span>
-                                <span className="text-slate-500 shrink-0">Requerido: <strong>{c.needed}</strong></span>
-                                <span className={`font-black shrink-0 ${ok ? 'text-emerald-600' : 'text-red-600'}`}>
-                                  {ok ? '✓' : '✗'} Disp: {c.available}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {/* Resumen de qué se va a descontar */}
-                        {kitDispatchAvail.can_build && (
-                          <div className="bg-white rounded-xl border border-emerald-200 px-4 py-3 mb-4">
-                            <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest mb-2">Al confirmar se descuentan:</p>
-                            <div className="flex flex-wrap gap-2">
-                              {(kitDispatchAvail.components || []).map(c => (
-                                <span key={c.component_sku} className="bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 text-[10px] font-black text-emerald-800">
-                                  {c.needed} × {c.component_sku}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {kitDispatchAvail.can_build && (
-                          <button onClick={handleDirectKitDispatch}
-                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-emerald-200 transition-colors flex items-center justify-center gap-2">
-                            <ArrowRightLeft size={16}/> Confirmar Despacho Directo {kitDispatchForm.qty}x {kitDispatchForm.kit_sku}
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                )}
-
-                {/* SUB-TAB ÓRDENES DE KIT */}
-                {kittingTab === 'orders' && (
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ClipboardCheck className="text-indigo-500"/> Historial de Armados</h2>
-                  </div>
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 border-b">
-                        <tr>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Fecha</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Tipo</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Kit SKU</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Cliente</th>
-                          <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Qty</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">LPN / Notas</th>
-                          <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Operador</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {kitOrders.map(o => {
-                          const isDispatch = o.type === 'DISPATCHED';
-                          return (
-                            <tr key={o.id} className={`hover:bg-slate-50 ${isDispatch ? 'bg-emerald-50/30' : ''}`}>
-                              <td className="p-4 text-[10px] text-slate-400">{new Date(o.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
-                              <td className="p-4">
-                                <span className={`text-[9px] font-black px-2 py-1 rounded-full uppercase ${isDispatch ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'}`}>
-                                  {isDispatch ? '↗ Despacho Directo' : '🔧 Armado'}
-                                </span>
-                              </td>
-                              <td className="p-4 font-black text-xs uppercase text-slate-800">{o.kit_sku}</td>
-                              <td className="p-4 text-xs text-slate-600">{o.client_id}</td>
-                              <td className="p-4 text-center font-black text-slate-800">{o.qty_to_build}</td>
-                              <td className="p-4 font-mono text-[9px] text-slate-500">
-                                {isDispatch ? (o.notes || '—') : (o.result_lpn || '—')}
-                              </td>
-                              <td className="p-4 text-[10px] text-slate-400">{o.created_by}</td>
-                            </tr>
-                          );
-                        })}
-                        {kitOrders.length === 0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400 text-xs">Sin órdenes registradas</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <KitsTab
+                  is3PLMode={is3PLMode} systemConfig={systemConfig} permittedClients={permittedClients}
+                  permittedSkus={permittedSkus} safeSkus={safeSkus} kits={kits}
+                  kittingTab={kittingTab} setKittingTab={setKittingTab}
+                  kitForm={kitForm} setKitForm={setKitForm}
+                  kitComponentLine={kitComponentLine} setKitComponentLine={setKitComponentLine}
+                  kitClientSkus={kitClientSkus}
+                  handleSaveKit={handleSaveKit} addKitComponent={addKitComponent}
+                  removeKitComponent={removeKitComponent} handleDeleteKit={handleDeleteKit}
+                  ordForm={ordForm} setOrdForm={setOrdForm} ordSugeridos={ordSugeridos} setOrdSugeridos={setOrdSugeridos}
+                  ordKit={ordKit} ordenesV2={ordenesV2} creatingOrden={creatingOrden}
+                  handleCreateOrden={handleCreateOrden} loadOrdenesV2={loadOrdenesV2}
+                  openArmar={openArmar} openDesarmar={openDesarmar} openTrace={openTrace}
+                  armOrden={armOrden} setArmOrden={setArmOrden} armSources={armSources} setArmSources={setArmSources}
+                  armDest={armDest} setArmDest={setArmDest} armBusy={armBusy} handleArmar={handleArmar}
+                  traceOrden={traceOrden} setTraceOrden={setTraceOrden}
+                  desarmOrden={desarmOrden} setDesarmOrden={setDesarmOrden} desarmDest={desarmDest} setDesarmDest={setDesarmDest}
+                  desarmBusy={desarmBusy} handleDesarmar={handleDesarmar}
+                  renderKitSourcePicker={renderKitSourcePicker}
+                />
+              </Suspense>
             )}
 
             {/* CLIENTES */}
             {activeTab === 'clients' && is3PLMode && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Users className="w-5 h-5 mr-2 text-indigo-500"/> Registro de Clientes</h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Añadir dueños de mercadería (Operación Multi-Cliente)</p>
-                    </div>
-                    <form onSubmit={handleSaveClient} className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">ID / RUT / CUIT *</label><input type="text" value={clientForm.id} onChange={e=>setClientForm({...clientForm, id: e.target.value.toUpperCase().replace(/\s/g, '')})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: CLI-001"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Razón Social / Nombre *</label><input type="text" value={clientForm.name} onChange={e=>setClientForm({...clientForm, name: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Nombre de la empresa"/></div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Contacto (Persona)</label><input type="text" value={clientForm.contact} onChange={e=>setClientForm({...clientForm, contact: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Nombre del responsable"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Email</label><input type="email" value={clientForm.email} onChange={e=>setClientForm({...clientForm, email: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="correo@empresa.com"/></div>
-                        </div>
-                      </div>
-                      <button type="submit" disabled={isSavingClient} className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest hover:bg-indigo-700 transition-colors mt-4 flex justify-center items-center disabled:opacity-60">
-                        {isSavingClient ? <><Loader2 size={16} className="mr-2 animate-spin"/> Guardando...</> : <><Building2 size={16} className="mr-2"/> Guardar Cliente en Base de Datos</>}
-                      </button>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[500px] custom-scrollbar pr-2">
-                    <div className="sticky top-0 bg-white pt-2 pb-3 z-10 border-b border-slate-100 space-y-2 mb-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Clientes ({permittedClients.filter(c=>(c.id||'').toLowerCase().includes(clientSearchTerm.toLowerCase())||(c.name||'').toLowerCase().includes(clientSearchTerm.toLowerCase())).length})</p>
-                          <button onClick={() => { const filtered = permittedClients.filter(c=>(c.id||'').toLowerCase().includes(clientSearchTerm.toLowerCase())||(c.name||'').toLowerCase().includes(clientSearchTerm.toLowerCase())); const headers='id,name,contact,email'; const csv=filtered.map(c=>`"${c.id}","${c.name}","${c.contact||''}","${c.email||''}"`).join('\n'); const blob=new Blob([headers+'\n'+csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='clientes_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
-                          <button onClick={() => setImportModal({ type: 'clients' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Upload size={10}/> Importar</button>
-                        </div>
-                      </div>
-                      <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1"><Search size={11} className="text-slate-400 mr-1 shrink-0"/><input type="text" placeholder="Buscar por ID o nombre..." value={clientSearchTerm} onChange={(e) => setClientSearchTerm(e.target.value)} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700"/></div>
-                    </div>
-                    <div className="space-y-3">
-                      {permittedClients.filter(c => (c.id || '').toLowerCase().includes(clientSearchTerm.toLowerCase()) || (c.name || '').toLowerCase().includes(clientSearchTerm.toLowerCase())).map(c => (
-                        <div key={c.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="text-sm font-black text-slate-800 flex items-center gap-2">{c.name}</p>
-                              <p className="text-[10px] font-mono text-indigo-600 mt-1">ID: {c.id}</p>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => { setPortalConfigClient(c.id); setPortalConfigForm({ portal_enabled: !!c.portal_enabled, portal_password:'', portal_email: c.portal_email||'' }); }} className="text-[9px] font-black bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-2 py-1 rounded-lg uppercase flex items-center gap-1 transition-colors"><Globe size={10}/> Portal</button>
-                              <button onClick={() => handleDeleteClient(c.id)} className="text-slate-300 hover:text-red-500 transition-colors ml-2"><Trash2 size={14}/></button>
-                            </div>
-                          </div>
-                          {(c.contact || c.email) && (
-                            <div className="mt-2 pt-2 border-t border-slate-100 flex gap-4 text-[9px] text-slate-500 font-bold tracking-widest">
-                              {c.contact && <span>Contacto: {c.contact}</span>}
-                              {c.email && <span>Email: {c.email}</span>}
-                            </div>
-                          )}
-                          {/* Portal config expandida */}
-                          {portalConfigClient === c.id && (
-                            <div className="mt-3 pt-3 border-t-2 border-indigo-100 bg-indigo-50 rounded-2xl p-4 space-y-3">
-                              <p className="text-[10px] font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1"><Globe size={10}/> Configuración Portal 3PL</p>
-                              <div className="flex items-center gap-3">
-                                <label className="text-[10px] font-black text-slate-600 uppercase">Portal Habilitado</label>
-                                <button onClick={()=>setPortalConfigForm(f=>({...f,portal_enabled:!f.portal_enabled}))} className={`w-10 h-6 rounded-full transition-colors ${portalConfigForm.portal_enabled?'bg-indigo-600':'bg-slate-300'}`}><span className={`block w-4 h-4 bg-white rounded-full shadow transition-transform mx-1 ${portalConfigForm.portal_enabled?'translate-x-4':'translate-x-0'}`}/></button>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-500 uppercase">Nueva Contraseña Portal</label>
-                                <input type="password" placeholder="Dejar vacío para no cambiar" value={portalConfigForm.portal_password} onChange={e=>setPortalConfigForm(f=>({...f,portal_password:e.target.value}))} className="w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500"/>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-black text-slate-500 uppercase">Email del Portal</label>
-                                <input type="email" placeholder="email@cliente.com" value={portalConfigForm.portal_email} onChange={e=>setPortalConfigForm(f=>({...f,portal_email:e.target.value}))} className="w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500"/>
-                              </div>
-                              {portalConfigForm.portal_enabled && (
-                                <div className="bg-white rounded-xl px-3 py-2 border border-indigo-200">
-                                  <p className="text-[9px] font-black text-slate-400 uppercase mb-1">URL del Portal</p>
-                                  <p className="font-mono text-[10px] text-indigo-700 break-all">{window.location.origin}?portal={c.id}</p>
-                                </div>
-                              )}
-                              <div className="flex gap-2">
-                                <button onClick={()=>handlePortalSaveConfig(c.id)} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2 rounded-xl text-[10px] uppercase tracking-widest transition-colors">Guardar</button>
-                                <button onClick={()=>setPortalConfigClient(null)} className="px-4 bg-slate-200 hover:bg-slate-300 text-slate-600 font-black py-2 rounded-xl text-[10px] uppercase tracking-widest transition-colors">Cancelar</button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      {permittedClients.length === 0 && <div className="p-8 text-center text-slate-400"><Building2 className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay clientes visibles para usted</p></div>}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <ClientsTab
+                  clientForm={clientForm} setClientForm={setClientForm} isSavingClient={isSavingClient} handleSaveClient={handleSaveClient}
+                  filteredClients={filteredClients} permittedClients={permittedClients}
+                  clientIdFilter={clientIdFilter} setClientIdFilter={setClientIdFilter}
+                  clientNameFilter={clientNameFilter} setClientNameFilter={setClientNameFilter}
+                  clientContactFilter={clientContactFilter} setClientContactFilter={setClientContactFilter}
+                  setImportModal={setImportModal}
+                  portalConfigClient={portalConfigClient} setPortalConfigClient={setPortalConfigClient}
+                  portalConfigForm={portalConfigForm} setPortalConfigForm={setPortalConfigForm}
+                  handleDeleteClient={handleDeleteClient} handlePortalSaveConfig={handlePortalSaveConfig}
+                />
+              </Suspense>
             )}
 
             {/* MAESTRO ESTADOS */}
             {activeTab === 'statuses' && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Activity className="w-5 h-5 mr-2 text-indigo-500"/> Maestro de Estados</h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Configurar colores y reglas de bloqueo</p>
-                    </div>
-                    <form onSubmit={handleSaveStatus} className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">ID Estado (Ej: BASURA, RETENIDO) *</label><input type="text" value={statusForm.id} onChange={e=>setStatusForm({...statusForm, id: e.target.value.toUpperCase().replace(/\s/g, '_')})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: EN_REVISION"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Descripción / Uso *</label><input type="text" value={statusForm.description} onChange={e=>setStatusForm({...statusForm, description: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Motivo de este estado"/></div>
-                        
-                        <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100">
-                          <div className="space-y-1">
-                             <label className="text-[10px] font-black text-slate-400 uppercase">Color Visual</label>
-                             <select value={statusForm.color} onChange={e=>setStatusForm({...statusForm, color: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                               <option value="slate">Gris (Defecto)</option>
-                               <option value="emerald">Verde</option>
-                               <option value="red">Rojo</option>
-                               <option value="amber">Amarillo / Naranja</option>
-                               <option value="blue">Azul</option>
-                               <option value="purple">Morado</option>
-                               <option value="pink">Rosa</option>
-                             </select>
-                          </div>
-                          <div className="space-y-1 flex flex-col justify-center">
-                             <label className="flex items-center gap-2 cursor-pointer mt-4">
-                               <input type="checkbox" checked={statusForm.blocks_outbound} onChange={e=>setStatusForm({...statusForm, blocks_outbound: e.target.checked})} className="w-5 h-5 accent-indigo-600 rounded" />
-                               <span className="text-xs font-black text-slate-700 uppercase">Bloquea Despacho</span>
-                             </label>
-                             <p className="text-[9px] text-slate-400 mt-1 leading-tight">Si se marca, el LPN no aparecerá en el módulo de Despachos.</p>
-                          </div>
-                        </div>
-
-                      </div>
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest hover:bg-indigo-700 transition-colors mt-4 flex justify-center items-center"><Plus size={16} className="mr-2"/> Guardar Estado</button>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[500px] custom-scrollbar pr-2">
-                    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Estados Registrados ({statuses.length})</p>
-                    </div>
-                    <div className="space-y-3">
-                      {statuses.map(s => (
-                        <div key={s.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className={`px-2 py-1 rounded text-[10px] font-black uppercase border ${getStatusBadge(s.id)}`}>{s.id}</span>
-                              {s.blocks_outbound && <span className="text-[8px] bg-red-100 text-red-700 px-2 py-0.5 rounded flex items-center font-bold uppercase"><ShieldAlert size={10} className="mr-1"/> Bloquea Salida</span>}
-                            </div>
-                            {s.id !== 'DISPONIBLE' && (
-                              <button onClick={() => handleDeleteStatus(s.id)} className="text-slate-300 hover:text-red-500 transition-colors ml-2"><Trash2 size={14}/></button>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-600 font-bold mt-2">{s.description}</p>
-                        </div>
-                      ))}
-                      {statuses.length === 0 && <div className="p-8 text-center text-slate-400"><Activity className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay estados configurados</p></div>}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <StatusesTab
+                  statuses={statuses}
+                  statusForm={statusForm} setStatusForm={setStatusForm}
+                  handleSaveStatus={handleSaveStatus} handleDeleteStatus={handleDeleteStatus}
+                  getStatusBadge={getStatusBadge}
+                />
+              </Suspense>
             )}
 
             {/* MAESTRO DOCUMENTOS */}
             {activeTab === 'doc-types' && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
-                    <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><FileType className="w-5 h-5 mr-2 text-indigo-500"/> Maestro de Documentos</h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Configurar tipos de documentos admitidos (Factura, Guía, etc.)</p>
-                    </div>
-                    <form onSubmit={handleSaveDocType} className="space-y-6">
-                      <div className="space-y-4">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">ID Documento (Ej: FACTURA, GUIA) *</label><input type="text" value={docTypeForm.id} onChange={e=>setDocTypeForm({...docTypeForm, id: e.target.value.toUpperCase().replace(/\s/g, '_')})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: FACTURA_VENTA"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Descripción *</label><input type="text" value={docTypeForm.description} onChange={e=>setDocTypeForm({...docTypeForm, description: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Ej: Factura de Venta Electrónica"/></div>
-                        <div className="space-y-1">
-                           <label className="text-[10px] font-black text-slate-400 uppercase">Flujo Permitido</label>
-                           <select value={docTypeForm.flow_type} onChange={e=>setDocTypeForm({...docTypeForm, flow_type: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                             <option value="BOTH">Ambos (Recepción y Despacho)</option>
-                             <option value="INBOUND">Solo Recepción (Inbound)</option>
-                             <option value="OUTBOUND">Solo Despacho (Outbound)</option>
-                           </select>
-                        </div>
-                      </div>
-                      <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest hover:bg-indigo-700 transition-colors mt-4 flex justify-center items-center"><Plus size={16} className="mr-2"/> Guardar Tipo de Documento</button>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[500px] custom-scrollbar pr-2">
-                    <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tipos de Documento Registrados ({documentTypes.length})</p>
-                    </div>
-                    <div className="space-y-3">
-                      {documentTypes.map(d => (
-                        <div key={d.id} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-center mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className="px-2 py-1 rounded text-[10px] font-black uppercase border bg-slate-100 text-slate-600 border-slate-200">{d.id}</span>
-                              <span className="text-[8px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded flex items-center font-bold uppercase">{d.flow_type === 'BOTH' ? 'AMBOS' : d.flow_type === 'INBOUND' ? 'RECEPCIÓN' : 'DESPACHO'}</span>
-                            </div>
-                            <button onClick={() => handleDeleteDocType(d.id)} className="text-slate-300 hover:text-red-500 transition-colors ml-2"><Trash2 size={14}/></button>
-                          </div>
-                          <p className="text-xs text-slate-600 font-bold mt-2">{d.description}</p>
-                        </div>
-                      ))}
-                      {documentTypes.length === 0 && <div className="p-8 text-center text-slate-400"><FileType className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay tipos de documento</p></div>}
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <DocTypesTab
+                  documentTypes={documentTypes}
+                  docTypeForm={docTypeForm} setDocTypeForm={setDocTypeForm}
+                  handleSaveDocType={handleSaveDocType} handleDeleteDocType={handleDeleteDocType}
+                />
+              </Suspense>
             )}
 
             {/* INVENTORY */}
@@ -3633,7 +3280,7 @@ export default function App() {
                           <BarChart3 size={10}/> Saldo
                         </button>
                       </div>}
-                      <button onClick={() => window.open(`${host}/api/export/inventory`, '_blank')} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> <span className="hidden sm:inline">Exportar</span></button>
+                      <button onClick={async () => { try { await descargarArchivoAutenticado(host, '/api/export/inventory', `inventario_${new Date().toISOString().slice(0,10)}.xlsx`); } catch (e) { showMsg(`⛔ ${e.message}`, true); } }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> <span className="hidden sm:inline">Exportar</span></button>
                       <button onClick={() => setImportModal({ type: 'inventory' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Upload size={12}/> <span className="hidden sm:inline">Importar</span></button>
                     </div>
                   </div>
@@ -3867,6 +3514,13 @@ export default function App() {
                             <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono text-[10px] font-bold text-slate-700 block w-max mb-1">{i.location_id || 'PISO-RECEPCION'}</span>
                             <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${getStatusBadge(i.status)}`}>{statusLabel(i.status || 'DISPONIBLE')}</span>
                             {i.batch_number && <p className="text-[8px] font-black text-amber-700 uppercase mt-1">LT: {i.batch_number}</p>}
+                            {i.expiry_date && (() => {
+                              const d = new Date(i.expiry_date);
+                              const today = new Date(); today.setHours(0,0,0,0);
+                              const days = Math.ceil((d - today) / 86400000);
+                              const cls = isNaN(d.getTime()) ? 'text-slate-500' : days < 0 ? 'text-red-700' : days <= 30 ? 'text-orange-600' : 'text-amber-700';
+                              return <p className={`text-[8px] font-black uppercase mt-0.5 ${cls}`}><Calendar size={9} className="inline mr-0.5 -mt-0.5"/>VENCE: {isNaN(d.getTime()) ? i.expiry_date : d.toLocaleDateString('es-ES')}{!isNaN(d.getTime()) && days < 0 ? ' (VENCIDO)' : ''}</p>;
+                            })()}
                             {i.serial_number && <p className="text-[8px] font-black text-indigo-700 uppercase mt-0.5">SN: {i.serial_number}</p>}
                           </td>
                           <td className="p-4">
@@ -3918,113 +3572,16 @@ export default function App() {
 
             {/* AUDIT */}
             {activeTab === 'audit' && canManageMasters && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="flex flex-col gap-4 mb-4">
-                  <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Historial de Auditoría</h1>
-                    <button onClick={() => { const headers = 'id,type,sku,qty,glosa,username,created_at'; const csv = filteredAudit.map(l => `"${l.id}","${l.type}","${l.sku}","${l.qty}","${(l.glosa||'').replace(/"/g,"'")}","${l.username||''}","${l.created_at}"`).join('\n'); const blob = new Blob([headers+'\n'+csv],{type:'text/csv'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='auditoria_filtrada.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> Exportar Filtrado</button>
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                    <select value={auditTypeFilter} onChange={e=>{setAuditTypeFilter(e.target.value);setAuditPage(0);}} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none shadow-sm text-slate-700 uppercase">
-                      <option value="">Todos los tipos</option>
-                      <option value="INBOUND">Entrada</option>
-                      <option value="OUTBOUND">Salida</option>
-                      <option value="ADJUST_IN">Sobrante</option>
-                      <option value="ADJUST_OUT">Merma</option>
-                      <option value="RELOCATE">Reubicación</option>
-                      <option value="STATUS_CHANGE">Cambio Estado</option>
-                    </select>
-                    <input type="text" placeholder="Filtrar por usuario..." value={auditUserFilter} onChange={e=>{setAuditUserFilter(e.target.value);setAuditPage(0);}} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none shadow-sm text-slate-700"/>
-                    <input type="date" value={auditDateFrom} onChange={e=>{setAuditDateFrom(e.target.value);setAuditPage(0);}} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none shadow-sm text-slate-700" title="Fecha desde"/>
-                    <input type="date" value={auditDateTo} onChange={e=>{setAuditDateTo(e.target.value);setAuditPage(0);}} className="bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none shadow-sm text-slate-700" title="Fecha hasta"/>
-                    {(auditTypeFilter||auditUserFilter||auditDateFrom||auditDateTo) && (
-                      <button onClick={() => { setAuditTypeFilter(''); setAuditUserFilter(''); setAuditDateFrom(''); setAuditDateTo(''); }} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm col-span-2"><X size={10}/> Limpiar Filtros</button>
-                    )}
-                  </div>
-                </div>
-                <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 border-b">
-                      <tr>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">Fecha y Autor</th>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">Flujo</th>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">SKU</th>
-                        <th className="px-5 pt-4 pb-1 text-center text-[10px] font-black text-slate-400 uppercase">Cant.</th>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">
-                          {(auditTypeFilter||auditUserFilter||auditDateFrom||auditDateTo) && <button onClick={() => { setAuditTypeFilter(''); setAuditUserFilter(''); setAuditDateFrom(''); setAuditDateTo(''); }} className="bg-red-100 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase flex items-center gap-1 ml-auto"><X size={8}/> Limpiar</button>}
-                        </th>
-                      </tr>
-                      <tr className="border-t border-slate-100">
-                        <td className="px-3 pb-3 pt-1">
-                          <div className="flex gap-1">
-                            <input type="date" value={auditDateFrom} onChange={e=>setAuditDateFrom(e.target.value)} className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700" title="Desde"/>
-                            <input type="date" value={auditDateTo} onChange={e=>setAuditDateTo(e.target.value)} className="flex-1 border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700" title="Hasta"/>
-                          </div>
-                        </td>
-                        <td className="px-3 pb-3 pt-1">
-                          <select value={auditTypeFilter} onChange={e=>setAuditTypeFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
-                            <option value="">Todos los tipos</option>
-                            <option value="INBOUND">Entrada</option>
-                            <option value="OUTBOUND">Salida</option>
-                            <option value="ADJUST_IN">Sobrante</option>
-                            <option value="ADJUST_OUT">Merma</option>
-                            <option value="RELOCATE">Reubicación</option>
-                            <option value="STATUS_CHANGE">Cambio Estado</option>
-                          </select>
-                        </td>
-                        <td className="px-3 pb-3 pt-1">
-                          <select value={auditTypeFilter === '' ? invSkuFilter : ''} onChange={e=>{}} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
-                            <option value="">Todos los SKUs</option>
-                            {[...new Set(auditLogs.map(l=>l.sku))].sort().map(s=><option key={s} value={s}>{s}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-3 pb-3 pt-1"></td>
-                        <td className="px-3 pb-3 pt-1">
-                          <input type="text" placeholder="🔍 Usuario..." value={auditUserFilter} onChange={e=>setAuditUserFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700"/>
-                        </td>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredAudit.slice(auditPage * PAGE_SIZE, (auditPage + 1) * PAGE_SIZE).map(log => (
-                        <tr key={log.id} className="hover:bg-slate-50">
-                          <td className="p-5">
-                            <p className="text-xs font-bold text-slate-600">{new Date(log.created_at).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'medium' })}</p>
-                            <p className="text-[9px] font-black text-indigo-600 mt-1 uppercase">👤 {log.username || 'SYSTEM'}</p>
-                          </td>
-                          <td className="p-5">
-                            <span className={`px-2 py-1 rounded text-[9px] font-black uppercase ${
-                              log.type === 'INBOUND' || log.type === 'ADJUST_IN' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 
-                              log.type === 'OUTBOUND' || log.type === 'ADJUST_OUT' ? 'bg-red-100 text-red-800 border border-red-200' : 
-                              'bg-purple-100 text-purple-800 border border-purple-200'
-                            }`}>
-                              {log.type === 'INBOUND' ? 'ENTRADA' : 
-                               log.type === 'OUTBOUND' ? 'SALIDA' : 
-                               log.type === 'ADJUST_IN' ? 'SOBRANTE (+)' : 
-                               log.type === 'ADJUST_OUT' ? 'MERMA (-)' : 
-                               log.type === 'STATUS_CHANGE' ? 'ESTADO FÍSICO' : 'REUBICACIÓN'}
-                            </span>
-                          </td>
-                          <td className="p-5 text-xs font-black text-slate-800 uppercase">{log.sku}</td>
-                          <td className="p-5 text-center font-black text-sm text-slate-800">{log.qty}</td>
-                          <td className="p-5 text-xs text-slate-500 italic max-w-sm truncate" title={log.glosa}>
-                            {log.glosa ? `"${log.glosa}"` : '-'}
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredAudit.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-500">No hay registros que coincidan.</td></tr>}
-                    </tbody>
-                  </table>
-                  {filteredAudit.length > PAGE_SIZE && (
-                    <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50">
-                      <span className="text-[10px] font-bold text-slate-500">Mostrando {auditPage * PAGE_SIZE + 1}–{Math.min((auditPage + 1) * PAGE_SIZE, filteredAudit.length)} de {filteredAudit.length}</span>
-                      <div className="flex gap-2">
-                        <button disabled={auditPage === 0} onClick={() => setAuditPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40">← Anterior</button>
-                        <button disabled={(auditPage + 1) * PAGE_SIZE >= filteredAudit.length} onClick={() => setAuditPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40">Siguiente →</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <AuditTab
+                  filteredAudit={filteredAudit} auditLogs={auditLogs} invSkuFilter={invSkuFilter}
+                  auditTypeFilter={auditTypeFilter} setAuditTypeFilter={setAuditTypeFilter}
+                  auditUserFilter={auditUserFilter} setAuditUserFilter={setAuditUserFilter}
+                  auditDateFrom={auditDateFrom} setAuditDateFrom={setAuditDateFrom}
+                  auditDateTo={auditDateTo} setAuditDateTo={setAuditDateTo}
+                  auditPage={auditPage} setAuditPage={setAuditPage}
+                />
+              </Suspense>
             )}
 
             {/* WAREHOUSE SETUP */}
@@ -4208,12 +3765,19 @@ export default function App() {
                     const existingIds = new Set(safeLocs.map(l=>l.location_id));
                     const aisles = [...new Set(preview.map(p => p.aisle || p.location_id.split('-')[1]))];
                     const cols = parseInt(draftLoc.colCount) || 1;
-                    const newCount = preview.filter(p => !whExcluded.has(p.location_id)).length;
+                    // FALLA-04: contar SOLO las que no existen (las "Ya existe" no cuentan como nuevas).
+                    const newCount = preview.filter(p => !whExcluded.has(p.location_id) && !existingIds.has(p.location_id)).length;
+                    const existingCount = preview.filter(p => !whExcluded.has(p.location_id) && existingIds.has(p.location_id)).length;
                     return (
                       <div className="space-y-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                         <div className="flex justify-between items-center">
                           <p className="text-[10px] font-black text-slate-600 uppercase">Grilla: {aisles.length} pasillos x {cols} columnas x {draftLoc.levelCount} niveles</p>
-                          <p className="text-[10px] font-black text-emerald-600">Se generaran {newCount} ubicaciones nuevas</p>
+                          <div className="text-right">
+                            <p className="text-[10px] font-black text-emerald-600">Se generaran {newCount} ubicaciones nuevas{existingCount>0?` (${existingCount} ya existen)`:''}</p>
+                            {newCount===0 && existingCount>0 && (
+                              <p className="text-[9px] font-bold text-amber-600">Todas ya existen. "Generar" solo reescribe si marcas "Sobrescribir duplicados".</p>
+                            )}
+                          </div>
                         </div>
                         <div className="overflow-auto max-h-60 custom-scrollbar">
                           {aisles.map(aisle => (
@@ -4264,10 +3828,15 @@ export default function App() {
                            <option value="">Todas las zonas</option>
                            {[...new Set(safeLocs.map(l=>l.zone_code||'SIN ZONA'))].sort().map(z=><option key={z} value={z}>{z}</option>)}
                          </select>
-                         <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm w-56 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
+                         <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm w-36 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
                            <Search size={12} className="text-slate-400 mr-2" />
-                           <input type="text" placeholder="Buscar..." value={locSearchTerm} onChange={(e) => { setLocSearchTerm(e.target.value); setLocPage(0); }} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700" />
+                           <input type="text" placeholder="Ubicación..." value={locCodeFilter} onChange={(e) => { setLocCodeFilter(e.target.value); setLocPage(0); }} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700" />
                          </div>
+                         <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm w-36 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
+                           <Search size={12} className="text-slate-400 mr-2" />
+                           <input type="text" placeholder="Zona..." value={locZoneFilter} onChange={(e) => { setLocZoneFilter(e.target.value); setLocPage(0); }} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700" />
+                         </div>
+                         {(locCodeFilter||locZoneFilter) && <button onClick={()=>{setLocCodeFilter('');setLocZoneFilter('');setLocPage(0);}} className="bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1.5 text-[9px] font-black uppercase flex items-center gap-1"><X size={9}/> Limpiar</button>}
                        </div>
                      </div>
 
@@ -4546,8 +4115,8 @@ export default function App() {
                       <div className="space-y-4">
                         {(() => {
                           if (!isEditingSku || !editingSkuOriginal) return null;
-                          const newLot    = skuForm.traceability === 'LOT';
-                          const newSerial = skuForm.traceability === 'SERIAL';
+                          const newLot    = skuForm.requires_lot;
+                          const newSerial = skuForm.requires_serial;
                           const criticalChange = newLot !== editingSkuOriginal.requires_lot || newSerial !== editingSkuOriginal.requires_serial;
                           if (!criticalChange) return null;
                           const hasStock = editingSkuOriginal.stock_total > 0;
@@ -4562,7 +4131,7 @@ export default function App() {
                             </div>
                           );
                         })()}
-                        <select value={skuForm.traceability} onChange={e=>setSkuForm({...skuForm, traceability: e.target.value})} className="w-full border-2 border-blue-200 bg-blue-50 text-blue-900 rounded-xl px-4 py-3 text-xs font-bold outline-none uppercase focus:border-blue-500">
+                        <select value={skuForm.requires_serial ? 'SERIAL' : (skuForm.requires_lot ? 'LOT' : 'NONE')} onChange={e=>{ const v = e.target.value; setSkuForm({...skuForm, requires_lot: v === 'LOT', requires_serial: v === 'SERIAL'}); }} className="w-full border-2 border-blue-200 bg-blue-50 text-blue-900 rounded-xl px-4 py-3 text-xs font-bold outline-none uppercase focus:border-blue-500">
                           <option value="NONE">Sin Controles (Stock General)</option>
                           <option value="LOT">Exigir Registro de LOTE y Vencimiento</option>
                           <option value="SERIAL">Exigir Registro de Número de SERIE Único</option>
@@ -4682,12 +4251,12 @@ export default function App() {
                       </div>
                     </form>
                   </div>}
-                  <div className={`${currentUser?.role === 'CLIENTE' ? 'w-full' : 'flex-[1.5]'} overflow-y-auto max-h-[500px] custom-scrollbar pr-2`}>
+                  <div className={`${currentUser?.role === 'CLIENTE' ? 'w-full' : 'flex-[1.5]'} overflow-y-auto h-[calc(100vh-180px)] custom-scrollbar pr-2`}>
                     <div className="sticky top-0 bg-white pt-2 pb-3 z-10 border-b border-slate-100 space-y-2 mb-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Catálogo ({filteredSkusList.length})</p>
-                          <button onClick={() => { const headers = 'sku,client_id,desc,category,uom,weight,length,width,height,abc_class,requires_lot,requires_serial,barcode'; const csv = filteredSkusList.map(s => Object.values({sku:s.sku,client_id:s.client_id||'',desc:s.desc||'',category:s.category||'',uom:s.uom||'',weight:s.weight||0,length:s.length||0,width:s.width||0,height:s.height||0,abc_class:s.abc_class||'',requires_lot:s.requires_lot||false,requires_serial:s.requires_serial||false,barcode:s.barcode||''}).map(v=>`"${v}"`).join(',')).join('\n'); const blob = new Blob([headers+'\n'+csv],{type:'text/csv'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='skus_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
+                          <button onClick={() => { const headers = 'sku,client_id,desc,category,uom,weight,length,width,height,abc_class,requires_lot,requires_serial,barcode,manufacturer_code,manufacturer_sku,brand'; const csv = filteredSkusList.map(s => Object.values({sku:s.sku,client_id:s.client_id||'',desc:s.desc||'',category:s.category||'',uom:s.uom||'',weight:s.weight||0,length:s.length||0,width:s.width||0,height:s.height||0,abc_class:s.abc_class||'',requires_lot:s.requires_lot||false,requires_serial:s.requires_serial||false,barcode:s.barcode||'',manufacturer_code:s.manufacturer_code||s.manufacturer?.code||'',manufacturer_sku:s.manufacturer_sku||'',brand:s.brand||''}).map(v=>`"${v}"`).join(',')).join('\n'); const blob = new Blob([headers+'\n'+csv],{type:'text/csv'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='skus_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
                           {currentUser?.role !== 'CLIENTE' && <button onClick={() => setImportModal({ type: 'skus' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Upload size={10}/> Importar</button>}
                         </div>
                         {(skuSearchTerm||skuClientFilter||skuCategoryFilter||skuAbcFilter) && <button onClick={() => { setSkuSearchTerm(''); setSkuClientFilter(''); setSkuCategoryFilter(''); setSkuAbcFilter(''); }} className="bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[9px] font-black uppercase flex items-center gap-1"><X size={9}/> Limpiar</button>}
@@ -4716,12 +4285,12 @@ export default function App() {
                         </select>
                       </div>
                     </div>
-                    <div className="space-y-3">
+                    <div className="space-y-1.5">
                       {filteredSkusList.slice(skuPage * PAGE_SIZE, (skuPage + 1) * PAGE_SIZE).map(s => (
-                        <div key={s.sku} className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col hover:bg-white transition-colors shadow-sm group">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="text-sm font-black text-slate-800 flex items-center gap-2">
+                        <div key={s.sku} className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl flex flex-col hover:bg-white transition-colors shadow-sm group">
+                          <div className="flex justify-between items-start">
+                            <div className="min-w-0">
+                              <p className="text-xs font-black text-slate-800 flex items-center gap-2 flex-wrap">
                                 {s.sku}
                                 {(() => {
                                   const ver = parseInt(s.current_version) || 1;
@@ -4735,27 +4304,24 @@ export default function App() {
                                 })()}
                                 {s.barcode && <span className="text-[9px] bg-slate-200 text-slate-600 px-1 rounded font-mono">UPC: {s.barcode}</span>}
                               </p>
-                              <p className="text-[10px] text-slate-500 truncate w-48 md:w-64">{s.desc}</p>
-                              {s.client_id && <p className="text-[9px] text-indigo-600 font-bold mt-1"><Building2 size={10} className="inline mr-1"/>Cliente: {clients.find(c=>c.id===s.client_id)?.name || s.client_id}</p>}
+                              <p className="text-[10px] text-slate-500 truncate w-48 md:w-72">
+                                {s.desc}
+                                {s.client_id && <span className="text-indigo-600 font-bold"> · {clients.find(c=>c.id===s.client_id)?.name || s.client_id}</span>}
+                                {(s.weight || s.length || s.width || s.height) && <span className="text-slate-400"> · {s.weight ? `${s.weight}kg ` : ''}{(s.length || s.width || s.height) ? `${s.length||0}×${s.width||0}×${s.height||0}cm` : ''}</span>}
+                              </p>
                             </div>
-                            <div className="flex items-center gap-1 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                              {(s.requires_lot || s.requires_serial) && <span className="text-[9px] font-black bg-amber-100 border border-amber-200 px-2 py-1 rounded uppercase text-amber-800 mr-2">{s.requires_lot ? 'LOTE' : 'SERIE'}</span>}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {(s.requires_lot || s.requires_serial) && <span className="text-[9px] font-black bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded uppercase text-amber-800 mr-1">{s.requires_lot ? 'LOTE' : 'SERIE'}</span>}
 
-                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleEditSku(s)} className="bg-white p-2 rounded-full border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all" title="Editar Producto">
-                                <Pencil size={14}/>
+                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleEditSku(s)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all" title="Editar Producto">
+                                <Pencil size={13}/>
                               </button>}
 
-                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleDeleteSku(s.sku, s.client_id)} className="bg-white p-2 rounded-full border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 shadow-sm transition-all ml-1" title="Eliminar Producto">
-                                <Trash2 size={14}/>
+                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleDeleteSku(s.sku, s.client_id)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 shadow-sm transition-all" title="Eliminar Producto">
+                                <Trash2 size={13}/>
                               </button>}
                             </div>
                           </div>
-                          {(s.weight || s.length || s.width || s.height) && (
-                            <div className="mt-2 pt-2 border-t border-slate-100 flex gap-4 text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-                              {s.weight && <span>Peso: {s.weight}kg</span>}
-                              {(s.length || s.width || s.height) && <span>Dim: {s.length||0}x{s.width||0}x{s.height||0}cm</span>}
-                            </div>
-                          )}
                         </div>
                       ))}
                       {filteredSkusList.length > PAGE_SIZE && (
@@ -4834,6 +4400,7 @@ export default function App() {
                   workspaces={workspaces} newDocNum={newDocNum} setNewDocNum={setNewDocNum} newDocType={newDocType} setNewDocType={setNewDocType} newDocGlosa={newDocGlosa} setNewDocGlosa={setNewDocGlosa}
                   newDocDate={newDocDate} setNewDocDate={setNewDocDate} newDocRef={newDocRef} setNewDocRef={setNewDocRef} newDocEnteredAt={newDocEnteredAt} setNewDocEnteredAt={setNewDocEnteredAt}
                   documentTypes={documentTypes} handleCreateDoc={handleCreateDoc} removeDoc={removeDoc} setActiveDocId={setActiveDocId} currentUser={currentUser}
+                  is3PLMode={is3PLMode} opsClients={opsClients} newDocClient={newDocClient} setNewDocClient={setNewDocClient}
                 />
               </div>
             )}
@@ -4845,6 +4412,7 @@ export default function App() {
                       <button onClick={() => setActiveDocId(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition-colors"><ArrowLeft size={16} className="text-emerald-700"/></button>
                       <div>
                         <h2 className="text-lg font-black text-emerald-900 uppercase tracking-tighter flex items-center">[{activeDoc.docType}] {activeDoc.docNum}</h2>
+                        {activeDoc.client && <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
                         <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-0.5">Editando... (Autoguardado activado)</p>
                       </div>
                     </div>
@@ -4879,7 +4447,7 @@ export default function App() {
                         </div>
                         <select value={lineItem.sku} onChange={e=>{setLineItem({...lineItem, sku: e.target.value, qty: permittedSkus.find(s=>s.sku===e.target.value)?.requires_serial ? 1 : ''});}} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 uppercase bg-white">
                           <option value="">-- O seleccionar del catálogo --</option>
-                          {permittedSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
+                          {docSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
                         </select>
                       </div>
                       {selSku.requires_lot && (
@@ -4942,6 +4510,7 @@ export default function App() {
                   workspaces={workspaces} newDocNum={newDocNum} setNewDocNum={setNewDocNum} newDocType={newDocType} setNewDocType={setNewDocType} newDocGlosa={newDocGlosa} setNewDocGlosa={setNewDocGlosa}
                   newDocDate={newDocDate} setNewDocDate={setNewDocDate} newDocRef={newDocRef} setNewDocRef={setNewDocRef} newDocEnteredAt={newDocEnteredAt} setNewDocEnteredAt={setNewDocEnteredAt}
                   documentTypes={documentTypes} handleCreateDoc={handleCreateDoc} removeDoc={removeDoc} setActiveDocId={setActiveDocId} currentUser={currentUser}
+                  is3PLMode={is3PLMode} opsClients={opsClients} newDocClient={newDocClient} setNewDocClient={setNewDocClient}
                 />
               </div>
             )}
@@ -4953,6 +4522,7 @@ export default function App() {
                       <button onClick={() => setActiveDocId(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition-colors"><ArrowLeft size={16} className="text-blue-700"/></button>
                       <div>
                         <h2 className="text-lg font-black text-blue-900 uppercase tracking-tighter flex items-center">[{activeDoc.docType}] {activeDoc.docNum}</h2>
+                        {activeDoc.client && <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
                         <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Armando carro de extracción...</p>
                       </div>
                     </div>
@@ -4973,7 +4543,7 @@ export default function App() {
                       <div className="space-y-1">
                         <select value={lineItem.sku} onChange={e=>setLineItem({sku: e.target.value, selectedLpns: {}})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-blue-500 uppercase bg-white">
                           <option value="">-- O seleccionar del catálogo --</option>
-                          {permittedSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
+                          {docSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
                         </select>
                       </div>
 
@@ -5011,7 +4581,7 @@ export default function App() {
                                     <tbody className="divide-y divide-slate-200">
                                       {stockForDisp.map(lpn => (
                                         <tr key={lpn.id} className="bg-white hover:bg-blue-50/50">
-                                          <td className="p-3 text-xs font-mono font-bold text-slate-600"><p>{lpn.id}</p><p className="text-[9px] text-slate-400 mt-1">Rack: {lpn.location_id || 'PISO'} - <span className={getStatusBadge(lpn.status)}>{statusLabel(lpn.status || 'DISPONIBLE')}</span></p></td>
+                                          <td className="p-3 text-xs font-mono font-bold text-slate-600"><p>{lpn.id}</p><p className="text-[9px] text-slate-400 mt-1">Rack: {lpn.location_id || 'PISO'} - <span className={getStatusBadge(lpn.status)}>{statusLabel(lpn.status || 'DISPONIBLE')}</span></p>{selSku.requires_serial && !lpn.serial_number && <p className="text-[8px] font-black text-amber-600 uppercase mt-1">⚠ Sin serie — stock anterior</p>}</td>
                                           <td className="p-3 text-sm font-black text-indigo-600 text-center">{lpn.effectiveQty}</td>
                                           <td className="p-3 text-center flex justify-center items-center h-full pt-4">
                                             {lpn.serial_number ? (
@@ -5043,16 +4613,77 @@ export default function App() {
                       )}
                     </div>
 
+                    {/* ── Modo A: despachar un KIT explotando componentes al vuelo ── */}
+                    {activeDoc.client && (
+                      <div className="bg-white rounded-3xl border-2 border-violet-100 shadow-sm overflow-hidden mb-6">
+                        <div className="bg-violet-50 border-b border-violet-100 p-4">
+                          <h3 className="text-[10px] font-black text-violet-600 uppercase tracking-widest">📦 Despachar kit (explota componentes)</h3>
+                          <p className="text-[9px] text-violet-400 mt-0.5">El kit no genera stock propio: se descuentan sus componentes con trazabilidad de origen.</p>
+                        </div>
+                        <div className="p-4 space-y-3">
+                          {(() => {
+                            const availKits = (kits || []).filter(k => k.client_id === activeDoc.client && (k.components || []).length > 0);
+                            if (availKits.length === 0) return <p className="text-[10px] text-slate-400">No hay kits con receta para este cliente.</p>;
+                            return (
+                              <div className="flex flex-wrap items-end gap-2">
+                                <div className="flex-1 min-w-[180px]">
+                                  <label className="text-[9px] font-black text-slate-400 uppercase">Kit</label>
+                                  <select value={dispKitForm.kit_sku} onChange={e => { setDispKitForm(f => ({ ...f, kit_sku: e.target.value })); setDispKitAvail(null); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-violet-500">
+                                    <option value="">— Selecciona —</option>
+                                    {availKits.map(k => <option key={k.kit_sku} value={k.kit_sku}>{k.kit_sku}{k.description ? ` · ${k.description}` : ''}</option>)}
+                                  </select>
+                                </div>
+                                <div className="w-24">
+                                  <label className="text-[9px] font-black text-slate-400 uppercase">Cant. kits</label>
+                                  <input type="number" min="1" value={dispKitForm.qty} onChange={e => { setDispKitForm(f => ({ ...f, qty: e.target.value })); setDispKitAvail(null); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-center font-black outline-none focus:border-violet-500"/>
+                                </div>
+                                <button type="button" onClick={checkDispKitAvail} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">Verificar</button>
+                              </div>
+                            );
+                          })()}
+                          {dispKitAvail && (
+                            <div className={`rounded-2xl p-4 border-2 ${dispKitAvail.can_build ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+                              <p className={`text-xs font-black uppercase mb-2 ${dispKitAvail.can_build ? 'text-emerald-700' : 'text-red-700'}`}>{dispKitAvail.can_build ? '✅ Stock suficiente' : '⛔ Stock insuficiente'}</p>
+                              <div className="space-y-2">
+                                {(dispKitAvail.components || []).map(c => (
+                                  <div key={c.component_sku} className="bg-white rounded-xl px-3 py-2 border border-slate-100">
+                                    <div className="flex items-center gap-2 text-[11px]">
+                                      <span className="font-black uppercase text-slate-700 flex-1 truncate">{c.component_sku}</span>
+                                      <span className="text-slate-400">necesita {c.needed}</span>
+                                      <span className={`font-black ${c.available >= c.needed ? 'text-emerald-600' : 'text-red-600'}`}>disp {c.available}</span>
+                                    </div>
+                                    {renderKitSourcePicker(c, dispKitSources, setDispKitSources)}
+                                  </div>
+                                ))}
+                              </div>
+                              {dispKitAvail.can_build && (
+                                <button type="button" onClick={addKitLineToDispatch} className="mt-3 w-full bg-violet-600 hover:bg-violet-700 text-white font-black py-2.5 rounded-xl uppercase text-[10px] tracking-widest">+ Agregar kit al carro</button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {activeDoc.items.length > 0 && (
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-                        <div className="bg-slate-50 border-b border-slate-200 p-4 flex justify-between items-center"><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Carro de Extracción ({activeDoc.items.length} posiciones)</h3><span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-1 rounded font-black uppercase">Total: {activeDoc.items.reduce((sum, it) => sum + parseFloat(it.qtyToPick), 0)} Unds.</span></div>
+                        <div className="bg-slate-50 border-b border-slate-200 p-4 flex justify-between items-center"><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Carro de Extracción ({activeDoc.items.length} posiciones)</h3><span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-1 rounded font-black uppercase">Total: {activeDoc.items.reduce((sum, it) => sum + (parseFloat(it.qtyToPick) || 0), 0)} Unds.</span></div>
                         <table className="w-full text-left">
                           <thead className="bg-slate-100 border-b border-slate-200"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Origen LPN / SKU</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Sacar</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Eliminar</th></tr></thead>
                           <tbody className="divide-y divide-slate-100">
                             {activeDoc.items.map((it, idx) => (
                               <tr key={idx} className="hover:bg-slate-50">
-                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}</p></td>
-                                <td className="p-3 text-center text-lg font-black text-blue-600">-{it.qtyToPick}</td>
+                                {it.isKit ? (
+                                  <>
+                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku} <span className="ml-1 bg-violet-100 text-violet-700 px-1.5 rounded font-black text-[9px] uppercase">KIT</span></p><p className="text-[9px] text-slate-500">{it._compSummary}</p><p className="text-[8px] text-slate-400 uppercase">{(it.components||[]).every(c=>c.mode!=='manual') ? 'Origen automático (FEFO)' : 'Origen mixto / seleccionado'}</p></td>
+                                    <td className="p-3 text-center text-lg font-black text-violet-600">{it.qtyKits} kit{it.qtyKits>1?'s':''}</td>
+                                  </>
+                                ) : (
+                                  <>
+                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}{!it.serial && skus.find(s=>s.sku===it.sku)?.requires_serial && <span className="ml-1 bg-amber-100 text-amber-700 px-1 rounded font-bold">⚠ Sin serie</span>}</p></td>
+                                    <td className="p-3 text-center text-lg font-black text-blue-600">-{it.qtyToPick}</td>
+                                  </>
+                                )}
                                 <td className="p-3 text-center"><button onClick={() => removeLineFromDoc(idx)} className="text-red-400 hover:text-red-600"><MinusCircle size={16}/></button></td>
                               </tr>
                             ))}
@@ -5121,6 +4752,10 @@ export default function App() {
                       );
                     })()}
 
+                    <button disabled={activeDoc.items.length === 0} onClick={openTransportReq} className="w-full bg-white border-2 border-cyan-500 text-cyan-700 hover:bg-cyan-50 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">
+                      <Truck size={16} className="mr-2"/> Solicitar Transporte
+                    </button>
+
                     <button disabled={activeDoc.items.length === 0} onClick={openDispatchConfirm} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">
                       <ArrowUpRight size={16} className="mr-2"/> Proceder a Confirmación de Salida
                     </button>
@@ -5152,23 +4787,36 @@ export default function App() {
                       <tbody className="divide-y divide-slate-100">
                         {activeDoc.items.map((it, idx) => (
                           <tr key={idx} className="hover:bg-slate-50">
-                            <td className="p-3 pl-4">
-                              <p className="text-xs font-black text-slate-800">{it.sku}</p>
-                              <p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}</p>
-                            </td>
-                            <td className="p-3 text-center text-sm font-black text-slate-500">{it.qtyToPick}</td>
-                            <td className="p-3 text-center pr-4">
-                              <input 
-                                type="number" 
-                                min="0" 
-                                max={it.qtyToPick} 
-                                value={shipQtys[idx] === 0 ? '' : shipQtys[idx]} 
-                                onChange={(e) => setShipQtys({...shipQtys, [idx]: parseFloat(e.target.value) || 0})}
-                                disabled={!!it.serial} 
-                                className="w-24 border-2 border-blue-200 rounded-xl px-3 py-2 text-center font-black outline-none focus:border-blue-600 text-blue-700 bg-blue-50"
-                                placeholder="0"
-                              />
-                            </td>
+                            {it.isKit ? (
+                              <>
+                                <td className="p-3 pl-4">
+                                  <p className="text-xs font-black text-slate-800">{it.sku} <span className="ml-1 bg-violet-100 text-violet-700 px-1.5 rounded font-black text-[9px] uppercase">KIT</span></p>
+                                  <p className="text-[9px] text-slate-500">{it._compSummary}</p>
+                                </td>
+                                <td className="p-3 text-center text-sm font-black text-slate-500">{it.qtyKits} kit{it.qtyKits>1?'s':''}</td>
+                                <td className="p-3 text-center pr-4"><span className="text-[9px] font-black text-violet-600 uppercase">Completo</span></td>
+                              </>
+                            ) : (
+                              <>
+                                <td className="p-3 pl-4">
+                                  <p className="text-xs font-black text-slate-800">{it.sku}</p>
+                                  <p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}{!it.serial && skus.find(s=>s.sku===it.sku)?.requires_serial && <span className="ml-1 bg-amber-100 text-amber-700 px-1 rounded font-bold">⚠ Sin serie — stock anterior</span>}</p>
+                                </td>
+                                <td className="p-3 text-center text-sm font-black text-slate-500">{it.qtyToPick}</td>
+                                <td className="p-3 text-center pr-4">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={it.qtyToPick}
+                                    value={shipQtys[idx] === 0 ? '' : shipQtys[idx]}
+                                    onChange={(e) => setShipQtys({...shipQtys, [idx]: parseFloat(e.target.value) || 0})}
+                                    disabled={!!it.serial}
+                                    className="w-24 border-2 border-blue-200 rounded-xl px-3 py-2 text-center font-black outline-none focus:border-blue-600 text-blue-700 bg-blue-50"
+                                    placeholder="0"
+                                  />
+                                </td>
+                              </>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -5191,6 +4839,54 @@ export default function App() {
               </div>
             )}
 
+            {/* MODAL: SOLICITAR TRANSPORTE DESDE DESPACHO */}
+            {showTransportReq && activeDoc && (
+              <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 max-h-[90vh]">
+                  <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-cyan-50 shrink-0">
+                    <div>
+                      <h2 className="text-xl font-black text-cyan-900 uppercase tracking-tighter flex items-center"><Truck className="w-6 h-6 mr-2"/> Solicitar Transporte</h2>
+                      <p className="text-[10px] font-bold text-cyan-600 uppercase tracking-widest mt-1">Despacho {activeDoc.docNum} · {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client || 'sin cliente'}</p>
+                    </div>
+                    <button onClick={() => { setShowTransportReq(false); setTransportReqResult(null); }} className="bg-white p-2 rounded-full text-slate-400 hover:text-slate-600 shadow-sm"><X size={16}/></button>
+                  </div>
+                  <div className="p-8 flex-1 overflow-y-auto custom-scrollbar space-y-5">
+                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Líneas del carrito (peso/volumen los calcula el sistema)</p>
+                      <div className="space-y-1 max-h-40 overflow-y-auto">
+                        {activeDoc.items.map((it, idx) => (
+                          <div key={idx} className="flex items-center justify-between text-xs">
+                            <span className="font-mono font-black text-slate-700">{it.sku}{it.isKit && <span className="ml-1 bg-violet-100 text-violet-700 px-1 rounded text-[8px] uppercase">KIT</span>}</span>
+                            <span className="font-black text-slate-500">{it.isKit ? `${it.qtyKits} kit${it.qtyKits>1?'s':''}` : it.qtyToPick}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="md:col-span-2"><label className="text-[9px] font-black text-slate-400 uppercase">Destino</label><input value={transportReqForm.destino} onChange={e => setTransportReqForm({ ...transportReqForm, destino: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500" placeholder="Dirección / lugar de entrega"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Sentido</label><select value={transportReqForm.sentido} onChange={e => setTransportReqForm({ ...transportReqForm, sentido: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white"><option value="SALIDA">Salida</option><option value="REGRESO">Regreso</option></select></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Tipo vehículo sugerido</label><select value={transportReqForm.tipo_vehiculo_sugerido} onChange={e => setTransportReqForm({ ...transportReqForm, tipo_vehiculo_sugerido: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white"><option value="">—</option>{transportTipos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}</select></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">N° cajas</label><input type="number" value={transportReqForm.n_cajas} onChange={e => setTransportReqForm({ ...transportReqForm, n_cajas: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">N° cajones</label><input type="number" value={transportReqForm.n_cajones} onChange={e => setTransportReqForm({ ...transportReqForm, n_cajones: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">N° pallets</label><input type="number" value={transportReqForm.n_pallets} onChange={e => setTransportReqForm({ ...transportReqForm, n_pallets: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Hora carga habilitada</label><input type="datetime-local" value={transportReqForm.hora_carga_habilitada} onChange={e => setTransportReqForm({ ...transportReqForm, hora_carga_habilitada: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Recepción en destino</label><input type="datetime-local" value={transportReqForm.fecha_hora_recepcion_destino} onChange={e => setTransportReqForm({ ...transportReqForm, fecha_hora_recepcion_destino: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                    </div>
+                    {transportReqResult && (
+                      <div className={`rounded-xl p-3 ${transportReqResult.dims_incompletas ? 'bg-amber-50 border border-amber-300' : 'bg-emerald-50 border border-emerald-200'}`}>
+                        <div className="text-[11px] font-bold text-slate-700">Calculado — Peso: <b>{(Number(transportReqResult.peso_total)||0).toLocaleString('es-CL')} kg</b> · Volumen: <b>{(Number(transportReqResult.volumen_total)||0).toLocaleString('es-CL')} m³</b></div>
+                        {transportReqResult.aviso && <div className="flex items-center gap-1.5 text-amber-700 text-[11px] font-bold mt-1"><AlertTriangle size={13}/> {transportReqResult.aviso}</div>}
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-4 shrink-0">
+                    <button onClick={() => { setShowTransportReq(false); setTransportReqResult(null); }} className="w-1/3 bg-white border border-slate-200 text-slate-600 font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-slate-100 transition-colors">{transportReqResult ? 'Cerrar' : 'Cancelar'}</button>
+                    <button disabled={transportReqBusy} onClick={submitTransportReq} className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center">{transportReqBusy ? <><Loader2 size={16} className="mr-2 animate-spin"/> Enviando...</> : <><Send size={16} className="mr-2"/> Enviar Solicitud</>}</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ERP: ADJUST BATCH */}
             {activeTab === 'adjust' && !activeDocId && (
               <div className="space-y-4">
@@ -5200,13 +4896,14 @@ export default function App() {
                   workspaces={workspaces} newDocNum={newDocNum} setNewDocNum={setNewDocNum} newDocGlosa={newDocGlosa} setNewDocGlosa={setNewDocGlosa}
                   newDocDate={newDocDate} setNewDocDate={setNewDocDate} newDocRef={newDocRef} setNewDocRef={setNewDocRef} newDocEnteredAt={newDocEnteredAt} setNewDocEnteredAt={setNewDocEnteredAt}
                   handleCreateDoc={handleCreateDoc} removeDoc={removeDoc} setActiveDocId={setActiveDocId} currentUser={currentUser}
+                  is3PLMode={is3PLMode} opsClients={opsClients} newDocClient={newDocClient} setNewDocClient={setNewDocClient}
                 />
                 {/* Panel de solicitudes de ajuste */}
                 {adjustRequests.length > 0 && (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
                       <p className="text-sm font-black text-amber-800 uppercase tracking-tighter flex items-center gap-2">
-                        <ClipboardList size={15}/> {['ADMIN','SUPERADMIN'].includes(currentUser?.role) ? 'Solicitudes de Ajuste Pendientes' : 'Mis Solicitudes de Ajuste'}
+                        <ClipboardList size={15}/> {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) ? 'Solicitudes de Ajuste Pendientes' : 'Mis Solicitudes de Ajuste'}
                         {adjustRequests.filter(r=>r.status==='PENDIENTE').length > 0 && <span className="bg-amber-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black">{adjustRequests.filter(r=>r.status==='PENDIENTE').length}</span>}
                       </p>
                       <button onClick={async()=>{ const r=await apiFetch(`${host}/api/adjust-requests`); if(r.ok) setAdjustRequests(await r.json()); }} className="text-[9px] text-slate-400 hover:text-slate-700 font-black uppercase flex items-center gap-1"><RefreshCcw size={10}/> Actualizar</button>
@@ -5225,7 +4922,7 @@ export default function App() {
                             {req.reject_reason && <p className="text-[10px] text-red-500 mt-1">Rechazo: "{req.reject_reason}"</p>}
                             {req.authorized_by && <p className="text-[10px] text-slate-400">Procesado por <strong>{req.authorized_by}</strong></p>}
                           </div>
-                          {req.status === 'PENDIENTE' && ['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
+                          {req.status === 'PENDIENTE' && ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
                             <div className="flex gap-2 shrink-0">
                               <button onClick={async()=>{
                                 if(!(await confirm({ message: `¿Aprobar el ajuste de stock del documento ${req.doc_num}?`, danger: true }))) return;
@@ -5261,6 +4958,7 @@ export default function App() {
                       <button onClick={() => setActiveDocId(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition-colors"><ArrowLeft size={16} className="text-amber-700"/></button>
                       <div>
                         <h2 className="text-lg font-black text-amber-900 uppercase tracking-tighter flex items-center">Doc: {activeDoc.docNum}</h2>
+                        {activeDoc.client && <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
                         <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">Agregando diferencias de inventario...</p>
                       </div>
                     </div>
@@ -5286,7 +4984,7 @@ export default function App() {
                         </div>
                         <select value={lineItem.sku} onChange={e=>{setLineItem({...lineItem, sku: e.target.value, qty: permittedSkus.find(s=>s.sku===e.target.value)?.requires_serial ? 1 : ''});}} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-amber-500 uppercase bg-white">
                           <option value="">-- O seleccionar del catálogo --</option>
-                          {permittedSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
+                          {docSkus.map(s => <option key={s.sku} value={s.sku}>[{s.uom}] {s.sku} - {s.desc}</option>)}
                         </select>
                       </div>
 
@@ -5408,7 +5106,7 @@ export default function App() {
               const massSelectedItems = filteredRelData.filter(i => massSelected.includes(i.id));
 
               const pendingRelocReqs = relocRequests.filter(r => r.status === 'PENDIENTE');
-              const isSupervisorPlus = ['EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+              const isSupervisorPlus = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
 
               return (
               <div className="space-y-4 animate-in fade-in max-w-7xl mx-auto">
@@ -5483,12 +5181,30 @@ export default function App() {
                         >{m.icon} {m.label}</button>
                       ))}
                     </div>
-                    {/* Búsqueda */}
-                    <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-56">
+                    {/* Trabajar por cliente */}
+                    {is3PLMode && (
+                      <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm">
+                        <Building2 size={14} className="text-indigo-400 mr-2"/>
+                        <select value={relClientFilter} onChange={e=>setRelClientFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none text-slate-700 max-w-[160px]">
+                          <option value="">Todos los clientes</option>
+                          {opsClients.map(c=><option key={c.id} value={c.id}>{c.id} · {c.name}</option>)}
+                        </select>
+                      </div>
+                    )}
+                    {/* Filtros individuales combinables */}
+                    <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
                       <Search size={14} className="text-slate-400 mr-2"/>
-                      <input type="text" placeholder="Buscar producto o código..." value={relSearchTerm} onChange={e=>setRelSearchTerm(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                      <input type="text" placeholder="LPN..." value={relLpnFilter} onChange={e=>setRelLpnFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
                     </div>
-                    {relSearchTerm && <button onClick={()=>setRelSearchTerm('')} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
+                    <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
+                      <Search size={14} className="text-slate-400 mr-2"/>
+                      <input type="text" placeholder="SKU / producto..." value={relSkuFilter} onChange={e=>setRelSkuFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                    </div>
+                    <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
+                      <Search size={14} className="text-slate-400 mr-2"/>
+                      <input type="text" placeholder="Ubicación..." value={relLocFilter} onChange={e=>setRelLocFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                    </div>
+                    {(relLpnFilter||relSkuFilter||relLocFilter) && <button onClick={()=>{setRelLpnFilter('');setRelSkuFilter('');setRelLocFilter('');}} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
                     <span className="text-[10px] font-black text-slate-400 uppercase">{filteredRelData.length} LPNs</span>
                   </div>
                 </div>
@@ -5937,366 +5653,36 @@ export default function App() {
 
             {/* ÓRDENES DE COMPRA */}
             {activeTab === 'purchase-orders' && (
-              <div className="space-y-6 animate-in fade-in max-w-5xl mx-auto">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><FileText className="text-indigo-500"/> Órdenes de Compra</h1>
-                  <div className="flex gap-2">
-                    <button onClick={async () => { const res = await apiFetch(`${host}/api/purchase-orders`); const d = await res.json(); setPurchaseOrders(Array.isArray(d)?d:[]); }} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Cargar</button>
-                    <button onClick={() => setShowPOForm(!showPOForm)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-md"><Plus size={12}/> Nueva OC</button>
-                  </div>
-                </div>
-
-                {showPOForm && (
-                  <div className="bg-white rounded-3xl border border-indigo-200 shadow-sm p-8 animate-in slide-in-from-top-4">
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter mb-6 border-b pb-4 flex items-center gap-2"><FileText size={16} className="text-indigo-500"/> Crear Nueva Orden de Compra</h3>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <input type="text" placeholder="N° OC / Referencia *" value={newPO.doc_num} onChange={e=>setNewPO({...newPO,doc_num:e.target.value.toUpperCase()})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black uppercase outline-none focus:border-indigo-500"/>
-                      <input type="text" placeholder="Proveedor *" value={newPO.supplier} onChange={e=>setNewPO({...newPO,supplier:e.target.value})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500"/>
-                      {is3PLMode ? (
-                        <select value={newPO.client_id} onChange={e=>setNewPO({...newPO,client_id:e.target.value})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
-                          <option value="">-- Cliente Destino --</option>
-                          {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                      ) : (
-                        <div className="border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                          <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                        </div>
-                      )}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase">Fecha Esperada de Llegada</label>
-                        <input type="date" value={newPO.expected_date} onChange={e=>setNewPO({...newPO,expected_date:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500 bg-white"/>
-                      </div>
-                    </div>
-                    <div className="bg-slate-50 rounded-2xl p-4 mb-4">
-                      <p className="text-[10px] font-black text-slate-500 uppercase mb-3">Líneas de Productos Esperados</p>
-                      <div className="flex gap-3 mb-3">
-                        <select value={newPOLine.sku} onChange={e=>setNewPOLine({...newPOLine,sku:e.target.value})} className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white uppercase">
-                          <option value="">-- SKU --</option>
-                          {permittedSkus.map(s=><option key={s.sku} value={s.sku}>{s.sku} — {s.desc}</option>)}
-                        </select>
-                        <input type="number" min="0.01" placeholder="Cant. Esperada" value={newPOLine.expected_qty} onChange={e=>setNewPOLine({...newPOLine,expected_qty:e.target.value})} className="w-36 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none text-center"/>
-                        <button onClick={() => { if (!newPOLine.sku || !newPOLine.expected_qty) return; setNewPO(p=>({...p,items:[...p.items,{...newPOLine}]})); setNewPOLine({sku:'',expected_qty:''}); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Plus size={12}/> Agregar</button>
-                      </div>
-                      {newPO.items.map((it,i) => (
-                        <div key={i} className="flex justify-between items-center bg-white p-3 rounded-xl border border-slate-200 mb-2">
-                          <span className="text-xs font-black uppercase text-slate-800">{it.sku} <span className="text-slate-400 font-normal">— esperado: {it.expected_qty} un</span></span>
-                          <button onClick={()=>setNewPO(p=>({...p,items:p.items.filter((_,idx)=>idx!==i)}))} className="text-red-400 hover:text-red-600"><X size={14}/></button>
-                        </div>
-                      ))}
-                    </div>
-                    <div className="flex gap-3">
-                      <button disabled={!newPO.doc_num || !newPO.supplier || newPO.items.length===0} onClick={async () => { const poPayload={...newPO,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !poPayload.client_id) poPayload.client_id=systemConfig.own_client_id||'PROPIO'; const res = await apiFetch(`${host}/api/purchase-orders`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(poPayload)}); if(res.ok){const d=await res.json(); showMsg(`✅ OC ${d.poId} creada`); setNewPO({doc_num:'',supplier:'',client_id:'',expected_date:'',notes:'',items:[]}); setShowPOForm(false); const r2=await apiFetch(`${host}/api/purchase-orders`); setPurchaseOrders(await r2.json());} else showMsg('⛔ Error',true); }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50">Crear Orden de Compra</button>
-                      <button onClick={() => setShowPOForm(false)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[10px]">Cancelar</button>
-                    </div>
-                  </div>
-                )}
-
-                {activePO ? (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="bg-indigo-50 p-6 border-b border-indigo-200 flex justify-between items-center">
-                      <div>
-                        <h3 className="text-lg font-black text-indigo-900 uppercase">{activePO.doc_num} — {activePO.supplier}</h3>
-                        <p className="text-[10px] font-bold text-indigo-600 uppercase">Comparar cantidades recibidas vs esperadas</p>
-                      </div>
-                      <button onClick={() => { setActivePO(null); setPoLines([]); setPoReceivedQtys({}); }} className="bg-white border border-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase"><ArrowLeft size={12} className="inline mr-1"/> Volver</button>
-                    </div>
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 border-b"><tr>
-                        <th className="p-4 text-[10px] font-black text-slate-400 uppercase">SKU / Producto</th>
-                        <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Esperado</th>
-                        <th className="p-4 text-center text-[10px] font-black text-indigo-600 uppercase">Recibido Real</th>
-                        <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Diferencia</th>
-                        <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Estado</th>
-                      </tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {poLines.map(line => {
-                          const received = parseFloat(poReceivedQtys[line.id] ?? line.received_qty ?? 0);
-                          const expected = parseFloat(line.expected_qty);
-                          const diff = received - expected;
-                          return (
-                            <tr key={line.id} className={`hover:bg-slate-50 ${diff < 0 ? 'bg-red-50/30' : diff > 0 ? 'bg-amber-50/30' : ''}`}>
-                              <td className="p-4"><p className="text-xs font-black text-slate-800 uppercase">{line.sku}</p><p className="text-[9px] text-slate-500">{line.desc}</p></td>
-                              <td className="p-4 text-center font-black text-slate-700">{expected} <span className="text-[9px] text-slate-400">{line.uom||'UN'}</span></td>
-                              <td className="p-4 text-center">
-                                {line.status === 'RECEIVED' ? <span className="font-black text-emerald-700">{line.received_qty}</span> : (
-                                  <input type="number" min="0" step="0.01" value={poReceivedQtys[line.id] ?? ''} onChange={e=>setPoReceivedQtys(p=>({...p,[line.id]:e.target.value}))} className="w-24 border-2 border-indigo-200 rounded-xl px-3 py-2 text-center font-black text-sm outline-none focus:border-indigo-500 text-indigo-700 bg-indigo-50" placeholder="0"/>
-                                )}
-                              </td>
-                              <td className="p-4 text-center">
-                                {line.status === 'RECEIVED' ? (
-                                  <span className={`font-black text-sm ${parseFloat(line.difference)===0?'text-emerald-600':parseFloat(line.difference)>0?'text-amber-600':'text-red-600'}`}>
-                                    {parseFloat(line.difference)>0?'+':''}{line.difference}
-                                  </span>
-                                ) : (
-                                  poReceivedQtys[line.id] !== undefined && (
-                                    <span className={`font-black text-sm ${diff===0?'text-emerald-600':diff>0?'text-amber-600':'text-red-600'}`}>
-                                      {diff>0?'+':''}{diff.toFixed(2)}
-                                    </span>
-                                  )
-                                )}
-                              </td>
-                              <td className="p-4 text-center">
-                                <span className={`text-[9px] font-black px-2 py-1 rounded uppercase ${line.status==='RECEIVED'?'bg-emerald-100 text-emerald-700':line.status==='PARTIAL'?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600'}`}>
-                                  {line.status==='RECEIVED'?'Completo':line.status==='PARTIAL'?'Parcial':'Pendiente'}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                    <div className="p-6 bg-slate-50 border-t border-slate-200 flex justify-between items-center">
-                      <div className="flex gap-4 text-[10px] font-black text-slate-500 uppercase">
-                        <span>Total líneas: {poLines.length}</span>
-                        <span className="text-emerald-600">Completas: {poLines.filter(l=>l.status==='RECEIVED').length}</span>
-                        <span className="text-red-500">Pendientes: {poLines.filter(l=>l.status==='PENDING').length}</span>
-                      </div>
-                      <button onClick={async () => {
-                        const items = poLines.filter(l=>l.status!=='RECEIVED' && poReceivedQtys[l.id]!==undefined).map(l=>({lineId:l.id,received_qty:parseFloat(poReceivedQtys[l.id])||0}));
-                        if (!items.length) return showMsg('⚠️ Ingresa cantidades recibidas primero', true);
-                        const res = await apiFetch(`${host}/api/purchase-orders/${activePO.id}/receive`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({received_items:items,username:currentUser.username})});
-                        if(res.ok){showMsg('✅ Recepción comparada y guardada');const r2=await apiFetch(`${host}/api/purchase-orders/${activePO.id}/lines`);const d=await r2.json();setPoLines(d.lines);setPoReceivedQtys({});}else showMsg('⛔ Error',true);
-                      }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 py-3 rounded-2xl shadow-md uppercase text-[10px] tracking-widest flex items-center gap-2"><CheckCircle2 size={14}/> Confirmar Recepción</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {purchaseOrders.map(po => (
-                      <div key={po.id} className={`bg-white p-5 rounded-2xl border shadow-sm flex items-center justify-between hover:shadow-md transition-all ${po.status==='COMPLETED'?'border-emerald-200':po.status==='PARTIAL'?'border-amber-200':'border-slate-200'}`}>
-                        <div>
-                          <div className="flex items-center gap-3 mb-1">
-                            <p className="text-sm font-black text-slate-800 uppercase">{po.doc_num}</p>
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${po.status==='COMPLETED'?'bg-emerald-100 text-emerald-700':po.status==='PARTIAL'?'bg-amber-100 text-amber-700':'bg-slate-100 text-slate-600'}`}>{po.status}</span>
-                          </div>
-                          <p className="text-[10px] text-slate-500 font-bold">Proveedor: {po.supplier} · {po.received_lines}/{po.total_lines} líneas recibidas</p>
-                          {po.expected_date && <p className="text-[9px] text-slate-400 mt-0.5">Esperado: {new Date(po.expected_date).toLocaleDateString('es-ES')}</p>}
-                        </div>
-                        <button onClick={async () => { const res = await apiFetch(`${host}/api/purchase-orders/${po.id}/lines`); const d = await res.json(); setActivePO(d.po); setPoLines(d.lines); setPoReceivedQtys({}); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Search size={12}/> Ver / Comparar</button>
-                      </div>
-                    ))}
-                    {purchaseOrders.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400"><FileText className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">No hay órdenes. Presiona Cargar o crea una nueva.</p></div>}
-                  </div>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <PurchaseOrdersTab
+                  purchaseOrders={purchaseOrders} setPurchaseOrders={setPurchaseOrders}
+                  showPOForm={showPOForm} setShowPOForm={setShowPOForm}
+                  newPO={newPO} setNewPO={setNewPO} newPOLine={newPOLine} setNewPOLine={setNewPOLine}
+                  activePO={activePO} setActivePO={setActivePO} poLines={poLines} setPoLines={setPoLines} poReceivedQtys={poReceivedQtys} setPoReceivedQtys={setPoReceivedQtys}
+                  is3PLMode={is3PLMode} isHybridMode={isHybridMode} permittedClients={permittedClients} permittedSkus={permittedSkus} systemConfig={systemConfig} currentUser={currentUser}
+                  showMsg={showMsg} apiFetch={apiFetch} host={host}
+                />
+              </Suspense>
             )}
 
             {/* HISTORIAL DOCUMENTOS */}
             {activeTab === 'doc-history' && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><History className="text-slate-500"/> Historial de Documentos</h1>
-                  <div className="flex gap-2">
-                    {['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                      <button onClick={async()=>{ const r=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`); if(r.ok){const d=await r.json();setAnulationRequests(d);} setAnulHistoryTab('requests'); }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-colors ${anulHistoryTab==='requests'?'bg-red-600 text-white shadow-md':'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200'}`}>
-                        <XCircle size={12}/> Solicitudes Anulación
-                        {anulationRequests.filter(r=>r.status==='PENDIENTE').length > 0 && <span className="bg-white text-red-600 px-1.5 rounded-full text-[8px] font-black">{anulationRequests.filter(r=>r.status==='PENDIENTE').length}</span>}
-                      </button>
-                    )}
-                    <button onClick={async()=>{ setAnulHistoryTab('docs'); setDocHistoryPage(0); const params=new URLSearchParams(); if(docHistoryModule) params.append('module',docHistoryModule); if(docHistorySearch) params.append('search',docHistorySearch); if(docHistoryDateFrom) params.append('date_from',docHistoryDateFrom); if(docHistoryDateTo) params.append('date_to',docHistoryDateTo); const res=await apiFetch(`${host}/api/document-history?${params}`); const d=await res.json(); setDocHistory(Array.isArray(d)?d:[]); }} className="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-sm"><Search size={12}/> Buscar</button>
-                    {docHistory.length > 0 && <button onClick={()=> exportToExcel(docHistory,[{key:'created_at',header:'Fecha',format:'date'},{key:'module',header:'Módulo',format:'text'},{key:'doc_type',header:'Tipo Doc',format:'text'},{key:'doc_num',header:'N° Documento',format:'text'},{key:'glosa',header:'Glosa',format:'text'},{key:'username',header:'Usuario',format:'text'},{key:'total_qty',header:'Cantidad Total',format:'number'},{key:'status',header:'Estado',format:'text'},{key:'client_id',header:'Cliente ID',format:'text'}],`historial-docs${docHistoryModule?'_'+docHistoryModule:''}_${new Date().toISOString().slice(0,10)}`,'Historial')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
-                  </div>
-                </div>
-
-                {/* ── SOLICITUDES DE ANULACIÓN (solo admins) ── */}
-                {anulHistoryTab === 'requests' && ['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                  <div className="space-y-3">
-                    <div className="flex gap-2 items-center">
-                      {['PENDIENTE','APROBADA','RECHAZADA'].map(s=>(
-                        <button key={s} onClick={async()=>{ const r=await apiFetch(`${host}/api/anulation-requests?status=${s}`); if(r.ok){const d=await r.json();setAnulationRequests(d);} }} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border transition-colors ${s==='PENDIENTE'?'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100':s==='APROBADA'?'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100':'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'}`}>{s}</button>
-                      ))}
-                      <button onClick={()=>setAnulHistoryTab('docs')} className="ml-auto text-slate-400 hover:text-slate-700 text-[10px] font-black uppercase flex items-center gap-1"><ArrowLeft size={12}/> Volver al historial</button>
-                    </div>
-                    {anulationRequests.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-12 text-center text-slate-400"><XCircle className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="font-black uppercase text-xs">Sin solicitudes</p></div>}
-                    {anulationRequests.map(req => (
-                      <div key={req.id} className={`bg-white rounded-2xl border-2 shadow-sm p-5 ${req.status==='PENDIENTE'?'border-amber-200':req.status==='APROBADA'?'border-emerald-200':'border-red-200'}`}>
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${req.status==='PENDIENTE'?'bg-amber-100 text-amber-700':req.status==='APROBADA'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{req.status}</span>
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded border ${req.module==='receive'?'bg-emerald-50 text-emerald-700 border-emerald-200':'bg-blue-50 text-blue-700 border-blue-200'}`}>{req.module==='receive'?'RECEPCIÓN':'DESPACHO'}</span>
-                            </div>
-                            <p className="text-sm font-black text-slate-800 uppercase">{req.doc_type ? `[${req.doc_type}]` : ''} {req.doc_num}</p>
-                            <p className="text-xs text-slate-600 mt-1">Motivo: <span className="font-bold">"{req.reason}"</span></p>
-                            <p className="text-[10px] text-slate-400 mt-1">Solicitado por <strong>{req.requested_by}</strong> · {new Date(req.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</p>
-                            {req.authorized_by && <p className="text-[10px] text-slate-400">Procesado por <strong>{req.authorized_by}</strong> · {req.resolved_at && new Date(req.resolved_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</p>}
-                            {req.reject_reason && <p className="text-[10px] text-red-500 mt-1">Rechazo: "{req.reject_reason}"</p>}
-                          </div>
-                          {req.status === 'PENDIENTE' && (
-                            <div className="flex gap-2 shrink-0">
-                              <button onClick={async()=>{
-                                if(!(await confirm({ message: `¿Aprobar la anulación del documento ${req.doc_num}?\nEsto revertirá el stock.`, danger: true }))) return;
-                                const r=await apiFetch(`${host}/api/anulation-requests/${req.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
-                                if(r.ok){showMsg('✅ Anulación aprobada y stock revertido');const d=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`);if(d.ok)setAnulationRequests(await d.json());fetchData();}
-                                else{const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                              }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 transition-colors">
-                                <CheckCircle2 size={12}/> Aprobar
-                              </button>
-                              <button onClick={async()=>{
-                                const motivo=(await prompt({ message: 'Motivo del rechazo (opcional):' }));
-                                if(motivo===null) return;
-                                const r=await apiFetch(`${host}/api/anulation-requests/${req.id}/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reject_reason:motivo})});
-                                if(r.ok){showMsg('Solicitud rechazada');const d=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`);if(d.ok)setAnulationRequests(await d.json());}
-                                else{const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                              }} className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 transition-colors border border-red-200">
-                                <X size={12}/> Rechazar
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* ── HISTORIAL DE DOCUMENTOS ── */}
-                {anulHistoryTab === 'docs' && (
-                  <>
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        <select value={docHistoryModule} onChange={e=>setDocHistoryModule(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white text-slate-700 uppercase">
-                          <option value="">Todos los módulos</option>
-                          <option value="receive">Recepciones</option>
-                          <option value="dispatch">Despachos</option>
-                          <option value="adjust">Ajustes</option>
-                        </select>
-                        <input type="text" placeholder="🔍 N° doc, glosa, usuario..." value={docHistorySearch} onChange={e=>setDocHistorySearch(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none text-slate-700"/>
-                        <input type="date" value={docHistoryDateFrom} onChange={e=>setDocHistoryDateFrom(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white text-slate-700" title="Desde"/>
-                        <input type="date" value={docHistoryDateTo} onChange={e=>setDocHistoryDateTo(e.target.value)} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white text-slate-700" title="Hasta"/>
-                      </div>
-                    </div>
-                    {/* Paginación historial de documentos */}
-                    {docHistory.length > 0 && (() => {
-                      const DH_PAGE_SIZE = 50;
-                      const totalPages = Math.ceil(docHistory.length / DH_PAGE_SIZE);
-                      return totalPages > 1 ? (
-                        <div className="flex items-center justify-between">
-                          <p className="text-[10px] font-bold text-slate-400 uppercase">{docHistory.length} documentos — página {docHistoryPage + 1} de {totalPages}</p>
-                          <div className="flex gap-2">
-                            <button disabled={docHistoryPage === 0} onClick={() => setDocHistoryPage(p => p - 1)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">← Anterior</button>
-                            <button disabled={docHistoryPage >= totalPages - 1} onClick={() => setDocHistoryPage(p => p + 1)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Siguiente →</button>
-                          </div>
-                        </div>
-                      ) : null;
-                    })()}
-                    <div className="space-y-3">
-                      {docHistory.slice(docHistoryPage * 50, (docHistoryPage + 1) * 50).map(doc => {
-                        const isVoided = doc.status === 'ANULADO';
-                        const canVoid = ['receive','dispatch'].includes(doc.module) && !isVoided;
-                        const isAdmin = ['ADMIN','SUPERADMIN'].includes(currentUser?.role);
-                        return (
-                          <div key={doc.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isVoided?'border-red-200 opacity-70':'border-slate-200'}`}>
-                            <div className="flex items-center justify-between p-5 cursor-pointer hover:bg-slate-50" onClick={() => setExpandedHistoryDoc(expandedHistoryDoc===doc.id ? null : doc.id)}>
-                              <div className="flex items-center gap-4">
-                                <div className={`p-2.5 rounded-xl ${isVoided?'bg-red-100 text-red-400':doc.module==='receive'?'bg-emerald-100 text-emerald-600':doc.module==='dispatch'?'bg-blue-100 text-blue-600':'bg-amber-100 text-amber-600'}`}>
-                                  {isVoided?<XCircle size={16}/>:doc.module==='receive'?<ArrowDownRight size={16}/>:doc.module==='dispatch'?<ArrowUpRight size={16}/>:<ClipboardCheck size={16}/>}
-                                </div>
-                                <div>
-                                  <p className={`text-sm font-black uppercase flex items-center gap-2 ${isVoided?'text-red-400 line-through':'text-slate-800'}`}>
-                                    [{doc.doc_type||doc.module.toUpperCase()}] {doc.doc_num}
-                                    {isVoided
-                                      ? <span className="text-[9px] px-2 py-0.5 rounded font-black bg-red-100 text-red-600 no-underline" style={{textDecoration:'none'}}>ANULADO</span>
-                                      : <span className={`text-[9px] px-2 py-0.5 rounded font-black ${doc.module==='receive'?'bg-emerald-100 text-emerald-700':doc.module==='dispatch'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{doc.module==='receive'?'RECEPCIÓN':doc.module==='dispatch'?'DESPACHO':'AJUSTE'}</span>
-                                    }
-                                  </p>
-                                  <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
-                                    <span>👤 {doc.username}</span><span>·</span>
-                                    <span>{new Date(doc.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</span>
-                                    {doc.glosa && <span>· "{doc.glosa}"</span>}
-                                    {doc.doc_ref && <span>· Ref: <strong>{doc.doc_ref}</strong></span>}
-                                    {doc.doc_date && <span>· 📅 {doc.doc_date}</span>}
-                                  </p>
-                                  {isVoided && <p className="text-[9px] text-red-500 font-bold mt-0.5">Anulado por {doc.voided_by} · Motivo: "{doc.void_reason}"</p>}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <div className="text-right">
-                                  <p className={`text-lg font-black ${isVoided?'text-red-400':'text-slate-800'}`}>{Number(doc.total_qty).toLocaleString()}</p>
-                                  <p className="text-[9px] text-slate-400 uppercase font-bold">unidades</p>
-                                </div>
-                                {canVoid && (
-                                  <button onClick={e=>{e.stopPropagation();setVoidModal({doc});setVoidReason('');}} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1 transition-colors">
-                                    <XCircle size={11}/> {isAdmin?'Anular':'Solicitar Anulación'}
-                                  </button>
-                                )}
-                                <ChevronRight size={16} className={`text-slate-400 transition-transform ${expandedHistoryDoc===doc.id?'rotate-90':''}`}/>
-                              </div>
-                            </div>
-                            {expandedHistoryDoc === doc.id && (
-                              <div className="border-t border-slate-100 bg-slate-50 p-4">
-                                <table className="w-full text-left">
-                                  <thead><tr><th className="p-2 text-[9px] font-black text-slate-400 uppercase">SKU</th><th className="p-2 text-[9px] font-black text-slate-400 uppercase">Descripción</th><th className="p-2 text-center text-[9px] font-black text-slate-400 uppercase">Cantidad</th><th className="p-2 text-[9px] font-black text-slate-400 uppercase">Detalle</th></tr></thead>
-                                  <tbody className="divide-y divide-slate-100">
-                                    {JSON.parse(doc.items_json||'[]').map((item,i) => (
-                                      <tr key={i} className="bg-white hover:bg-slate-50">
-                                        <td className="p-2 text-xs font-black text-slate-800 uppercase">{item.sku}</td>
-                                        <td className="p-2 text-[10px] text-slate-500 truncate max-w-[200px]">{item.desc||'-'}</td>
-                                        <td className="p-2 text-center font-black text-slate-700">{item.qty||item.qtyToPick||'-'}</td>
-                                        <td className="p-2 text-[9px] text-slate-400">{item.location_id||item.lpnId||'-'}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {docHistory.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400"><History className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">Usa los filtros y presiona Buscar</p></div>}
-                    </div>
-                  </>
-                )}
-
-                {/* ── MODAL DE ANULACIÓN ── */}
-                {voidModal && (
-                  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e=>{if(e.target===e.currentTarget)setVoidModal(null);}}>
-                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
-                      <div className="bg-red-600 rounded-t-3xl px-6 py-5 flex items-center justify-between">
-                        <div>
-                          <p className="text-white font-black uppercase tracking-tight flex items-center gap-2"><XCircle size={18}/> {['ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Documento':'Solicitar Anulación'}</p>
-                          <p className="text-red-200 text-[11px] mt-0.5 uppercase font-bold">[{voidModal.doc.doc_type||voidModal.doc.module}] {voidModal.doc.doc_num}</p>
-                        </div>
-                        <button onClick={()=>setVoidModal(null)} className="text-white/70 hover:text-white"><X size={18}/></button>
-                      </div>
-                      <div className="p-6 space-y-4">
-                        {!['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[11px] text-amber-800 font-bold">
-                            ⚠️ No tienes permisos para anular directamente. Se enviará una solicitud a un administrador para su aprobación.
-                          </div>
-                        )}
-                        {['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-[11px] text-red-800 font-bold">
-                            ⚠️ Esta acción {voidModal.doc.module==='receive'?'eliminará los LPNs creados en esta recepción':'restaurará las cantidades despachadas al inventario'}. No se puede deshacer.
-                          </div>
-                        )}
-                        <div>
-                          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Motivo de la anulación *</label>
-                          <textarea rows={3} value={voidReason} onChange={e=>setVoidReason(e.target.value)} placeholder="Describe el motivo de la anulación..." className="w-full border-2 border-slate-200 focus:border-red-400 rounded-xl px-4 py-3 text-sm font-medium outline-none resize-none"/>
-                        </div>
-                        <div className="flex gap-3">
-                          <button onClick={()=>setVoidModal(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl py-3 font-black uppercase text-[10px] transition-colors">Cancelar</button>
-                          <button disabled={!voidReason.trim()} onClick={async()=>{
-                            const isAdmin = ['ADMIN','SUPERADMIN'].includes(currentUser?.role);
-                            const endpoint = isAdmin
-                              ? `${host}/api/document-history/${voidModal.doc.id}/void`
-                              : `${host}/api/document-history/${voidModal.doc.id}/void-request`;
-                            const r = await apiFetch(endpoint, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({reason:voidReason.trim()})});
-                            if(r.ok){
-                              showMsg(isAdmin?'✅ Documento anulado y stock revertido':'✅ Solicitud enviada al administrador');
-                              setVoidModal(null);
-                              // Refrescar historial
-                              const params=new URLSearchParams(); if(docHistoryModule) params.append('module',docHistoryModule); if(docHistorySearch) params.append('search',docHistorySearch); if(docHistoryDateFrom) params.append('date_from',docHistoryDateFrom); if(docHistoryDateTo) params.append('date_to',docHistoryDateTo);
-                              const res=await apiFetch(`${host}/api/document-history?${params}`); const d=await res.json(); setDocHistory(Array.isArray(d)?d:[]);
-                              if(isAdmin) fetchData();
-                            } else {const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                          }} className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl py-3 font-black uppercase text-[10px] transition-colors flex items-center justify-center gap-2">
-                            <XCircle size={14}/> {['ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Ahora':'Enviar Solicitud'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <DocHistoryTab
+                  anulHistoryTab={anulHistoryTab} setAnulHistoryTab={setAnulHistoryTab}
+                  anulationRequests={anulationRequests} setAnulationRequests={setAnulationRequests}
+                  docHistoryModule={docHistoryModule} setDocHistoryModule={setDocHistoryModule}
+                  docHistorySearch={docHistorySearch} setDocHistorySearch={setDocHistorySearch}
+                  docHistoryDateFrom={docHistoryDateFrom} setDocHistoryDateFrom={setDocHistoryDateFrom}
+                  docHistoryDateTo={docHistoryDateTo} setDocHistoryDateTo={setDocHistoryDateTo}
+                  docHistoryPage={docHistoryPage} setDocHistoryPage={setDocHistoryPage}
+                  docHistory={docHistory} setDocHistory={setDocHistory}
+                  expandedHistoryDoc={expandedHistoryDoc} setExpandedHistoryDoc={setExpandedHistoryDoc}
+                  voidModal={voidModal} setVoidModal={setVoidModal} voidReason={voidReason} setVoidReason={setVoidReason}
+                  currentUser={currentUser} showMsg={showMsg} apiFetch={apiFetch} host={host}
+                  confirm={confirm} prompt={prompt} exportToExcel={exportToExcel} fetchData={fetchData}
+                />
+              </Suspense>
             )}
 
             {/* 3PL BILLING */}
@@ -6781,36 +6167,38 @@ export default function App() {
                       <h3 className="text-sm font-black text-slate-700 uppercase mb-4 flex items-center gap-2"><Package size={16}/> Buscar y Seleccionar SKU</h3>
                       <div className="flex gap-3 flex-wrap items-start">
                         <div className="flex-1 min-w-[260px] space-y-2">
-                          <div className="relative">
-                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
-                            <input
-                              type="text"
-                              placeholder="Buscar por SKU, descripción o cliente..."
-                              value={resSkuFilter}
-                              onChange={e => setResSkuFilter(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500 uppercase"
-                            />
-                            {resSkuFilter && <button onClick={()=>setResSkuFilter('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={12}/></button>}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="relative">
+                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                              <input type="text" placeholder="SKU..." value={resSkuFilter} onChange={e => setResSkuFilter(e.target.value)} className="w-full pl-7 pr-2 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500 uppercase"/>
+                            </div>
+                            <div className="relative">
+                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                              <input type="text" placeholder="Descripción..." value={resDescFilter} onChange={e => setResDescFilter(e.target.value)} className="w-full pl-7 pr-2 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500"/>
+                            </div>
+                            <div className="relative">
+                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                              <input type="text" placeholder="Cliente..." value={resCliFilter} onChange={e => setResCliFilter(e.target.value)} className="w-full pl-7 pr-2 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500 uppercase"/>
+                            </div>
                           </div>
+                          {(resSkuFilter||resDescFilter||resCliFilter) && <button onClick={()=>{setResSkuFilter('');setResDescFilter('');setResCliFilter('');}} className="mt-1 text-[9px] font-black text-red-500 uppercase flex items-center gap-1 hover:text-red-600"><X size={10}/> Limpiar filtros</button>}
                           {(() => {
-                            const q = resSkuFilter.toLowerCase();
                             const filtered = safeSkus.filter(s =>
-                              !q ||
-                              s.sku.toLowerCase().includes(q) ||
-                              (s.desc||'').toLowerCase().includes(q) ||
-                              (s.client_id||'').toLowerCase().includes(q)
+                              (!resSkuFilter || s.sku.toLowerCase().includes(resSkuFilter.toLowerCase())) &&
+                              (!resDescFilter || (s.desc||'').toLowerCase().includes(resDescFilter.toLowerCase())) &&
+                              (!resCliFilter || (s.client_id||'').toLowerCase().includes(resCliFilter.toLowerCase()))
                             );
-                            if (!resSkuFilter && !resSku) return (
+                            if (!resSkuFilter && !resDescFilter && !resCliFilter && !resSku) return (
                               <p className="text-[10px] text-slate-400 font-bold px-1">Escribe para filtrar los {safeSkus.length} SKUs disponibles</p>
                             );
                             if (filtered.length === 0) return (
-                              <p className="text-[10px] text-red-400 font-bold px-1">Sin resultados para "{resSkuFilter}"</p>
+                              <p className="text-[10px] text-red-400 font-bold px-1">Sin resultados para los filtros aplicados</p>
                             );
                             return (
                               <div className="border-2 border-amber-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto custom-scrollbar bg-white shadow-sm">
                                 {filtered.slice(0,80).map(s => (
                                   <button key={s.sku+s.client_id} onClick={async () => {
-                                    setResSku(s.sku); setResClientId(s.client_id||''); setResResources([]); setResSkuFilter('');
+                                    setResSku(s.sku); setResClientId(s.client_id||''); setResResources([]); setResSkuFilter(''); setResDescFilter(''); setResCliFilter('');
                                     if (s.sku && s.client_id) {
                                       const r = await apiFetch(`${host}/api/sku-resources?sku=${encodeURIComponent(s.sku)}&client_id=${encodeURIComponent(s.client_id)}`);
                                       const d = await r.json(); setResResources(Array.isArray(d)?d:[]);
@@ -7208,439 +6596,70 @@ export default function App() {
               </Suspense>
             )}
 
-            {/* DEVOLUCIONES */}
-            {activeTab === 'returns' && (
-              <div className="space-y-6 animate-in fade-in max-w-5xl mx-auto">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ArrowLeft className="text-orange-500"/> Gestión de Devoluciones</h1>
-                  <button onClick={async () => { const res = await apiFetch(`${host}/api/returns`); const d = await res.json(); setReturnsData(Array.isArray(d)?d:[]); }} className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-sm"><RefreshCcw size={12}/> Cargar</button>
-                </div>
-                <div className="bg-white rounded-3xl border border-orange-200 shadow-sm p-8">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter mb-6 border-b pb-4">Nueva Devolución</h3>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <input type="text" placeholder="N° Documento *" value={newReturn.doc_num} onChange={e=>setNewReturn({...newReturn,doc_num:e.target.value.toUpperCase()})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black uppercase outline-none focus:border-orange-500"/>
-                    {is3PLMode ? (
-                      <select value={newReturn.client_id} onChange={e=>setNewReturn({...newReturn,client_id:e.target.value})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500 bg-white">
-                        <option value="">-- Cliente --</option>
-                        {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    ) : (
-                      <div className="border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2">
-                        <Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}
-                      </div>
-                    )}
-                    <input type="text" placeholder="Motivo de devolución *" value={newReturn.reason} onChange={e=>setNewReturn({...newReturn,reason:e.target.value})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-orange-500 col-span-2"/>
-                  </div>
-                  <div className="bg-slate-50 rounded-2xl p-4 mb-4 space-y-3">
-                    <h4 className="text-[10px] font-black text-slate-500 uppercase">Agregar Línea de Devolución</h4>
-                    <div className="grid grid-cols-3 gap-3">
-                      <select value={returnLineItem.sku} onChange={e=>setReturnLineItem({...returnLineItem,sku:e.target.value})} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white uppercase">
-                        <option value="">-- SKU --</option>
-                        {permittedSkus.map(s=><option key={s.sku} value={s.sku}>{s.sku}</option>)}
-                      </select>
-                      <input type="number" placeholder="Cantidad" value={returnLineItem.qty} onChange={e=>setReturnLineItem({...returnLineItem,qty:e.target.value})} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none"/>
-                      <select value={returnLineItem.condition} onChange={e=>setReturnLineItem({...returnLineItem,condition:e.target.value})} className="border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white">
-                        <option value="BUENO">Buen Estado → DISPONIBLE</option>
-                        <option value="MALO">Dañado → RETENIDO</option>
-                      </select>
-                    </div>
-                    <button onClick={() => { if (!returnLineItem.sku || !returnLineItem.qty) return; setNewReturn(prev=>({...prev,items:[...prev.items,{...returnLineItem}]})); setReturnLineItem({sku:'',qty:'',original_lpn:'',condition:'BUENO',location_id:'PISO-RECEPCION',notes:''}); }} className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Plus size={12}/> Agregar</button>
-                  </div>
-                  {newReturn.items.length > 0 && (
-                    <div className="mb-4">
-                      {newReturn.items.map((it,i) => (
-                        <div key={i} className="flex justify-between items-center p-3 bg-white rounded-xl border border-slate-200 mb-2">
-                          <span className="text-xs font-black uppercase">{it.sku} — {it.qty} un <span className={`text-[9px] px-1 rounded ${it.condition==='BUENO'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{it.condition}</span></span>
-                          <button onClick={()=>setNewReturn(prev=>({...prev,items:prev.items.filter((_,idx)=>idx!==i)}))} className="text-red-400 hover:text-red-600"><Trash2 size={14}/></button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <button disabled={!newReturn.doc_num || !newReturn.reason || newReturn.items.length===0} onClick={async () => { const retPayload={...newReturn,username:currentUser.username}; if((!is3PLMode || isHybridMode) && !retPayload.client_id) retPayload.client_id=systemConfig.own_client_id||'PROPIO'; const res = await apiFetch(`${host}/api/returns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(retPayload)}); if (res.ok) { const d=await res.json(); showMsg(`✅ Devolución ${d.returnId} procesada`); setNewReturn({doc_num:'',doc_type:'DEVOLUCION',client_id:'',reason:'',glosa:'',items:[]}); fetchData(); } else showMsg('⛔ Error',true); }} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"><ArrowLeft size={16}/> Procesar Devolución e Ingresar Stock</button>
-                </div>
-                {returnsData.length > 0 && (
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 border-b"><tr><th className="p-4 text-[10px] font-black text-slate-400 uppercase">ID Devolución</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Documento</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Motivo</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Fecha</th><th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Líneas</th></tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {returnsData.map(r=>(
-                          <tr key={r.id} className="hover:bg-slate-50">
-                            <td className="p-4 font-mono text-[10px] font-black text-orange-700">{r.id}</td>
-                            <td className="p-4 text-xs font-black uppercase">{r.doc_num}</td>
-                            <td className="p-4 text-xs text-slate-600">{r.reason}</td>
-                            <td className="p-4 text-[10px] text-slate-400">{new Date(r.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
-                            <td className="p-4 text-center font-black text-slate-700">{r.line_count}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+            {/* TRANSPORTE Y LOGÍSTICA (módulo del Coordinador de Transporte) */}
+            {activeTab === 'transporte-coord' && (
+              <Suspense fallback={<TabLoader />}>
+                <TransporteTab showMsg={showMsg} currentUser={currentUser} />
+              </Suspense>
             )}
 
-            {/* TRANSPORTE */}
+            {/* SOLICITAR TRANSPORTE (Origen A — ejecutivo prepara el despacho) */}
+            {activeTab === 'solicitar-transporte' && (
+              <Suspense fallback={<TabLoader />}>
+                <SolicitarTransporteTab showMsg={showMsg} />
+              </Suspense>
+            )}
+
+            {/* TRANSPORTE (BODEGA): cierre de despachos por POD + avisos de llegada */}
+            {activeTab === 'cierre-transporte' && (
+              <Suspense fallback={<TabLoader />}>
+                <CierreDespachosTab showMsg={showMsg} currentUser={currentUser} />
+              </Suspense>
+            )}
+
+            {activeTab === 'returns' && (
+              <Suspense fallback={<TabLoader />}>
+                <ReturnsTab
+                  returnsData={returnsData} setReturnsData={setReturnsData}
+                  newReturn={newReturn} setNewReturn={setNewReturn}
+                  returnLineItem={returnLineItem} setReturnLineItem={setReturnLineItem}
+                  is3PLMode={is3PLMode} isHybridMode={isHybridMode} permittedClients={permittedClients} permittedSkus={permittedSkus} systemConfig={systemConfig} currentUser={currentUser}
+                  showMsg={showMsg} apiFetch={apiFetch} host={host} fetchData={fetchData}
+                />
+              </Suspense>
+            )}
+
             {activeTab === 'transport' && (
-              <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
-                <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Truck className="text-cyan-500"/> Módulo de Transporte</h1>
-                </div>
-                {/* Sub-tabs transporte */}
-                <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit">
-                  {[['carriers','Transportistas'],['shipments','Envíos']].map(([id,label])=>(
-                    <button key={id} onClick={()=>setTransportTab(id)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${transportTab===id?'bg-white text-cyan-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>{label}</button>
-                  ))}
-                </div>
-
-                {transportTab === 'carriers' && (
-                <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
-                  <div className="flex-1 space-y-5 border-r border-slate-100 pr-8">
-                    <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center"><Truck className="w-4 h-4 mr-2 text-cyan-500"/> {carrierForm.id ? 'Editar Transportista' : 'Nuevo Transportista'}</h2>
-                    <form onSubmit={handleSaveCarrier} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Razón Social *</label><input type="text" required value={carrierForm.name} onChange={e=>setCarrierForm({...carrierForm,name:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">RUT</label><input type="text" value={carrierForm.rut} onChange={e=>setCarrierForm({...carrierForm,rut:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Contacto</label><input type="text" value={carrierForm.contact} onChange={e=>setCarrierForm({...carrierForm,contact:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Teléfono</label><input type="text" value={carrierForm.phone} onChange={e=>setCarrierForm({...carrierForm,phone:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="col-span-2 space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Email</label><input type="email" value={carrierForm.email} onChange={e=>setCarrierForm({...carrierForm,email:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                      </div>
-                      <div className="flex gap-3">
-                        <button type="submit" className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-cyan-200 transition-colors flex items-center justify-center gap-2"><Plus size={14}/> {carrierForm.id?'Actualizar':'Guardar'}</button>
-                        {carrierForm.id && <button type="button" onClick={()=>setCarrierForm({id:'',name:'',rut:'',contact:'',phone:'',email:''})} className="px-6 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-4 rounded-2xl text-xs uppercase tracking-widest transition-colors">Cancelar</button>}
-                      </div>
-                    </form>
-                  </div>
-                  <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Transportistas Registrados ({carriers.length})</p>
-                    <div className="space-y-3">
-                      {carriers.map(c=>(
-                        <div key={c.id} className="bg-slate-50 border border-slate-200 rounded-2xl p-4 hover:bg-white transition-colors shadow-sm">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-sm font-black text-slate-800">{c.name}</p>
-                              {c.rut && <p className="text-[10px] font-mono text-slate-500 mt-0.5">RUT: {c.rut}</p>}
-                              <div className="flex gap-3 mt-1 text-[9px] text-slate-400 font-bold">{c.contact&&<span>{c.contact}</span>}{c.phone&&<span>{c.phone}</span>}{c.email&&<span>{c.email}</span>}</div>
-                            </div>
-                            <div className="flex gap-2">
-                              <button onClick={()=>setCarrierForm({id:c.id,name:c.name,rut:c.rut||'',contact:c.contact||'',phone:c.phone||'',email:c.email||''})} className="text-slate-400 hover:text-cyan-600 transition-colors"><Settings2 size={14}/></button>
-                              <button onClick={async()=>{if(!(await confirm({ message: '¿Eliminar?', danger: true })))return;const r=await apiFetch(`${host}/api/carriers/${c.id}`,{method:'DELETE'});if(r.ok){showMsg('✅ Eliminado');fetchData();}}} className="text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={14}/></button>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                      {carriers.length===0 && <div className="p-8 text-center text-slate-400"><Truck className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay transportistas registrados</p></div>}
-                    </div>
-                  </div>
-                </div>
-                )}
-
-                {transportTab === 'shipments' && (
-                <div className="space-y-6">
-                  <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8">
-                    <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center mb-6"><FileText className="w-4 h-4 mr-2 text-cyan-500"/> Nuevo Envío</h2>
-                    <form onSubmit={handleSaveShipment} className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Transportista *</label><select required value={shipmentForm.carrier_id} onChange={e=>setShipmentForm({...shipmentForm,carrier_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500 bg-white"><option value="">-- Seleccionar --</option>{carriers.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">N° Documento *</label><input type="text" required value={shipmentForm.doc_num} onChange={e=>setShipmentForm({...shipmentForm,doc_num:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-cyan-500 uppercase"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Cliente</label>{is3PLMode ? (<select value={shipmentForm.client_id} onChange={e=>setShipmentForm({...shipmentForm,client_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500 bg-white"><option value="">-- Seleccionar --</option>{permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select>) : (<div className="w-full border-2 border-emerald-200 bg-emerald-50 rounded-xl px-4 py-3 text-sm font-black text-emerald-700 flex items-center gap-2"><Package size={14} className="text-emerald-500 shrink-0"/>{systemConfig.own_client_name || 'Bodega Propia'}</div>)}</div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Destino</label><input type="text" value={shipmentForm.destination} onChange={e=>setShipmentForm({...shipmentForm,destination:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                        <div className="col-span-2 space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Notas</label><input type="text" value={shipmentForm.notes} onChange={e=>setShipmentForm({...shipmentForm,notes:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-500"/></div>
-                      </div>
-                      <button type="submit" className="bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 px-8 rounded-2xl uppercase text-xs tracking-widest shadow-lg shadow-cyan-200 transition-colors flex items-center gap-2"><Plus size={14}/> Crear Envío</button>
-                    </form>
-                  </div>
-                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <table className="w-full text-left">
-                      <thead className="bg-slate-50 border-b"><tr><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Documento</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Transportista</th>{is3PLMode && <th className="p-4 text-[10px] font-black text-slate-400 uppercase">Cliente</th>}<th className="p-4 text-[10px] font-black text-slate-400 uppercase">Destino</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Estado</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Acciones</th></tr></thead>
-                      <tbody className="divide-y divide-slate-100">
-                        {shipments.map(s=>{
-                          const statusColors = {PENDING:'bg-slate-100 text-slate-600',ASSIGNED:'bg-blue-100 text-blue-700',IN_TRANSIT:'bg-amber-100 text-amber-700',DELIVERED:'bg-emerald-100 text-emerald-700',RETURNED:'bg-red-100 text-red-700'};
-                          const nextStatus = {PENDING:'ASSIGNED',ASSIGNED:'IN_TRANSIT',IN_TRANSIT:'DELIVERED'};
-                          const nextLabel = {PENDING:'Asignar',ASSIGNED:'En Tránsito',IN_TRANSIT:'Entregar'};
-                          return (
-                            <tr key={s.id} className="hover:bg-slate-50">
-                              <td className="p-4 font-black text-xs uppercase text-cyan-700">{s.doc_num}</td>
-                              <td className="p-4 text-xs text-slate-600">{s.carrier_name||s.carrier_id}</td>
-                              {is3PLMode && <td className="p-4 text-xs text-slate-500">{s.client_id||'—'}</td>}
-                              <td className="p-4 text-xs text-slate-500">{s.destination||'—'}</td>
-                              <td className="p-4"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${statusColors[s.status]||'bg-slate-100 text-slate-600'}`}>{s.status}</span></td>
-                              <td className="p-4">
-                                <div className="flex gap-2">
-                                  {nextStatus[s.status] && <button onClick={()=>handleShipmentStatus(s.id,nextStatus[s.status])} className="text-[9px] font-black bg-cyan-50 hover:bg-cyan-100 text-cyan-700 px-2 py-1 rounded-lg uppercase transition-colors">{nextLabel[s.status]}</button>}
-                                  {s.status!=='DELIVERED'&&s.status!=='RETURNED' && <button onClick={()=>handleShipmentStatus(s.id,'RETURNED')} className="text-[9px] font-black bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1 rounded-lg uppercase transition-colors">Devolver</button>}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {shipments.length===0 && <tr><td colSpan={is3PLMode ? 6 : 5} className="p-8 text-center text-slate-400 text-xs">Sin envíos registrados</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <TransportLegacyTab
+                  transportTab={transportTab} setTransportTab={setTransportTab}
+                  carrierForm={carrierForm} setCarrierForm={setCarrierForm} handleSaveCarrier={handleSaveCarrier} carriers={carriers}
+                  shipmentForm={shipmentForm} setShipmentForm={setShipmentForm} handleSaveShipment={handleSaveShipment} shipments={shipments} handleShipmentStatus={handleShipmentStatus}
+                  is3PLMode={is3PLMode} permittedClients={permittedClients} systemConfig={systemConfig}
+                  confirm={confirm} apiFetch={apiFetch} host={host} showMsg={showMsg} fetchData={fetchData}
+                />
+              </Suspense>
             )}
 
             {/* CONTEOS CÍCLICOS — oculto para CLIENTE */}
             {activeTab === 'cycle-count' && currentUser?.role !== 'CLIENTE' && (
-              <div className="space-y-6 animate-in fade-in max-w-5xl mx-auto">
-                {/* ── Header ── */}
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ClipboardCheck className="text-cyan-500"/> Conteo Físico</h1>
-                  <button onClick={async()=>{ const r=await apiFetch(`${host}/api/cycle-count`); const d=await r.json(); setCycleCountData(Array.isArray(d)?d:[]); }} className="bg-cyan-100 hover:bg-cyan-200 text-cyan-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Cargar</button>
-                </div>
-
-                {/* ── Formulario nuevo conteo ── */}
-                <div className="bg-white rounded-3xl border border-cyan-200 shadow-sm p-6 space-y-4">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter border-b pb-3">Nuevo Conteo</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {clients.length > 0 && (
-                      <div>
-                        <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Cliente</label>
-                        <select value={ccFilter.client_id} onChange={e=>{setCcFilter(f=>({...f,client_id:e.target.value}));setCcPreview(null);}} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white">
-                          <option value="">Todos</option>
-                          {clients.map(c=><option key={c.id} value={c.id}>{c.name||c.id}</option>)}
-                        </select>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">SKU (opcional)</label>
-                      <input value={ccFilter.sku} onChange={e=>{setCcFilter(f=>({...f,sku:e.target.value.toUpperCase()}));setCcPreview(null);}} placeholder="SKU exacto" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold uppercase outline-none focus:border-cyan-500"/>
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Zona (opcional)</label>
-                      <select value={ccFilter.zone} onChange={e=>{setCcFilter(f=>({...f,zone:e.target.value}));setCcPreview(null);}} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white">
-                        <option value="">Todas</option>
-                        {[...new Set(safeLocs.map(l=>l.zone_code).filter(Boolean))].map(z=><option key={z} value={z}>{z}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase block mb-1">Ubicación puntual</label>
-                      <input value={ccFilter.location_id} onChange={e=>{setCcFilter(f=>({...f,location_id:e.target.value.toUpperCase()}));setCcPreview(null);}} placeholder="1-A-01-1" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold uppercase outline-none focus:border-cyan-500"/>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 flex-wrap">
-                    <label className="flex items-center gap-2 px-3 py-2 border-2 border-slate-200 rounded-xl cursor-pointer hover:border-cyan-300">
-                      <input type="checkbox" checked={ccBlind} onChange={e=>setCcBlind(e.target.checked)} className="rounded accent-cyan-600"/>
-                      <span className="text-xs font-black text-slate-600 uppercase">A ciegas</span>
-                    </label>
-                    <button onClick={async()=>{
-                      setCcPreviewLoading(true);setCcPreview(null);
-                      const r=await apiFetch(`${host}/api/cycle-count/preview`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({zone_code:ccFilter.zone||undefined,client_id:ccFilter.client_id||undefined,sku:ccFilter.sku||undefined,location_id:ccFilter.location_id||undefined})});
-                      setCcPreviewLoading(false);
-                      if(r.ok)setCcPreview(await r.json()); else showMsg('⛔ Error al previsualizar',true);
-                    }} disabled={ccPreviewLoading} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 disabled:opacity-50">
-                      <Search size={12}/> {ccPreviewLoading?'…':'Previsualizar'}
-                    </button>
-                    {ccPreview && <span className="text-xs font-bold text-cyan-700 bg-cyan-50 border border-cyan-200 px-3 py-1.5 rounded-xl">{ccPreview.lines} ubicaciones · {Number(ccPreview.total_units).toLocaleString('es-CL')} unidades</span>}
-                    <button onClick={async()=>{
-                      const body={username:currentUser.username,blind:ccBlind};
-                      if(ccFilter.zone)        body.zone_code=ccFilter.zone;
-                      if(ccFilter.client_id)   body.client_id=ccFilter.client_id;
-                      if(ccFilter.sku)         body.sku=ccFilter.sku;
-                      if(ccFilter.location_id) body.location_id=ccFilter.location_id;
-                      const res=await apiFetch(`${host}/api/cycle-count/create`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-                      if(res.ok){const d=await res.json();showMsg(`✅ Conteo ${d.countId} creado — ${d.lines} líneas`);const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());setCcFilter({zone:'',client_id:'',sku:'',location_id:''});setCcPreview(null);}
-                      else{const e=await res.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);}
-                    }} className="bg-cyan-600 hover:bg-cyan-700 text-white px-6 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg flex items-center gap-2 ml-auto">
-                      <Plus size={13}/> Crear conteo
-                    </button>
-                  </div>
-                </div>
-
-                {/* ── Modal rechazar ── */}
-                {ccRejectModal && (
-                  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-2xl p-6 w-96 shadow-2xl space-y-4">
-                      <h3 className="font-black text-slate-800 uppercase">Rechazar conteo</h3>
-                      <textarea value={ccRejectReason} onChange={e=>setCcRejectReason(e.target.value)} placeholder="Motivo del rechazo..." className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-red-400 h-24 resize-none"/>
-                      <div className="flex gap-2 justify-end">
-                        <button onClick={()=>{setCcRejectModal(null);setCcRejectReason('');}} className="px-4 py-2 text-[10px] font-black uppercase text-slate-600 border border-slate-200 rounded-xl hover:bg-slate-50">Cancelar</button>
-                        <button onClick={async()=>{
-                          const r=await apiFetch(`${host}/api/cycle-count/${ccRejectModal}/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username,reason:ccRejectReason})});
-                          if(r.ok){showMsg('Conteo rechazado');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());}
-                          else showMsg('⛔ Error',true);
-                          setCcRejectModal(null);setCcRejectReason('');
-                        }} className="px-4 py-2 text-[10px] font-black uppercase bg-red-600 hover:bg-red-700 text-white rounded-xl">Rechazar</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* ── Conteo activo ── */}
-                {activeCycleCount ? (()=>{
-                  const isBlind=activeCycleCount.blind;
-                  const isCompleted=activeCycleCount.status==='COMPLETED';
-                  const isPendApproval=activeCycleCount.status==='PENDIENTE_APROBACION';
-                  const showExpected=!isBlind||isCompleted||isPendApproval;
-                  const canApprove=['SUPERVISOR','EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
-                  const STATUS_BADGE={PENDING:'bg-slate-100 text-slate-600',EN_PROCESO:'bg-cyan-100 text-cyan-700',PENDIENTE_APROBACION:'bg-amber-100 text-amber-700',COMPLETED:'bg-emerald-100 text-emerald-700',RECHAZADO:'bg-red-100 text-red-700'};
-                  return (
-                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                      <div className="bg-cyan-50 p-5 border-b border-cyan-200 flex justify-between items-start flex-wrap gap-3">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-sm font-black text-cyan-900 uppercase">{activeCycleCount.id}</h3>
-                            {isBlind && <span className="text-[9px] bg-violet-100 text-violet-700 border border-violet-200 px-2 py-0.5 rounded font-black uppercase">A ciegas</span>}
-                            <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${STATUS_BADGE[activeCycleCount.status]||'bg-slate-100 text-slate-600'}`}>{activeCycleCount.status}</span>
-                          </div>
-                          <p className="text-[10px] text-cyan-700 font-bold">{activeCycleCount.scope_label||activeCycleCount.zone_code} · {activeCycleCount.counted_lines}/{activeCycleCount.total_lines} contadas · {activeCycleCount.diff_lines||0} con diferencia</p>
-                        </div>
-                        <div className="flex gap-2 flex-wrap">
-                          {!isPendApproval && !isCompleted && <button onClick={()=>setCcAddLineForm({location_id:'',sku:'',qty:'',note:''})} className="bg-white border border-amber-200 text-amber-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Plus size={11}/> Reportar hallazgo</button>}
-                          <button onClick={()=>{setActiveCycleCount(null);setCycleLines([]);setCcAddLineForm(null);}} className="bg-white border border-slate-200 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase">Cerrar</button>
-                          {!isPendApproval && !isCompleted && (
-                            <button onClick={async()=>{
-                              if(!(await confirm({message:'¿Enviar el conteo a aprobación? Si no hay diferencias, se completará directamente.',danger:false})))return;
-                              const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/submit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username})});
-                              const d=await r.json().catch(()=>({}));
-                              if(r.ok){showMsg(d.requires_approval?'✅ Conteo enviado a aprobación':'✅ Conteo completado (sin diferencias)');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());setActiveCycleCount(null);setCycleLines([]);}
-                              else showMsg(`⛔ ${d.error||'Error'}`,true);
-                            }} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-md">Enviar a aprobación</button>
-                          )}
-                          {isPendApproval && canApprove && (<>
-                            <button onClick={async()=>{
-                              if(!(await confirm({message:'¿Aprobar y aplicar ajustes al inventario?',danger:true})))return;
-                              const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username})});
-                              if(r.ok){showMsg('✅ Conteo aprobado y stock ajustado');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());setActiveCycleCount(null);setCycleLines([]);fetchData();}
-                              else{const e=await r.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);}
-                            }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-md">Aprobar</button>
-                            <button onClick={()=>{setCcRejectModal(activeCycleCount.id);setCcRejectReason('');}} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase">Rechazar</button>
-                          </>)}
-                        </div>
-                      </div>
-
-                      {/* Hallazgo form */}
-                      {ccAddLineForm && (
-                        <div className="bg-amber-50 border-b border-amber-200 p-4 flex gap-3 flex-wrap items-end">
-                          {[{label:'Ubicación',key:'location_id',ph:'1-A-01-1',w:'w-36',up:true},{label:'SKU',key:'sku',ph:'SKU',w:'w-36',up:true},{label:'Cantidad',key:'qty',ph:'0',w:'w-24',type:'number'},{label:'Nota',key:'note',ph:'Detalle...',w:'w-44'}].map(f=>(
-                            <div key={f.key}>
-                              <p className="text-[9px] font-black text-amber-700 uppercase mb-1">{f.label}</p>
-                              <input type={f.type||'text'} min={f.type==='number'?0:undefined} step={f.type==='number'?'0.01':undefined}
-                                value={ccAddLineForm[f.key]} onChange={e=>setCcAddLineForm(p=>({...p,[f.key]:f.up?e.target.value.toUpperCase():e.target.value}))}
-                                placeholder={f.ph} className={`border border-amber-300 rounded-lg px-3 py-2 text-xs font-black outline-none focus:border-amber-500 bg-white ${f.w}`}/>
-                            </div>
-                          ))}
-                          <button onClick={async()=>{
-                            if(!ccAddLineForm.location_id||!ccAddLineForm.sku){showMsg('⛔ Ubicación y SKU requeridos',true);return;}
-                            const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/add-line`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location_id:ccAddLineForm.location_id,sku:ccAddLineForm.sku,counted_qty:parseFloat(ccAddLineForm.qty)||0,note:ccAddLineForm.note,username:currentUser.username})});
-                            if(r.ok){const d=await r.json();setCycleLines(d.lines);setCcAddLineForm(null);showMsg('✅ Hallazgo registrado');}
-                            else showMsg('⛔ Error',true);
-                          }} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase">Guardar</button>
-                          <button onClick={()=>setCcAddLineForm(null)} className="text-slate-500 text-[9px] font-black uppercase px-3 py-2">Cancelar</button>
-                        </div>
-                      )}
-
-                      {cycleLines.length===0 ? (
-                        <div className="p-10 text-center space-y-3">
-                          <ClipboardCheck className="w-10 h-10 mx-auto text-slate-300"/>
-                          <p className="font-black text-slate-500 text-sm">No hay ubicaciones con stock para el alcance <strong>'{activeCycleCount.scope_label||activeCycleCount.zone_code}'</strong>.</p>
-                          <p className="text-[11px] text-slate-400">Verifica que las ubicaciones tengan zone_code asignado en el maestro, o reporta un hallazgo manualmente.</p>
-                          <button onClick={()=>setCcAddLineForm({location_id:'',sku:'',qty:'',note:''})} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 mx-auto"><Plus size={11}/> Reportar hallazgo</button>
-                        </div>
-                      ) : (
-                        <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
-                          <table className="w-full text-left">
-                            <thead className="bg-slate-50 sticky top-0">
-                              <tr>
-                                <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Ubicación</th>
-                                <th className="p-3 text-[9px] font-black text-slate-400 uppercase">SKU</th>
-                                {showExpected && <th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Esperado</th>}
-                                <th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Contado</th>
-                                <th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Diferencia</th>
-                                <th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Acción</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {cycleLines.map(line=>(
-                                <tr key={line.id} className={`hover:bg-slate-50 ${line.status==='COUNTED'?(parseFloat(line.difference)!==0?'bg-red-50':'bg-emerald-50/50'):''} ${line.line_type==='ENCONTRADO'?'bg-amber-50/60':''}`}>
-                                  <td className="p-3 font-mono text-[10px] font-bold text-slate-600">{line.location_id}</td>
-                                  <td className="p-3 text-xs font-black text-slate-800 uppercase">
-                                    {line.sku}
-                                    {line.line_type==='ENCONTRADO' && <span className="ml-1 text-[8px] bg-amber-200 text-amber-700 px-1.5 py-0.5 rounded font-black">HALLAZGO</span>}
-                                    {line.note && <span className="ml-1 text-[8px] text-slate-400" title={line.note}>📝</span>}
-                                  </td>
-                                  {showExpected && <td className="p-3 text-center font-black text-slate-700">{line.expected_qty??'—'}</td>}
-                                  <td className="p-3 text-center">
-                                    {line.status==='COUNTED'||isPendApproval
-                                      ? <span className="font-black text-slate-800">{line.counted_qty??'—'}</span>
-                                      : <input type="number" min="0" step="0.01" value={cycleCountedQtys[line.id]||''} onChange={e=>setCycleCountedQtys(p=>({...p,[line.id]:e.target.value}))} className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-center text-xs font-black outline-none focus:border-cyan-500" placeholder="0"/>}
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    {(line.status==='COUNTED'||isPendApproval) && <span className={`font-black text-sm ${parseFloat(line.difference)>0?'text-emerald-600':parseFloat(line.difference)<0?'text-red-600':'text-slate-400'}`}>{parseFloat(line.difference)>0?'+':''}{line.difference}</span>}
-                                  </td>
-                                  <td className="p-3 text-center">
-                                    {line.status!=='COUNTED'&&!isPendApproval && <button onClick={async()=>{
-                                      const qty=cycleCountedQtys[line.id]; if(qty===undefined||qty==='')return;
-                                      const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/count`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lineId:line.id,counted_qty:parseFloat(qty),username:currentUser.username})});
-                                      if(r.ok){const r2=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/lines`);const d=await r2.json();setCycleLines(d.lines||d);const upd=cycleCountData.map(c=>c.id===activeCycleCount.id?{...c,counted_lines:(c.counted_lines||0)+1}:c);setCycleCountData(upd);setActiveCycleCount(p=>({...p,counted_lines:(p.counted_lines||0)+1}));}
-                                    }} className="bg-cyan-100 hover:bg-cyan-200 text-cyan-700 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase">Registrar</button>}
-                                    {line.status==='COUNTED' && <span className="text-[8px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded font-black uppercase">✓</span>}
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })() : (
-                  <>
-                    {/* Bandeja de aprobación */}
-                    {['SUPERVISOR','EJECUTIVO_CUENTA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && cycleCountData.some(c=>c.status==='PENDIENTE_APROBACION') && (
-                      <div className="space-y-3">
-                        <h3 className="text-xs font-black text-amber-700 uppercase flex items-center gap-2"><AlertTriangle size={14}/> Pendientes de aprobación</h3>
-                        {cycleCountData.filter(c=>c.status==='PENDIENTE_APROBACION').map(cc=>(
-                          <div key={cc.id} className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 flex justify-between items-center flex-wrap gap-3">
-                            <div>
-                              <p className="text-xs font-black text-amber-900 uppercase">{cc.id}</p>
-                              <p className="text-[10px] text-amber-700">{cc.scope_label||cc.zone_code} · {cc.diff_lines} líneas con diferencia · Creado por {cc.created_by}</p>
-                            </div>
-                            <div className="flex gap-2">
-                              <button onClick={async()=>{setActiveCycleCount(cc);const r=await apiFetch(`${host}/api/cycle-count/${cc.id}/lines`);const d=await r.json();setCycleLines(d.lines||d);}} className="bg-amber-600 hover:bg-amber-700 text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase">Ver detalle</button>
-                              <button onClick={async()=>{
-                                if(!(await confirm({message:'¿Aprobar y aplicar ajustes al inventario?',danger:true})))return;
-                                const r=await apiFetch(`${host}/api/cycle-count/${cc.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username})});
-                                if(r.ok){showMsg('✅ Aprobado y stock ajustado');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());fetchData();}
-                                else{const e=await r.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);}
-                              }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase">Aprobar</button>
-                              <button onClick={()=>{setCcRejectModal(cc.id);setCcRejectReason('');}} className="bg-white border border-red-200 text-red-600 px-3 py-2 rounded-xl text-[9px] font-black uppercase hover:bg-red-50">Rechazar</button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Lista de conteos */}
-                    {cycleCountData.length > 0 && (()=>{
-                      const STATUS_BADGE={PENDING:'bg-slate-100 text-slate-600',EN_PROCESO:'bg-cyan-100 text-cyan-700',PENDIENTE_APROBACION:'bg-amber-100 text-amber-700',COMPLETED:'bg-emerald-100 text-emerald-700',RECHAZADO:'bg-red-100 text-red-700',REVISION:'bg-orange-100 text-orange-700'};
-                      const openable=['PENDING','EN_PROCESO','PENDIENTE_APROBACION'];
-                      return (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          {cycleCountData.map(cc=>(
-                            <div key={cc.id} className={`bg-white p-5 rounded-2xl border shadow-sm flex flex-col ${cc.status==='COMPLETED'?'border-emerald-200':cc.status==='RECHAZADO'?'border-red-200':cc.status==='PENDIENTE_APROBACION'?'border-amber-200':'border-cyan-200'}`}>
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <p className="text-xs font-black text-slate-800 uppercase">{cc.id}</p>
-                                    {cc.blind && <span className="text-[8px] bg-violet-100 text-violet-600 border border-violet-200 px-1.5 rounded font-black uppercase">A ciegas</span>}
-                                    <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${STATUS_BADGE[cc.status]||'bg-slate-100 text-slate-600'}`}>{cc.status}</span>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 mt-0.5">{cc.scope_label||cc.zone_code} · {cc.counted_lines}/{cc.total_lines} líneas{cc.diff_lines>0?` · ${cc.diff_lines} dif.`:''}</p>
-                                </div>
-                              </div>
-                              <div className="w-full bg-slate-100 rounded-full h-1.5 mb-3"><div className={`h-1.5 rounded-full ${cc.status==='COMPLETED'?'bg-emerald-500':cc.status==='RECHAZADO'?'bg-red-400':'bg-cyan-500'}`} style={{width:`${cc.total_lines>0?(cc.counted_lines/cc.total_lines)*100:0}%`}}></div></div>
-                              {openable.includes(cc.status) && <button onClick={async()=>{setActiveCycleCount(cc);const r=await apiFetch(`${host}/api/cycle-count/${cc.id}/lines`);const d=await r.json();setCycleLines(d.lines||d);}} className="mt-auto w-full bg-cyan-100 hover:bg-cyan-200 text-cyan-700 py-2 rounded-xl text-[10px] font-black uppercase">{cc.status==='PENDIENTE_APROBACION'?'Ver / Aprobar':'Abrir y Contar'}</button>}
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </>
-                )}
-              </div>
+              <Suspense fallback={<TabLoader />}>
+                <CycleCountTab
+                  cycleCountData={cycleCountData} setCycleCountData={setCycleCountData}
+                  ccFilter={ccFilter} setCcFilter={setCcFilter}
+                  ccBlind={ccBlind} setCcBlind={setCcBlind}
+                  ccPreview={ccPreview} setCcPreview={setCcPreview}
+                  ccPreviewLoading={ccPreviewLoading} setCcPreviewLoading={setCcPreviewLoading}
+                  ccRejectModal={ccRejectModal} setCcRejectModal={setCcRejectModal}
+                  ccRejectReason={ccRejectReason} setCcRejectReason={setCcRejectReason}
+                  activeCycleCount={activeCycleCount} setActiveCycleCount={setActiveCycleCount}
+                  cycleLines={cycleLines} setCycleLines={setCycleLines}
+                  ccAddLineForm={ccAddLineForm} setCcAddLineForm={setCcAddLineForm}
+                  cycleCountedQtys={cycleCountedQtys} setCycleCountedQtys={setCycleCountedQtys}
+                  clients={clients} safeLocs={safeLocs} currentUser={currentUser}
+                  showMsg={showMsg} apiFetch={apiFetch} host={host} confirm={confirm} fetchData={fetchData}
+                />
+              </Suspense>
             )}
 
             {/* SUPERADMIN PANEL */}
@@ -7669,7 +6688,7 @@ export default function App() {
                 {/* TABS INTERNOS */}
                 <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm w-fit">
                   {[['metrics','📊 Estado del servidor'],['modo-modules','🔀 Modo & Módulos'],['config','⚙️ Configuración'],['demo','🎮 Modo de prueba'],['users-sa','👥 Usuarios del sistema'],['passwords','🔑 Contraseñas'],['inventory-sa','📦 Productos en bodega'],['audit-sa','📋 Historial de movimientos'],['backups','💾 Copias de respaldo'],['feedback','💡 Mejoras']].map(([id,label])=>(
-                    <button key={id} onClick={()=>{ setSuperAdminTab(id); if(id==='demo'){ apiFetch(`${host}/api/demo/feedback`).then(r=>r.ok?r.json():[]).then(d=>setDemoFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='backups'){ apiFetch(`${host}/api/system/backups`).then(r=>r.ok?r.json():[]).then(d=>setBackupsList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='feedback'){ apiFetch(`${host}/api/feedback`).then(r=>r.ok?r.json():[]).then(d=>setFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-colors ${superAdminTab===id?'bg-slate-800 text-white shadow-md':'text-slate-500 hover:bg-slate-100'}`}>{label}</button>
+                    <button key={id} onClick={()=>{ setSuperAdminTab(id); if(id==='demo'){ apiFetch(`${host}/api/demo/feedback`).then(r=>r.ok?r.json():[]).then(d=>setDemoFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='backups'){ apiFetch(`${host}/api/system/backups`).then(r=>r.ok?r.json():[]).then(d=>setBackupsList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='feedback'){ apiFetch(`${host}/api/feedback`).then(r=>r.ok?r.json():[]).then(d=>setFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='modo-modules'){ apiFetch(`${host}/api/system/ngrok/status`).then(r=>r.ok?r.json():null).then(d=>setNgrokStatus(d)).catch(()=>{}); } }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-colors ${superAdminTab===id?'bg-slate-800 text-white shadow-md':'text-slate-500 hover:bg-slate-100'}`}>{label}</button>
                   ))}
                 </div>
 
@@ -7844,6 +6863,34 @@ export default function App() {
                         })}
                       </div>
                     </div>
+
+                    <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8 space-y-4">
+                      <div className="flex items-center justify-between border-b pb-4">
+                        <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Globe className="w-5 h-5 mr-2 text-cyan-500"/> Acceso Remoto (ngrok)</h2>
+                        <button onClick={async()=>{ const res=await apiFetch(`${host}/api/system/ngrok/status`); const d=await res.json(); if(res.ok) setNgrokStatus(d); }} className="bg-cyan-100 hover:bg-cyan-200 text-cyan-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
+                      </div>
+                      <p className="text-[10px] text-slate-500 font-medium leading-relaxed">Expone esta bodega en internet mediante un túnel ngrok, para acceso remoto sin estar en la red local. Apágalo si no lo necesitas ahora mismo.</p>
+                      <div className="flex items-center justify-between flex-wrap gap-4">
+                        <div className="flex items-center gap-3">
+                          <span className={`w-3 h-3 rounded-full ${ngrokStatus?.status==='online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
+                          <div>
+                            <p className="text-xs font-black uppercase text-slate-800">{ngrokStatus?.status==='online' ? 'Acceso remoto ACTIVO' : ngrokStatus?.status==='stopped' ? 'Acceso remoto APAGADO' : 'Estado desconocido — presiona Actualizar'}</p>
+                            {ngrokStatus?.public_url && <p className="text-[10px] font-mono text-slate-400">{ngrokStatus.public_url}</p>}
+                          </div>
+                        </div>
+                        <button onClick={async()=>{
+                          const enable = ngrokStatus?.status !== 'online';
+                          const res = await apiFetch(`${host}/api/system/ngrok/toggle`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({enable})});
+                          const d = await res.json();
+                          if(res.ok){
+                            showMsg(enable ? '🟢 Acceso remoto ACTIVADO' : '🔴 Acceso remoto DESACTIVADO');
+                            const r2 = await apiFetch(`${host}/api/system/ngrok/status`); const d2 = await r2.json(); if(r2.ok) setNgrokStatus(d2);
+                          } else { showMsg(`⛔ ${d.error}`, true); }
+                        }} className={`px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all ${ngrokStatus?.status==='online' ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-emerald-600 text-white hover:bg-emerald-700'}`}>
+                          {ngrokStatus?.status==='online' ? '🔴 Apagar acceso remoto' : '🟢 Activar acceso remoto'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
 
@@ -7894,6 +6941,28 @@ export default function App() {
                         <button onClick={() => setEditingConfig({})} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[10px] tracking-widest">Descartar</button>
                       )}
                       <span className="text-[10px] font-bold text-slate-400 ml-auto">{Object.keys(editingConfig).length > 0 ? `${Object.keys(editingConfig).length} cambio(s) sin guardar` : 'Sin cambios'}</span>
+                    </div>
+                    {/* ── ZONA DE PELIGRO: formateo de fábrica ── */}
+                    <div className="mt-8 border-t-2 border-red-100 pt-6">
+                      <h3 className="text-sm font-black text-red-600 uppercase tracking-tighter flex items-center gap-2 mb-2"><ShieldAlert className="w-4 h-4"/> Zona de peligro</h3>
+                      <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-black text-red-700 uppercase">Formatear sistema (dejar de 0)</p>
+                          <p className="text-[10px] text-red-500 mt-1 max-w-md">Borra TODOS los datos (inventario, clientes, SKUs, movimientos, usuarios no-SUPERADMIN…) y deja el sistema como recién instalado. Conserva tu SUPERADMIN, la configuración/licencia y los catálogos base. Se crea un backup de seguridad automático antes. Irreversible salvo por ese backup.</p>
+                        </div>
+                        <button onClick={async () => {
+                          const ok = await confirm({ message: '⚠️ FORMATEAR EL SISTEMA borra TODOS los datos y lo deja como recién instalado. Se conservan tu SUPERADMIN, la configuración/licencia y los catálogos base, y se crea un backup de seguridad antes. ¿Continuar?', danger: true });
+                          if (!ok) return;
+                          const phrase = window.prompt('Acción IRREVERSIBLE. Escribe FORMATEAR (en mayúsculas) para confirmar:');
+                          if (phrase !== 'FORMATEAR') { showMsg('Formateo cancelado', true); return; }
+                          try {
+                            const res = await apiFetch(`${host}/api/system/factory-reset`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: 'FORMATEAR', requester: currentUser.username }) });
+                            const d = await res.json().catch(() => ({}));
+                            if (res.ok) { showMsg(`✅ Sistema formateado. Backup de seguridad: ${d.backup || '(creado)'}`); fetchData(); }
+                            else showMsg(`⛔ ${d.error || 'Error al formatear'}`, true);
+                          } catch (e) { showMsg('⛔ Error de red al formatear', true); }
+                        }} className="bg-red-600 hover:bg-red-700 text-white font-black py-3 px-6 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest flex items-center gap-2 shrink-0 whitespace-nowrap"><Trash2 size={14}/> Formatear sistema</button>
+                      </div>
                     </div>
                   </div>
                   );
@@ -7973,7 +7042,7 @@ export default function App() {
                               <div>
                                 <p className="text-sm font-black text-slate-800 flex items-center gap-2">
                                   {u.full_name}
-                                  {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase">Suspendido</span>}
+                                  {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase">Inhabilitado</span>}
                                 </p>
                                 <p className="text-[10px] font-mono text-slate-500 mt-0.5">@{u.username}</p>
                               </div>
@@ -7984,17 +7053,15 @@ export default function App() {
                                 }} className={`border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase outline-none ${u.role==='SUPERADMIN'?'bg-red-50 text-red-700 border-red-200':u.role==='ADMIN'?'bg-orange-50 text-orange-700 border-orange-200':u.role==='EJECUTIVO_CUENTA'?'bg-teal-50 text-teal-700 border-teal-200':u.role==='AUDITOR'?'bg-blue-50 text-blue-700 border-blue-200':u.role==='CLIENTE'?'bg-cyan-50 text-cyan-700 border-cyan-200':'bg-slate-100 text-slate-600 border-slate-200'}`}>
                                   <option value="CLIENTE">CLIENTE</option>
                                   <option value="PICKER">PICKER</option>
-                                  <option value="EJECUTIVO_CUENTA">EJECUTIVO_CUENTA</option>
+                                  <option value="JEFE_BODEGA">JEFE_BODEGA</option>
+                                  <option value="EJECUTIVO_CUENTA">EJECUTIVO_CUENTA (Operario)</option>
+                                  <option value="COORDINADOR_TRANSPORTE">COORDINADOR_TRANSPORTE</option>
                                   <option value="AUDITOR">AUDITOR</option>
                                   <option value="ADMIN">ADMIN</option>
                                   {u.username !== 'admin' && <option value="SUPERADMIN">SUPERADMIN</option>}
                                 </select>
-                                <button onClick={async () => {
-                                  const newStatus = u.status === 'SUSPENDED' ? 'ACTIVE' : 'SUSPENDED';
-                                  const res = await apiFetch(`${host}/api/users`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u.username,full_name:u.full_name,role:u.role,status:newStatus,allowed_clients:u.allowed_clients,allowed_modules:u.allowed_modules})});
-                                  if(res.ok){showMsg(`✅ Usuario ${newStatus==='SUSPENDED'?'suspendido':'activado'}`);fetchData();}
-                                }} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-colors ${u.status==='SUSPENDED'?'bg-emerald-100 text-emerald-700 hover:bg-emerald-200':'bg-red-100 text-red-700 hover:bg-red-200'}`}>
-                                  {u.status === 'SUSPENDED' ? '✓ Activar' : '✗ Suspender'}
+                                <button onClick={() => handleToggleUserStatus(u)} disabled={u.username === currentUser?.username} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-colors disabled:opacity-30 ${u.status==='SUSPENDED'?'bg-emerald-100 text-emerald-700 hover:bg-emerald-200':'bg-red-100 text-red-700 hover:bg-red-200'}`}>
+                                  {u.status === 'SUSPENDED' ? '✓ Activar' : '✗ Inhabilitar'}
                                 </button>
                               </div>
                             </div>
@@ -8422,9 +7489,17 @@ export default function App() {
             {activeTab === 'change-status' && (
               <Suspense fallback={<TabLoader />}>
                 <ChangeStatusTab
-                  relSearchTerm={relSearchTerm}
-                  setRelSearchTerm={setRelSearchTerm}
+                  relLpnFilter={relLpnFilter}
+                  setRelLpnFilter={setRelLpnFilter}
+                  relSkuFilter={relSkuFilter}
+                  setRelSkuFilter={setRelSkuFilter}
+                  relLocFilter={relLocFilter}
+                  setRelLocFilter={setRelLocFilter}
                   filteredRelData={filteredRelData}
+                  is3PLMode={is3PLMode}
+                  opsClients={opsClients}
+                  relClientFilter={relClientFilter}
+                  setRelClientFilter={setRelClientFilter}
                   lpnStatuses={lpnStatuses}
                   setLpnStatuses={setLpnStatuses}
                   glosas={glosas}
@@ -8446,7 +7521,7 @@ export default function App() {
             ];
             const getStatusColor = (s) => DS_STATUS.find(x=>x.id===s)?.color || 'bg-slate-100 text-slate-600 border-slate-200';
             const todayStr = new Date().toISOString().slice(0,10);
-            const isSup = ['SUPERVISOR','ADMIN','SUPERADMIN'].includes(currentUser?.role);
+            const isSup = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
 
             const filtered = dispatchSchedules.filter(d => {
               if (dsStatusFilter && d.status !== dsStatusFilter) return false;
@@ -9445,9 +8520,16 @@ export default function App() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quién produce cada SKU</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-72">
-                  <Search size={14} className="text-slate-400"/>
-                  <input type="text" placeholder="Buscar por código o nombre…" value={mfrSearchTerm} onChange={e=>setMfrSearchTerm(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
+                    <Search size={14} className="text-slate-400"/>
+                    <input type="text" placeholder="Código..." value={mfrCodeFilter} onChange={e=>setMfrCodeFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-44">
+                    <Search size={14} className="text-slate-400"/>
+                    <input type="text" placeholder="Nombre..." value={mfrNameFilter} onChange={e=>setMfrNameFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
+                  </div>
+                  {(mfrCodeFilter||mfrNameFilter) && <button onClick={()=>{setMfrCodeFilter('');setMfrNameFilter('');}} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
                 </div>
               </div>
 
@@ -9509,7 +8591,7 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {manufacturers.filter(m => !mfrSearchTerm || m.name.toLowerCase().includes(mfrSearchTerm.toLowerCase()) || m.code.toLowerCase().includes(mfrSearchTerm.toLowerCase())).map(m => (
+                        {manufacturers.filter(m => (!mfrCodeFilter || m.code.toLowerCase().includes(mfrCodeFilter.toLowerCase())) && (!mfrNameFilter || m.name.toLowerCase().includes(mfrNameFilter.toLowerCase()))).map(m => (
                           <tr key={m.id} className={`hover:bg-indigo-50/30 ${!m.active ? 'opacity-50' : ''}`}>
                             <td className="px-4 py-3 font-mono text-xs font-black text-indigo-700">{m.code}</td>
                             <td className="px-4 py-3"><button onClick={()=>handleOpenMfrDetail(m.id)} className="text-xs font-black text-slate-800 hover:text-indigo-600 text-left">{m.name}</button>{!m.active && <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-black uppercase">Inactivo</span>}</td>
@@ -9644,65 +8726,6 @@ export default function App() {
             </div>
           )}
 
-          {/* ═══════════════ ESTACIÓN DE EMPAQUE ═══════════════ */}
-          {activeTab === 'packing' && (
-            <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in">
-              <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Package className="w-7 h-7 mr-3 text-cyan-600"/> Estación de Empaque</h2>
-
-              {!activePackingOrder ? (
-                <div className="space-y-3">
-                  {packingOrders.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin órdenes de empaque.</div> : packingOrders.map(po=>(
-                    <div key={po.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-start justify-between">
-                      <div>
-                        <p className="font-black text-slate-800">{po.doc_num}</p>
-                        <p className="text-xs text-slate-500">{is3PLMode ? `${po.client_name||po.client_id} — ` : ''}{po.total_lines||0} líneas</p>
-                        <span className={`mt-2 inline-block text-[9px] font-black uppercase px-2 py-1 rounded border ${po.status==='COMPLETADA'?'bg-emerald-50 text-emerald-600 border-emerald-200':po.status==='EN_PROCESO'?'bg-amber-50 text-amber-600 border-amber-200':'bg-slate-50 text-slate-500 border-slate-200'}`}>{po.status}</span>
-                      </div>
-                      {po.status !== 'COMPLETADA' && (
-                        <button onClick={async()=>{const r=await apiFetch(`${host}/api/packing-orders/${po.id}`);if(r.ok){setActivePackingOrder(await r.json());setPackingLineQtys({});setPackingCartons({});}}} className="text-xs bg-cyan-50 hover:bg-cyan-100 text-cyan-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"><Package size={12}/> Empacar</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="bg-white rounded-2xl border-2 border-cyan-200 shadow-sm p-6 space-y-5">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-black text-slate-800 uppercase tracking-tighter">Empacando: {activePackingOrder.doc_num}</h3>
-                    <button onClick={()=>setActivePackingOrder(null)} className="text-slate-400 hover:text-slate-600"><X size={18}/></button>
-                  </div>
-                  <div className="space-y-3">
-                    {(activePackingOrder.lines||[]).map(ln=>(
-                      <div key={ln.id} className="bg-slate-50 rounded-xl p-4 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-mono font-black text-slate-800">{ln.sku}</p>
-                            <p className="text-xs text-slate-500">Solicitado: {ln.qty_requested} — Empacado: {ln.qty_packed||0}</p>
-                          </div>
-                          <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${ln.status==='COMPLETADA'?'bg-emerald-50 text-emerald-600 border-emerald-200':'bg-amber-50 text-amber-600 border-amber-200'}`}>{ln.status}</span>
-                        </div>
-                        {ln.status!=='COMPLETADA' && (
-                          <div className="flex gap-2">
-                            <input type="number" min="0" placeholder="Cant. empacada" value={packingLineQtys[ln.id]||''} onChange={e=>setPackingLineQtys(p=>({...p,[ln.id]:e.target.value}))} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-cyan-400 text-center"/>
-                            <input placeholder="Caja / Carton" value={packingCartons[ln.id]||''} onChange={e=>setPackingCartons(p=>({...p,[ln.id]:e.target.value}))} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-cyan-400"/>
-                            <button onClick={async()=>{
-                              const r=await apiFetch(`${host}/api/packing-orders/${activePackingOrder.id}/lines/${ln.id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({qty_packed:parseFloat(packingLineQtys[ln.id]||0),carton_id:packingCartons[ln.id]||null})});
-                              if(r.ok){showMsg('✅ Línea actualizada');const r2=await apiFetch(`${host}/api/packing-orders/${activePackingOrder.id}`);if(r2.ok)setActivePackingOrder(await r2.json());fetchData();}
-                              else{const e2=await r.json();showMsg(`⛔ ${e2.error}`,true);}
-                            }} className="bg-cyan-600 text-white px-4 py-2 rounded-xl font-black text-xs hover:bg-cyan-700 transition-colors flex items-center gap-1"><CheckCircle2 size={13}/> OK</button>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <button onClick={async()=>{
-                    const r=await apiFetch(`${host}/api/packing-orders/${activePackingOrder.id}/complete`,{method:'POST'});
-                    if(r.ok){showMsg('✅ Orden de empaque completada');setActivePackingOrder(null);fetchData();}
-                    else{const e2=await r.json();showMsg(`⛔ ${e2.error}`,true);}
-                  }} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-colors">Completar Orden</button>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* ═══════════════ DEVOLUCIONES ═══════════════ */}
           {activeTab === 'returns' && (
@@ -9763,6 +8786,449 @@ export default function App() {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ═══════════════ INSUMOS DE BODEGA ═══════════════ */}
+          {activeTab === 'insumos' && (
+            <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in">
+              <div className="flex items-center justify-between flex-wrap gap-3">
+                <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Layers className="text-orange-500"/> Insumos de Bodega</h1>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">Materiales propios de la bodega · globales (no por cliente)</span>
+              </div>
+              {/* Sub-pestañas (Materiales; las demás se agregan en fases siguientes) */}
+              <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 w-fit">
+                {[{id:'materiales',label:'Materiales'}, ...(canConsumeInsumos ? [{id:'asociar',label:'Asociar consumo'}] : []), {id:'analisis',label:'Análisis'}, {id:'reportes',label:'Reportes'}].map(t => (
+                  <button key={t.id} onClick={()=>setInsumosTab(t.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${insumosTab===t.id ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}>{t.label}{t.id==='materiales' && lowStockInsumos.length>0 && <span className="ml-1.5 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">{lowStockInsumos.length}</span>}</button>
+                ))}
+              </div>
+              {/* Alerta de stock bajo */}
+              {lowStockInsumos.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[11px] font-bold text-red-700">
+                  <AlertTriangle size={14} className="shrink-0"/>
+                  <span>{lowStockInsumos.length} insumo(s) bajo el mínimo: {lowStockInsumos.slice(0,5).map(i=>i.codigo).join(', ')}{lowStockInsumos.length>5?'…':''}</span>
+                </div>
+              )}
+
+              {insumosTab === 'materiales' && (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Formulario (solo JEFE+) */}
+                  {canManageInsumos && (
+                    <div className="lg:col-span-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 h-fit">
+                      <h3 className="text-sm font-black text-slate-700 uppercase tracking-tighter border-b border-slate-100 pb-3 mb-4">{isEditingInsumo ? 'Editar material' : 'Nuevo material'}</h3>
+                      <form onSubmit={handleSaveInsumo} className="space-y-3">
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Código *</label><input type="text" value={insumoForm.codigo} onChange={e=>setInsumoForm({...insumoForm,codigo:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 uppercase" placeholder="EJ: CAJA-M"/></div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Nombre *</label><input type="text" value={insumoForm.nombre} onChange={e=>setInsumoForm({...insumoForm,nombre:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="Caja mediana"/></div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Categoría</label>
+                            <select value={insumoForm.categoria} onChange={e=>setInsumoForm({...insumoForm,categoria:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
+                              {['embalaje','etiquetado','pallets','epp','otros'].map(c=><option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Unidad</label><input type="text" value={insumoForm.unidad} onChange={e=>setInsumoForm({...insumoForm,unidad:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 uppercase" placeholder="UN"/></div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Costo unit.</label><input type="number" min="0" step="0.01" value={insumoForm.costo_unitario} onChange={e=>setInsumoForm({...insumoForm,costo_unitario:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
+                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Stock mínimo</label><input type="number" min="0" step="0.001" value={insumoForm.stock_minimo} onChange={e=>setInsumoForm({...insumoForm,stock_minimo:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
+                        </div>
+                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Tiempo de reposición (días) <span className="text-slate-300 normal-case">· opcional</span></label><input type="number" min="0" step="1" value={insumoForm.lead_time_dias} onChange={e=>setInsumoForm({...insumoForm,lead_time_dias:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="Ej: 7"/></div>
+                        <div className="flex gap-2 pt-2">
+                          <button type="submit" disabled={isSavingInsumo} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isSavingInsumo ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}{isEditingInsumo ? 'Guardar' : 'Crear'}</button>
+                          {isEditingInsumo && <button type="button" onClick={()=>{setIsEditingInsumo(false);setInsumoForm({codigo:'',nombre:'',categoria:'embalaje',unidad:'UN',costo_unitario:'',stock_minimo:'',lead_time_dias:''});}} className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black px-4 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>}
+                        </div>
+                      </form>
+                    </div>
+                  )}
+                  {/* Tabla del maestro */}
+                  <div className={`${canManageInsumos ? 'lg:col-span-2' : 'lg:col-span-3'} bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden`}>
+                    <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Maestro de materiales ({insumos.length})</h3>
+                      {!canManageInsumos && <span className="text-[9px] font-bold text-slate-400 uppercase">Solo lectura</span>}
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead className="bg-slate-100 border-b border-slate-200"><tr>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Código / Nombre</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Categoría</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Mínimo</th>
+                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-right">Costo</th>
+                          {(canManageInsumos || canConsumeInsumos) && <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Acciones</th>}
+                        </tr></thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {insumos.map(i => {
+                            const low = parseFloat(i.stock_actual) < parseFloat(i.stock_minimo);
+                            return (
+                              <tr key={i.id} className={`${!i.activo ? 'opacity-50' : ''} ${low && i.activo ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
+                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{i.codigo}{!i.activo && <span className="ml-2 text-[8px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded uppercase">Inactivo</span>}</p><p className="text-[10px] text-slate-500">{i.nombre}</p></td>
+                                <td className="p-3 text-[10px] font-bold text-slate-500 uppercase">{i.categoria}</td>
+                                <td className="p-3 text-center"><span className={`text-sm font-black ${low ? 'text-amber-600' : 'text-slate-700'}`}>{parseFloat(i.stock_actual)}</span> <span className="text-[9px] text-slate-400">{i.unidad}</span>{low && i.activo && <p className="text-[8px] font-black text-amber-600 uppercase">⚠ Bajo mínimo</p>}</td>
+                                <td className="p-3 text-center text-[10px] font-bold text-slate-500">{parseFloat(i.stock_minimo)}</td>
+                                <td className="p-3 text-right text-[10px] font-bold text-slate-500">${Number(i.costo_unitario||0).toLocaleString('es-CL')}</td>
+                                {(canManageInsumos || canConsumeInsumos) && <td className="p-3 text-center whitespace-nowrap">
+                                  {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'entrada'});setInsumoMoveQty('');setInsumoMoveFecha('');}} className="text-emerald-500 hover:text-emerald-700 mr-2 font-black text-sm" title="Entrada (+)">＋</button>}
+                                  {i.activo && canConsumeInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'consumo'});setInsumoMoveQty('');}} className="text-amber-500 hover:text-amber-700 mr-2 font-black text-sm" title="Consumo (−)">－</button>}
+                                  {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'ajuste'});setInsumoMoveQty(String(parseFloat(i.stock_actual)));}} className="text-slate-400 hover:text-cyan-600 mr-2" title="Ajustar (recuento)"><Sliders size={14}/></button>}
+                                  <button onClick={()=>loadHistorial(i)} className="text-slate-400 hover:text-orange-600 mr-2" title="Histórico de movimientos"><History size={15}/></button>
+                                  {canManageInsumos && <button onClick={()=>handleEditInsumo(i)} className="text-slate-400 hover:text-indigo-600 mr-2" title="Editar"><Pencil size={15}/></button>}
+                                  {canManageInsumos && <button onClick={()=>handleToggleInsumo(i)} className={`${i.activo ? 'text-slate-400 hover:text-red-500' : 'text-emerald-500 hover:text-emerald-700'}`} title={i.activo ? 'Desactivar' : 'Reactivar'}>{i.activo ? <Trash2 size={15}/> : <RefreshCcw size={15}/>}</button>}
+                                </td>}
+                              </tr>
+                            );
+                          })}
+                          {insumos.length === 0 && <tr><td colSpan={canManageInsumos ? 6 : 5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">No hay insumos registrados</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {insumosTab === 'asociar' && (
+                <div className="space-y-4">
+                  {/* Buscador de documentos confirmados */}
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-end gap-3">
+                    <div className="flex-1 min-w-[200px] space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase">Buscar por número o cliente</label>
+                      <input type="text" value={docSearch.q} onChange={e=>setDocSearch({...docSearch,q:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')searchInsumoDocs();}} placeholder="Ej: DSP-0142 o nombre de cliente" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500"/>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase">Tipo</label>
+                      <select value={docSearch.tipo} onChange={e=>setDocSearch({...docSearch,tipo:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
+                        <option value="">Todos</option>
+                        <option value="dispatch">Despacho</option>
+                        <option value="receive">Recepción</option>
+                      </select>
+                    </div>
+                    <button onClick={searchInsumoDocs} disabled={docSearching} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{docSearching ? <Loader2 size={14} className="animate-spin"/> : <Search size={14}/>} Buscar</button>
+                  </div>
+
+                  {/* Resultados */}
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="bg-slate-50 border-b border-slate-200 p-4"><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Documentos confirmados ({docResults.length})</h3></div>
+                    <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+                      {docResults.map(d => {
+                        const isSel = selectedDoc?.id === d.id;
+                        return (
+                          <button key={d.id} onClick={()=>setSelectedDoc(d)} className={`w-full text-left p-4 flex items-center justify-between gap-3 transition-colors ${isSel ? 'bg-orange-50' : 'hover:bg-slate-50'}`}>
+                            <div className="flex items-center gap-3">
+                              <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${d.module==='dispatch' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>{d.module==='dispatch'?'Despacho':'Recepción'}</span>
+                              <div>
+                                <p className="text-xs font-black text-slate-800">[{d.doc_type}] {d.doc_num}</p>
+                                <p className="text-[10px] text-slate-500"><Building2 size={9} className="inline mr-1"/>{d.client_name} · {new Date(d.created_at).toLocaleDateString('es-CL')}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase">{d.status}</span>
+                              {isSel && <CheckCircle2 size={16} className="text-orange-500"/>}
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {docResults.length === 0 && <div className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">{docSearching ? 'Buscando…' : 'Busca un despacho o recepción confirmado'}</div>}
+                    </div>
+                  </div>
+
+                  {/* Panel de asociación de insumos al documento seleccionado */}
+                  {selectedDoc && (
+                    <div className="bg-white rounded-3xl border-2 border-orange-200 shadow-sm overflow-hidden">
+                      <div className="bg-orange-50 border-b border-orange-200 p-4 flex items-center justify-between">
+                        <p className="text-xs font-black text-orange-800 uppercase">[{selectedDoc.doc_type}] {selectedDoc.doc_num} · {selectedDoc.client_name}</p>
+                        <button onClick={()=>setSelectedDoc(null)} className="text-orange-400 hover:text-orange-700"><X size={16}/></button>
+                      </div>
+                      {canConsumeInsumos && (
+                        <div className="p-4 flex flex-wrap items-end gap-3 border-b border-slate-100">
+                          <div className="flex-1 min-w-[200px] space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Insumo</label>
+                            <select value={docInsumoLine.insumo_id} onChange={e=>setDocInsumoLine({...docInsumoLine,insumo_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
+                              <option value="">-- Seleccionar insumo --</option>
+                              {insumos.filter(i=>i.activo).map(i=><option key={i.id} value={i.id}>{i.codigo} — {i.nombre} (stock {parseFloat(i.stock_actual)} {i.unidad})</option>)}
+                            </select>
+                          </div>
+                          <div className="w-28 space-y-1">
+                            <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad</label>
+                            <input type="number" min="0.001" step="0.001" value={docInsumoLine.cantidad} onChange={e=>setDocInsumoLine({...docInsumoLine,cantidad:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')addDocInsumo();}} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black text-center outline-none focus:border-orange-500"/>
+                          </div>
+                          <button onClick={addDocInsumo} disabled={savingDocInsumo} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{savingDocInsumo ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} Registrar</button>
+                        </div>
+                      )}
+                      <div className="divide-y divide-slate-100">
+                        {docInsumos.map(l => (
+                          <div key={l.id} className="p-3 px-4 flex items-center justify-between hover:bg-slate-50">
+                            <div>
+                              <p className="text-xs font-black text-slate-800">{l.codigo} — {l.nombre}</p>
+                              <p className="text-[10px] text-slate-500">{new Date(l.fecha).toLocaleString('es-CL')} · {l.usuario} · costo ${Number((l.costo_unitario||0)*parseFloat(l.cantidad)).toLocaleString('es-CL')}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-black text-amber-600">−{parseFloat(l.cantidad)} {l.unidad}</span>
+                              {canConsumeInsumos && <button onClick={()=>removeDocInsumo(l.id)} className="text-slate-300 hover:text-red-500" title="Quitar (reintegra stock)"><Trash2 size={15}/></button>}
+                            </div>
+                          </div>
+                        ))}
+                        {docInsumos.length === 0 && <div className="p-8 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin insumos asociados a este documento</div>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {insumosTab === 'analisis' && (
+                <div className="space-y-4">
+                  {/* Controles: período + cliente */}
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-end gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase">Período</label>
+                      <select value={anDias} onChange={e=>setAnDias(parseInt(e.target.value))} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
+                        {[30,60,90].map(d=><option key={d} value={d}>Últimos {d} días</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black text-slate-400 uppercase">Cliente</label>
+                      <select value={anClient} onChange={e=>setAnClient(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white min-w-[180px]">
+                        <option value="">Todos los clientes</option>
+                        {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <button onClick={loadAnalisis} disabled={anLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{anLoading ? <Loader2 size={14} className="animate-spin"/> : <BarChart3 size={14}/>} Analizar</button>
+                    {anData?.items?.length > 0 && <button onClick={exportAnalisis} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
+                    <span className="text-[10px] font-bold text-slate-400 ml-auto self-center">Vista de solo lectura · basada en consumos registrados</span>
+                  </div>
+
+                  {!anData && <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">{anLoading ? 'Analizando…' : 'Selecciona período y cliente, luego pulsa Analizar'}</div>}
+
+                  {anData && (<>
+                    {/* KPIs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">En riesgo de quiebre</p>
+                        <p className={`text-3xl font-black mt-1 ${anData.kpis.en_riesgo>0?'text-red-600':'text-emerald-600'}`}>{anData.kpis.en_riesgo}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">crítico + por quebrar</p>
+                      </div>
+                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Consumo del período</p>
+                        <p className="text-3xl font-black mt-1 text-slate-800">{Math.round(parseFloat(anData.kpis.consumo_total_periodo)).toLocaleString('es-CL')}</p>
+                        <p className="text-[10px] font-bold text-slate-400 mt-1">unidades · últimos {anData.periodo.dias} días</p>
+                      </div>
+                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Más consumido</p>
+                        {anData.kpis.insumo_mas_consumido ? (<>
+                          <p className="text-base font-black mt-1 text-slate-800 truncate">{anData.kpis.insumo_mas_consumido.codigo}</p>
+                          <p className="text-[10px] font-bold text-slate-400 mt-1 truncate">{anData.kpis.insumo_mas_consumido.nombre} · {parseFloat(anData.kpis.insumo_mas_consumido.consumo_total_periodo)} {anData.kpis.insumo_mas_consumido.unidad}</p>
+                        </>) : <p className="text-base font-black mt-1 text-slate-300">— sin consumo —</p>}
+                      </div>
+                    </div>
+
+                    {/* Tabla por insumo */}
+                    <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                      <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Análisis por insumo ({anData.items.length})</h3>
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Click en una fila para ver consumo por cliente</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead className="bg-slate-100 border-b border-slate-200"><tr>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Insumo</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Prom./día</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Días cobertura</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Quiebre estimado</th>
+                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center pr-5">Estado</th>
+                          </tr></thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {anData.items.map(i => {
+                              const est = ESTADO_INSUMO[i.estado] || ESTADO_INSUMO.ok;
+                              const sel = anSelected?.id === i.id;
+                              return (
+                                <tr key={i.id} onClick={()=>loadAnalisisClientes(i)} className={`cursor-pointer ${sel?'bg-orange-50':'hover:bg-slate-50'}`}>
+                                  <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{i.codigo}</p><p className="text-[10px] text-slate-500">{i.nombre}</p></td>
+                                  <td className="p-3 text-center text-sm font-black text-slate-700">{parseFloat(i.stock_actual)} <span className="text-[9px] text-slate-400">{i.unidad}</span></td>
+                                  <td className="p-3 text-center text-xs font-bold text-slate-600">{parseFloat(i.consumo_prom_diario)}</td>
+                                  <td className="p-3 text-center text-xs font-black text-slate-700">{i.dias_cobertura != null ? `${parseFloat(i.dias_cobertura)} d` : <span className="text-slate-300">∞ sin consumo</span>}</td>
+                                  <td className="p-3 text-center text-[11px] font-bold text-slate-600">{i.quiebre_estimado ? String(i.quiebre_estimado).slice(0,10) : <span className="text-slate-300">—</span>}</td>
+                                  <td className="p-3 text-center pr-5"><span className={`inline-flex items-center gap-1.5 text-[9px] font-black uppercase px-2 py-1 rounded-full border ${est.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${est.dot}`}/>{est.label}</span></td>
+                                </tr>
+                              );
+                            })}
+                            {anData.items.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin insumos activos para analizar</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Desglose: consumo por cliente del insumo seleccionado */}
+                    {anSelected && (
+                      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+                          <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Consumo por cliente · {anSelected.codigo} — {anSelected.nombre}</h3>
+                          <button onClick={()=>{setAnSelected(null);setAnClientes([]);}} className="text-slate-400 hover:text-slate-700"><X size={16}/></button>
+                        </div>
+                        <div className="p-4">
+                          {anClientesLoading ? <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest py-6">Cargando…</p>
+                          : anClientes.length === 0 ? <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest py-6">Sin consumo de este insumo en el período</p>
+                          : (() => {
+                              const max = Math.max(...anClientes.map(c=>parseFloat(c.consumo_total)||0), 1);
+                              return (
+                                <div className="space-y-2">
+                                  {anClientes.map((c,idx) => (
+                                    <div key={(c.client_id||'null')+idx} className="flex items-center gap-3">
+                                      <span className="text-[11px] font-bold text-slate-600 w-40 truncate shrink-0">{c.client_name}</span>
+                                      <div className="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
+                                        <div className="bg-orange-400 h-5 rounded-full flex items-center justify-end pr-2" style={{ width: `${Math.max((parseFloat(c.consumo_total)/max)*100, 6)}%` }}>
+                                          <span className="text-[10px] font-black text-white">{parseFloat(c.consumo_total)}</span>
+                                        </div>
+                                      </div>
+                                      <span className="text-[10px] font-bold text-slate-400 w-20 text-right shrink-0">${Math.round(parseFloat(c.costo)||0).toLocaleString('es-CL')}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                        </div>
+                      </div>
+                    )}
+                  </>)}
+                </div>
+              )}
+
+              {insumosTab === 'reportes' && (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-end gap-3">
+                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Desde</label><input type="date" value={repRange.from} onChange={e=>setRepRange({...repRange,from:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white"/></div>
+                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Hasta</label><input type="date" value={repRange.to} onChange={e=>setRepRange({...repRange,to:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white"/></div>
+                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Agrupar por</label>
+                      <select value={repGroup} onChange={e=>setRepGroup(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
+                        <option value="insumo">Insumo</option>
+                        <option value="cliente">Cliente</option>
+                        <option value="documento">Documento</option>
+                      </select>
+                    </div>
+                    <button onClick={loadInsumoReport} disabled={repLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{repLoading ? <Loader2 size={14} className="animate-spin"/> : <BarChart3 size={14}/>} Generar</button>
+                    {repGrouped.length > 0 && <button onClick={exportInsumoReport} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
+                  </div>
+                  <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                    <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Consumo por {repGroup} ({repGrouped.length})</h3>
+                      <span className="text-[11px] font-black text-slate-700">Total: ${Math.round(repGrouped.reduce((s,g)=>s+g.costo,0)).toLocaleString('es-CL')}</span>
+                    </div>
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-100 border-b border-slate-200"><tr>
+                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">{repGroup==='cliente'?'Cliente':repGroup==='documento'?'Documento':'Insumo'}</th>
+                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cantidad</th>
+                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-right pr-5">Costo</th>
+                      </tr></thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {repGrouped.map(g => (
+                          <tr key={g.key} className="hover:bg-slate-50">
+                            <td className="p-3 pl-5 text-xs font-black text-slate-800">{g.key}</td>
+                            <td className="p-3 text-center text-sm font-black text-amber-600">{g.cantidad}</td>
+                            <td className="p-3 text-right pr-5 text-xs font-bold text-slate-600">${Math.round(g.costo).toLocaleString('es-CL')}</td>
+                          </tr>
+                        ))}
+                        {repGrouped.length === 0 && <tr><td colSpan={3} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">{repLoading ? 'Generando…' : 'Selecciona un período y genera el reporte'}</td></tr>}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Resumen del último movimiento (clases literales para que Tailwind no las purgue) */}
+              {insumoMoveResult && (() => {
+                const r = insumoMoveResult;
+                const cls = r.tipo === 'entrada'
+                  ? { box:'bg-emerald-50 border-emerald-300', num:'text-emerald-600', strong:'text-emerald-700' }
+                  : r.tipo === 'consumo'
+                  ? { box:'bg-amber-50 border-amber-300', num:'text-amber-600', strong:'text-amber-700' }
+                  : { box:'bg-cyan-50 border-cyan-300', num:'text-cyan-600', strong:'text-cyan-700' };
+                const signo = r.tipo === 'entrada' ? '+' : r.tipo === 'consumo' ? '−' : 'Δ';
+                return (
+                  <div className={`${cls.box} border-2 rounded-2xl p-5 flex items-center justify-between gap-4 animate-in fade-in`}>
+                    <div className="flex items-center gap-4">
+                      <div className={`text-3xl font-black ${cls.num}`}>{signo}{r.cantidad} <span className="text-sm">{r.insumo.unidad}</span></div>
+                      <div>
+                        <p className="text-xs font-black text-slate-800 uppercase">{r.tipo} · {r.insumo.codigo} — {r.insumo.nombre}</p>
+                        <p className="text-[11px] font-bold text-slate-500">Stock: <span className="font-mono">{r.stock_antes}</span> → <span className={`font-mono font-black ${cls.strong}`}>{r.stock_despues}</span> {r.insumo.unidad}</p>
+                        {r.fecha && <p className="text-[10px] font-bold text-slate-400 mt-0.5">Ingresado: {new Date(r.fecha).toLocaleDateString('es-CL')}</p>}
+                      </div>
+                    </div>
+                    <button onClick={()=>setInsumoMoveResult(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* Modal de movimiento de insumo (entrada / consumo / ajuste) */}
+          {insumoMove && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>setInsumoMove(null)}>
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6" onClick={e=>e.stopPropagation()}>
+                <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                  {insumoMove.tipo === 'entrada' ? <span className="text-emerald-600">＋ Entrada</span> : insumoMove.tipo === 'consumo' ? <span className="text-amber-600">－ Consumo</span> : <span className="text-cyan-600">Δ Ajuste (recuento)</span>}
+                </h3>
+                <p className="text-xs font-bold text-slate-500 mt-1">{insumoMove.insumo.codigo} — {insumoMove.insumo.nombre}</p>
+                <p className="text-[11px] text-slate-400 mt-1">Stock actual: <span className="font-mono font-black text-slate-700">{parseFloat(insumoMove.insumo.stock_actual)}</span> {insumoMove.insumo.unidad}</p>
+                {insumoMove.tipo === 'entrada' && (
+                  <div className="mt-4">
+                    <label className="text-[10px] font-black text-slate-400 uppercase block">Fecha de ingreso <span className="text-slate-300 normal-case">· opcional (por defecto hoy)</span></label>
+                    <input type="date" max={new Date().toISOString().slice(0,10)} value={insumoMoveFecha} onChange={e=>setInsumoMoveFecha(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 mt-1"/>
+                  </div>
+                )}
+                <label className="text-[10px] font-black text-slate-400 uppercase mt-4 block">{insumoMove.tipo === 'ajuste' ? 'Nueva cantidad (recuento)' : 'Cantidad'}</label>
+                <input autoFocus type="number" min="0" step="0.001" value={insumoMoveQty} onChange={e=>setInsumoMoveQty(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitInsumoMove();}} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none focus:border-slate-500 mt-1"/>
+                <div className="flex gap-2 mt-5">
+                  <button onClick={()=>setInsumoMove(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
+                  <button onClick={submitInsumoMove} disabled={isMovingInsumo} className="flex-1 bg-slate-900 hover:bg-black text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isMovingInsumo ? <Loader2 size={14} className="animate-spin"/> : 'Confirmar'}</button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal de histórico de movimientos de un insumo */}
+          {histInsumo && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>{setHistInsumo(null);setHistRows([]);}}>
+              <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col" onClick={e=>e.stopPropagation()}>
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <History size={18} className="text-orange-500"/>
+                    <div>
+                      <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter">Histórico de movimientos</h3>
+                      <p className="text-[11px] font-bold text-slate-500">{histInsumo.codigo} — {histInsumo.nombre}</p>
+                    </div>
+                  </div>
+                  <button onClick={()=>{setHistInsumo(null);setHistRows([]);}} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                </div>
+                <div className="overflow-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-100 border-b border-slate-200 sticky top-0"><tr>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Fecha</th>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Tipo</th>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cantidad</th>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
+                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Documento / Usuario</th>
+                    </tr></thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {histLoading ? <tr><td colSpan={5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Cargando…</td></tr>
+                      : histRows.length === 0 ? <tr><td colSpan={5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin movimientos registrados</td></tr>
+                      : histRows.map(m => {
+                          const tc = m.tipo==='entrada'?'text-emerald-600':m.tipo==='consumo'?'text-amber-600':'text-cyan-600';
+                          const sig = m.tipo==='entrada'?'+':m.tipo==='consumo'?'−':'Δ';
+                          return (
+                            <tr key={m.id} className={`${m.anulado?'opacity-50 line-through':''} hover:bg-slate-50`}>
+                              <td className="p-3 pl-5 text-[11px] font-bold text-slate-600 whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-CL')}<span className="text-slate-400 ml-1">{new Date(m.fecha).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</span></td>
+                              <td className="p-3"><span className={`text-[10px] font-black uppercase ${tc}`}>{m.tipo}</span>{m.anulado && <span className="ml-1.5 text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase no-underline inline-block">Anulado</span>}</td>
+                              <td className={`p-3 text-center text-sm font-black ${tc}`}>{sig}{parseFloat(m.cantidad)}</td>
+                              <td className="p-3 text-center text-[11px] font-mono text-slate-500 whitespace-nowrap">{parseFloat(m.stock_antes)}→{parseFloat(m.stock_despues)}</td>
+                              <td className="p-3 text-[10px] text-slate-500">
+                                {m.documento_id ? <span className="font-bold text-slate-600">[{(m.documento_tipo||'').toUpperCase()}] {m.documento_id}</span> : <span className="text-slate-400">—</span>}
+                                <span className="block text-slate-400">{m.usuario||'SYSTEM'}{m.anulado && m.anulado_by ? ` · anuló: ${m.anulado_by}` : ''}</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="p-3 border-t border-slate-100 text-[10px] font-bold text-slate-400 text-center">Últimos {histRows.length} movimientos · los anulados se conservan para trazabilidad</div>
+              </div>
             </div>
           )}
 
@@ -10203,11 +9669,14 @@ export default function App() {
               <button
                 disabled={Object.keys(substituteModal.selection).length === 0}
                 onClick={async () => {
+                  // Despacho con sustitutos: también exige re-clave (step-up).
+                  const reauthPw = await promptReauth('despacho');
+                  if (!reauthPw) return;
                   // Construir nuevo set de items mezclando original + sustitutos
                   const subItems = Object.entries(substituteModal.selection).map(([_, sel]) => ({ sku: sel.sku, qty: sel.qty }));
                   const res = await apiFetch(`${host}/api/dispatch_batch`, {
                     method: 'POST', headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ ...substituteModal.doc, username: currentUser.username, allow_substitutes: true, substitute_items: subItems })
+                    body: JSON.stringify({ ...substituteModal.doc, client_id: substituteModal.doc?.client, username: currentUser.username, allow_substitutes: true, substitute_items: subItems, reauth_password: reauthPw })
                   });
                   if (res.ok) {
                     showMsg('✅ Despacho con sustitutos procesado');

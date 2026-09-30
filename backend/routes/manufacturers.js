@@ -1,7 +1,7 @@
 // Fabricantes: CRUD con soft-delete y validación de stock vinculado.
 const express = require('express');
 const { pool, mapDbError } = require('../db');
-const { requireAuth, requireAdmin } = require('../middleware');
+const { requireAuth, requireJefe } = require('../middleware');
 
 const router = express.Router();
 
@@ -52,7 +52,7 @@ router.get('/manufacturers/:id', requireAuth, async (req, res) => {
 });
 
 // POST /api/manufacturers
-router.post('/manufacturers', requireAdmin, async (req, res) => {
+router.post('/manufacturers', requireJefe, async (req, res) => {
   let { code, name, country, contact, email, phone, website, notes } = req.body || {};
   if (!name || !String(name).trim()) return res.status(400).json({ error: 'El nombre es requerido' });
   if (email && !EMAIL_RE.test(String(email).trim())) return res.status(400).json({ error: 'Email inválido' });
@@ -87,7 +87,7 @@ router.post('/manufacturers', requireAdmin, async (req, res) => {
 });
 
 // PUT /api/manufacturers/:id
-router.put('/manufacturers/:id', requireAdmin, async (req, res) => {
+router.put('/manufacturers/:id', requireJefe, async (req, res) => {
   const { code, name, country, contact, email, phone, website, notes, active } = req.body || {};
   if (email && !EMAIL_RE.test(String(email).trim())) return res.status(400).json({ error: 'Email inválido' });
   try {
@@ -116,7 +116,7 @@ router.put('/manufacturers/:id', requireAdmin, async (req, res) => {
 });
 
 // DELETE /api/manufacturers/:id — soft delete con bloqueo si tiene stock
-router.delete('/manufacturers/:id', requireAdmin, async (req, res) => {
+router.delete('/manufacturers/:id', requireJefe, async (req, res) => {
   try {
     const stockRow = await pool.query(
       `SELECT COUNT(*)::int AS n

@@ -3,7 +3,7 @@
 // recepción crea LPN en PISO-RECEPCION y registra audit_log INBOUND.
 
 const express = require('express');
-const { pool, mapDbError } = require('../db');
+const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireAuth, requireAdmin, checkClientAccess } = require('../middleware');
 const { genLpnId } = require('../helpers');
 
@@ -42,7 +42,10 @@ router.post('/purchase-orders', requireAuth, checkClientAccess('write'), async (
         [poId, item.sku, parseFloat(item.expected_qty)]);
     }
     res.json({ success: true, poId });
-  } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
+  } catch(e) {
+    if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe una Orden de Compra con el número '${doc_num}' para este cliente.` });
+    res.status(500).json({ error: mapDbError(e) });
+  }
 });
 
 router.get('/purchase-orders/:id/lines', requireAuth, async (req, res) => {

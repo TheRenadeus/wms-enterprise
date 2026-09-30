@@ -61,4 +61,7 @@ const sendDbError = (res, err) => {
   return res.status(status).json({ error: mapDbError(err) });
 };
 
-module.exports = { pool, mapDbError, dbErrorStatus, sendDbError };
+// ¿El error es una violación de UNIQUE (documento duplicado)?
+const isUniqueViolation = (err) => !!err && err.code === '23505';
+
+module.exports = { pool, mapDbError, dbErrorStatus, sendDbError, isUniqueViolation };

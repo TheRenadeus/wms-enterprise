@@ -182,6 +182,45 @@ router.get('/system/backups/:id/download', requireSuperAdmin, async (req, res) =
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
+// Aplica un restore (TRUNCATE + reinsert) sobre un cliente de BD ya en transacción.
+// Reutilizado por el endpoint y por el recuperador standalone (recover.js).
+// `tables` es el objeto { tabla: [filas] } del backup JSON.
+async function aplicarRestore(client, tables) {
+  const restoredTables = [];
+  let rowsInserted = 0;
+  // Orden inverso para TRUNCATE (respetar FKs). CASCADE para limpiar dependencias.
+  for (let i = BACKUP_TABLES.length - 1; i >= 0; i--) {
+    const tbl = BACKUP_TABLES[i];
+    if (!(await tableExists(client, tbl))) continue;
+    await client.query(`TRUNCATE TABLE ${tbl} CASCADE`);
+  }
+  // Reinsertar en orden directo.
+  for (const tbl of BACKUP_TABLES) {
+    if (!(await tableExists(client, tbl))) continue;
+    const rows = tables[tbl] || [];
+    if (!rows.length) { restoredTables.push(tbl); continue; }
+    // Resiliencia ante drift de schema: insertar SOLO las columnas que existen hoy
+    // en la tabla. Columnas eliminadas en el backup se ignoran; columnas nuevas
+    // del schema actual toman su DEFAULT. Sin esto, un backup viejo con una columna
+    // ya eliminada (ej. loc_type) rompería todo el restore.
+    const colRes = await client.query(
+      `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=$1`,
+      [tbl]
+    );
+    const liveCols = new Set(colRes.rows.map(r => r.column_name));
+    const cols = Object.keys(rows[0]).filter(c => liveCols.has(c));
+    if (!cols.length) { restoredTables.push(tbl); continue; }
+    const colList = cols.map(c => `"${c}"`).join(',');
+    for (const row of rows) {
+      const placeholders = cols.map((_, i) => `$${i+1}`).join(',');
+      await client.query(`INSERT INTO ${tbl} (${colList}) VALUES (${placeholders})`, cols.map(c => row[c]));
+      rowsInserted++;
+    }
+    restoredTables.push(tbl);
+  }
+  return { restoredTables, rowsInserted };
+}
+
 router.post('/system/backups/:id/restore', requireSuperAdmin, async (req, res) => {
   const t0 = Date.now();
   try {
@@ -200,32 +239,12 @@ router.post('/system/backups/:id/restore', requireSuperAdmin, async (req, res) =
     // 3. Leer y aplicar en transacción
     const data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
     const tables = data.tables || {};
-    const restoredTables = [];
+    let restoredTables = [];
     let rowsInserted = 0;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      // Orden inverso para TRUNCATE (respetar FKs). CASCADE para limpiar dependencias.
-      for (let i = BACKUP_TABLES.length - 1; i >= 0; i--) {
-        const tbl = BACKUP_TABLES[i];
-        if (!(await tableExists(client, tbl))) continue;
-        await client.query(`TRUNCATE TABLE ${tbl} CASCADE`);
-      }
-      // Reinsertar en orden directo.
-      for (const tbl of BACKUP_TABLES) {
-        if (!(await tableExists(client, tbl))) continue;
-        const rows = tables[tbl] || [];
-        if (!rows.length) { restoredTables.push(tbl); continue; }
-        const cols = Object.keys(rows[0]);
-        const colList = cols.map(c => `"${c}"`).join(',');
-        for (const row of rows) {
-          const placeholders = cols.map((_, i) => `$${i+1}`).join(',');
-          const values = cols.map(c => row[c]);
-          await client.query(`INSERT INTO ${tbl} (${colList}) VALUES (${placeholders})`, values);
-          rowsInserted++;
-        }
-        restoredTables.push(tbl);
-      }
+      ({ restoredTables, rowsInserted } = await aplicarRestore(client, tables));
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
@@ -277,3 +296,7 @@ startCron();
 module.exports = router;
 module.exports.ejecutarBackup = ejecutarBackup;
 module.exports.purgarBackupsViejos = purgarBackupsViejos;
+module.exports.aplicarRestore = aplicarRestore;
+module.exports.tableExists = tableExists;
+module.exports.BACKUP_TABLES = BACKUP_TABLES;
+module.exports.BACKUPS_DIR = BACKUPS_DIR;

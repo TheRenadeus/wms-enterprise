@@ -6,14 +6,14 @@
 
 const express = require('express');
 
-const { pool, mapDbError, sendDbError } = require('../db');
-const { requireJefeOrAbove, requirePickerOrAbove } = require('../middleware');
+const { pool, mapDbError, sendDbError, isUniqueViolation } = require('../db');
+const { requireJefeOrAbove, requirePickerOrAbove, requireStockWrite } = require('../middleware');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
 
 // ── Crear tarea (supervisor crea una tarea por línea) ──────────────────────
-router.post('/pick-tasks', requireJefeOrAbove, async (req, res) => {
+router.post('/pick-tasks', requireStockWrite, async (req, res) => {
   const { doc_id, doc_num, doc_type, module, client_id, lines, notes } = req.body;
   if (!doc_num || !module || !Array.isArray(lines) || lines.length === 0)
     return res.status(400).json({ error: 'doc_num, module y lines son requeridos.' });
@@ -79,6 +79,7 @@ router.post('/pick-tasks', requireJefeOrAbove, async (req, res) => {
     res.json({ success: true, task_ids: createdTasks, count: createdTasks.length });
   } catch (err) {
     await client.query('ROLLBACK');
+    if (isUniqueViolation(err)) return res.status(409).json({ error: `Ya existe una tarea de picking activa para ese documento y cliente.` });
     res.status(500).json({ error: mapDbError(err) });
   } finally { client.release(); }
 });
@@ -115,7 +116,7 @@ router.get('/pick-tasks', requirePickerOrAbove, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.put('/pick-tasks/lines/:lineId/assign', requireJefeOrAbove, async (req, res) => {
+router.put('/pick-tasks/lines/:lineId/assign', requireStockWrite, async (req, res) => {
   try {
     const { assigned_to } = req.body;
     if (!assigned_to) return res.status(400).json({ error: 'assigned_to es requerido.' });
@@ -135,7 +136,7 @@ router.put('/pick-tasks/lines/:lineId/assign', requireJefeOrAbove, async (req, r
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.put('/pick-tasks/:taskId/cancel', requireJefeOrAbove, async (req, res) => {
+router.put('/pick-tasks/:taskId/cancel', requireStockWrite, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

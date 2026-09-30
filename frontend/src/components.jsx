@@ -4,9 +4,9 @@ import {
   FolderOpen, Trash2, CheckCircle2, Search, X,
   Box, Calendar, Combine, Edit, Eye, Layers, Map as MapIcon,
   Scan, Split, Tag, Warehouse, XCircle,
-  Database, Download, Loader2, Upload, ShieldAlert, Lightbulb
+  Database, Download, Loader2, Upload, ShieldAlert, Lightbulb, Building2
 } from 'lucide-react';
-import { timeAgo, apiFetch } from './utils';
+import { timeAgo, apiFetch, parseSpreadsheet } from './utils';
 import { DEMO_GLOSA_OPTIONS, IMPORT_CONFIG, DEMO_HINTS, SANDBOX_SCENARIOS, SANDBOX_ROLES, SANDBOX_MISSIONS } from './constants';
 
 // GlobalStyles: noop tras migrar a Tailwind build local (P14).
@@ -47,9 +47,11 @@ const DocTrayView = ({
   module, title, colorClass, textClass, btnColor, Icon,
   workspaces, newDocNum, setNewDocNum, newDocType, setNewDocType, newDocGlosa, setNewDocGlosa,
   newDocDate, setNewDocDate, newDocRef, setNewDocRef, newDocEnteredAt, setNewDocEnteredAt,
-  documentTypes, handleCreateDoc, removeDoc, setActiveDocId, currentUser
+  documentTypes, handleCreateDoc, removeDoc, setActiveDocId, currentUser,
+  is3PLMode, opsClients = [], newDocClient, setNewDocClient
 }) => {
   const docs = workspaces[module] || [];
+  const clientName = (id) => (opsClients.find(c => c.id === id)?.name) || id;
   const allowedTypes = (documentTypes || []).filter(d => d.flow_type === 'BOTH' || d.flow_type === (module === 'receive' ? 'INBOUND' : module === 'dispatch' ? 'OUTBOUND' : 'BOTH'));
   const canDeleteDoc = ['ADMIN', 'SUPERADMIN'].includes(currentUser?.role);
 
@@ -60,6 +62,16 @@ const DocTrayView = ({
           <Icon className={`w-6 h-6 mr-2 ${textClass}`}/> Crear Nuevo {title}
         </h2>
         <form onSubmit={(e) => handleCreateDoc(e, module)} className="flex flex-col gap-4">
+          {is3PLMode && (
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1"><Building2 size={12}/> Cliente del movimiento *</label>
+              <select value={newDocClient || ''} onChange={e=>setNewDocClient(e.target.value)} required className="w-full border-2 border-indigo-200 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 text-indigo-800">
+                <option value="">-- Seleccione el cliente --</option>
+                {opsClients.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
+              </select>
+              {opsClients.length === 0 && <p className="text-[9px] text-red-500 font-bold">No tiene clientes asignados para operar.</p>}
+            </div>
+          )}
           <div className="flex gap-4">
             {module !== 'adjust' && (
               <select value={newDocType} onChange={e=>setNewDocType(e.target.value)} required className="flex-[0.5] border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500 bg-white uppercase">
@@ -118,6 +130,7 @@ const DocTrayView = ({
                 <div>
                   <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest">En Proceso / Parcial</span>
                   <h4 className="text-lg font-black text-slate-800 uppercase mt-2 leading-none">[{d.docType || 'AJUSTE'}] {d.docNum}</h4>
+                  {d.client && <p className="text-[10px] font-black text-indigo-600 uppercase mt-1 flex items-center gap-1"><Building2 size={11}/> {clientName(d.client)}</p>}
                   {d.glosa && <p className="text-xs text-slate-500 mt-1 italic truncate">"{d.glosa}"</p>}
                   <div className="flex flex-wrap gap-2 mt-2">
                     {d.docDate && <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">📅 Doc: {d.docDate}</span>}
@@ -272,7 +285,35 @@ export function getPosition(loc) {
   return { x: 0, y: 0, z: 0, width: w, depth: d, height: h };
 }
 
-function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBadge, clients }) {
+// ── Coloreado FEFO por vencimiento (lotes) ───────────────────────────────────
+// Días hasta el vencimiento (negativo = ya vencido). null si no hay fecha válida.
+function daysUntilExpiry(expiry) {
+  if (!expiry) return null;
+  const d = new Date(expiry);
+  if (isNaN(d.getTime())) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return Math.ceil((d - today) / 86400000);
+}
+// Horizonte en días a partir del cual el lote se considera "fresco" (verde pleno).
+const FRESH_DAYS = 90;
+// Color en escala verde→amarillo→naranjo→rojo según cercanía al vencimiento.
+// >= FRESH_DAYS → verde; se acerca a 0 → rojo; vencido (<0) → rojo intenso.
+function expiryColor(days) {
+  if (days == null) return null;
+  if (days < 0) return 'hsl(0, 85%, 38%)';                 // vencido: rojo intenso
+  const t = Math.max(0, Math.min(1, days / FRESH_DAYS));   // 0 = por vencer, 1 = fresco
+  const hue = Math.round(t * 130);                         // 0 rojo → 130 verde
+  return `hsl(${hue}, 70%, 45%)`;
+}
+// Mínimo de días al vencimiento entre los items con lote/fecha de una celda (el más urgente).
+function minLotDays(items) {
+  const ds = (items || []).map(i => daysUntilExpiry(i.expiry_date)).filter(d => d != null);
+  return ds.length ? Math.min(...ds) : null;
+}
+
+function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBadge, clients, userRole }) {
+  // Editar el layout (unir/bloquear casillas) solo desde JEFE_BODEGA o superior.
+  const canEditLayout = ['JEFE_BODEGA', 'ADMIN', 'SUPERADMIN'].includes(userRole);
   const [hoveredLoc, setHoveredLoc] = useState(null);
   const [selectedLoc, setSelectedLoc] = useState(null);
 
@@ -300,6 +341,42 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
     }
     return codes.map(code => zones?.find(z => z.id === code) || { id: code, name: code });
   }, [locations, zones, activeWH]);
+
+  // Bodegas a mostrar en el selector: unión de las configuradas (prop/localStorage)
+  // con las que existen realmente en la BD (parts[0] del código de 4 seg). Así una
+  // bodega creada por seed/migración (ej. '1') aparece aunque no esté en la lista local.
+  const derivedWarehouses = useMemo(() => {
+    const fromLocs = [...new Set(locations
+      .map(l => (l.location_id || '').split('-'))
+      .filter(p => p.length === 4)
+      .map(p => p[0])
+      .filter(Boolean))];
+    const byId = new Map((warehouses || []).map(w => [w.id, w]));
+    fromLocs.forEach(id => { if (!byId.has(id)) byId.set(id, { id, name: `Bodega ${id}` }); });
+    return [...byId.values()];
+  }, [locations, warehouses]);
+
+  // Si la bodega activa no tiene ubicaciones reales (ej. default 'B1' tras consolidar
+  // todo en bodega '1'), saltar a la primera bodega que sí tenga ubicaciones.
+  useEffect(() => {
+    const withLocs = new Set(locations
+      .map(l => (l.location_id || '').split('-'))
+      .filter(p => p.length === 4)
+      .map(p => p[0]));
+    if (withLocs.size && !withLocs.has(activeWH)) {
+      setActiveWH([...withLocs][0]);
+    }
+  }, [locations, activeWH]);
+
+  // Si la zona activa no existe entre las zonas reales, seleccionar la primera real.
+  // Necesario porque activeZ se inicializa antes de que carguen las locations (async):
+  // arranca en el default 'RES' mientras la BD usa otra zona (p.ej. 'ALM'), y sin esto
+  // el grid filtra por una zona inexistente y no muestra ninguna casilla.
+  useEffect(() => {
+    if (derivedZones.length && !derivedZones.some(z => z.id === activeZ)) {
+      setActiveZ(derivedZones[0].id);
+    }
+  }, [derivedZones, activeZ]);
 
   const [editMode, setEditMode] = useState(false);
   const [blockedLocs, setBlockedLocs] = useState(new Set());
@@ -544,7 +621,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                if (firstZoneForWH) setActiveZ(firstZoneForWH);
                setSelectedLoc(null);
              }} className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer uppercase max-w-[120px]">
-               {warehouses.map(w => <option key={w.id} value={w.id}>{w.id} - {w.name}</option>)}
+               {derivedWarehouses.map(w => <option key={w.id} value={w.id}>{w.id} - {w.name}</option>)}
              </select>
            </div>
            <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
@@ -554,20 +631,29 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
              </select>
            </div>
 
-          <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-            <button onClick={() => {setEditMode(false); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${!editMode ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
-              <Eye size={12} className="mr-1"/> Vista
-            </button>
-            <button onClick={() => {setEditMode(true); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${editMode ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
-              <Edit size={12} className="mr-1"/> Editar
-            </button>
-          </div>
+          {canEditLayout && (
+            <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+              <button onClick={() => {setEditMode(false); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${!editMode ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <Eye size={12} className="mr-1"/> Vista
+              </button>
+              <button onClick={() => {setEditMode(true); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${editMode ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+                <Edit size={12} className="mr-1"/> Editar
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="flex flex-col lg:flex-row gap-4 min-h-[60vh] lg:min-h-[500px]">
         <div className={`bg-slate-900 rounded-[28px] sm:rounded-[40px] flex-1 flex flex-col p-4 sm:p-8 border-4 sm:border-8 shadow-2xl relative overflow-auto custom-scrollbar transition-colors min-h-[350px] ${editMode ? 'border-red-500/30' : 'border-slate-800'}`}>
           <div className={`absolute inset-0 pointer-events-none transition-colors ${editMode ? 'bg-[radial-gradient(circle_at_50%_50%,rgba(239,68,68,0.05),transparent)]' : 'bg-[radial-gradient(circle_at_50%_50%,rgba(67,56,202,0.1),transparent)]'}`}></div>
+          {!editMode && (
+            <div className="absolute top-3 right-3 z-20 bg-slate-800/80 backdrop-blur rounded-xl px-3 py-2 border border-white/10 pointer-events-none">
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-1">Vencimiento de lotes</p>
+              <div className="h-2 w-32 rounded-full" style={{ background: 'linear-gradient(to right, hsl(0,85%,38%), hsl(0,70%,45%), hsl(40,70%,45%), hsl(90,70%,45%), hsl(130,70%,45%))' }}></div>
+              <div className="flex justify-between text-[7px] font-bold text-white/60 mt-0.5"><span>Vencido</span><span>Fresco (+{FRESH_DAYS}d)</span></div>
+            </div>
+          )}
           
           {sortedAisles.length === 0 ? (
              <div className="h-full flex flex-col items-center justify-center text-center opacity-60 z-10">
@@ -620,13 +706,23 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                           const inEditSelection = editSelection.has(locId) || (isRootMerge && mergeBlock.covered.some(id => editSelection.has(id)));
                           const isViewSelected = selectedLoc?.locId === locId && !editMode;
 
-                          let bgClass = 'bg-emerald-400/80 border-emerald-300';
-                          
+                          let bgClass = 'bg-slate-500/60 border-slate-400/50'; // vacía: gris (distinto del verde de lote fresco)
+                          let lotBg = null; // color FEFO por vencimiento (va inline)
+
                           if (isBlocked) {
                              bgClass = editMode ? 'bg-slate-900 border-dashed border-red-500/50 flex items-center justify-center opacity-60 hover:bg-red-900/50' : 'opacity-0 pointer-events-none';
                           } else if (itemsInLoc.length > 0) {
                             const hasHold = itemsInLoc.some(i => i.status && i.status !== 'DISPONIBLE');
-                            bgClass = hasHold ? 'bg-red-500 border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse' : 'bg-indigo-500 border-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.4)]';
+                            const lotDays = minLotDays(itemsInLoc); // null si la celda no tiene lotes con fecha
+                            if (hasHold) {
+                              bgClass = 'bg-red-500 border-red-400 shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse';
+                            } else if (lotDays != null) {
+                              // Lotes: color en escala según cercanía al vencimiento (el más urgente).
+                              lotBg = expiryColor(lotDays);
+                              bgClass = 'border-white/25 shadow-[0_0_10px_rgba(0,0,0,0.35)]';
+                            } else {
+                              bgClass = 'bg-indigo-500 border-indigo-400 shadow-[0_0_10px_rgba(99,102,241,0.4)]';
+                            }
                           }
 
                           if (inEditSelection && editMode) bgClass += ' ring-4 ring-white z-30 scale-105';
@@ -635,7 +731,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                           return (
                             <div 
                               key={locId} 
-                              style={{ gridColumn: `${cIdx + 1} / span ${colSpan}`, gridRow: `${gridRowStart} / span ${rowSpan}` }}
+                              style={{ gridColumn: `${cIdx + 1} / span ${colSpan}`, gridRow: `${gridRowStart} / span ${rowSpan}`, ...(lotBg ? { backgroundColor: lotBg } : {}) }}
                               onMouseEnter={() => !isBlocked && !editMode && setHoveredLoc({ locId, items: itemsInLoc })} 
                               onMouseLeave={() => !isBlocked && !editMode && setHoveredLoc(null)} 
                               onClick={() => handleCellClick(locId, itemsInLoc, mergeBlock)}
@@ -791,9 +887,30 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
       });
       const d = await res.json();
       if (d.error) { setError(d.error); setStatus('idle'); return; }
+      // Validar cabeceras requeridas ANTES de permitir importar (PASO 2.3).
+      const headers = Array.isArray(d.headers) ? d.headers.map(h => String(h).trim().toLowerCase()) : [];
+      const required = (cfg.required || []).map(r => String(r).toLowerCase());
+      const missing = required.filter(r => !headers.includes(r));
+      if (missing.length > 0) {
+        setError(`El archivo no tiene las columnas requeridas: ${missing.join(', ')}`);
+        setStatus('idle');
+        return;
+      }
       setPreview(d);
       setStatus('preview');
     } catch (e) { setError('Error al leer el archivo'); setStatus('idle'); }
+  };
+
+  // Normaliza la respuesta del backend a una forma consistente { success, errors[] }.
+  // El backend devuelve { success, errors } en éxito pero { error } en fallo, así
+  // que sin esto el render reventaba al leer results.errors.length (errors undefined).
+  const normalizeResult = (d, fallbackMsg) => {
+    if (!d || typeof d !== 'object') return { success: 0, errors: [fallbackMsg || 'Respuesta inesperada del servidor.'] };
+    if (d.error) return { success: Number(d.success) || 0, errors: [d.error] };
+    return {
+      success: Number(d.success) || 0,
+      errors: Array.isArray(d.errors) ? d.errors : [],
+    };
   };
 
   const handleImport = async () => {
@@ -804,12 +921,26 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ data: fileDataRef.current, filename: filenameRef.current, username: currentUser?.username, ...extraParams })
       });
-      const d = await res.json();
-      setResults(d);
+      let d = null;
+      try { d = await res.json(); } catch { d = null; }
+      const normalized = (!res.ok || !d || d.error)
+        ? normalizeResult(d, `Error del servidor (HTTP ${res.status}).`)
+        : normalizeResult(d);
+      setResults(normalized);
       setStatus('results');
-      if (d.success > 0) onSuccess();
-    } catch (e) { setError('Error de red al importar'); setStatus('preview'); }
+      if (normalized.success > 0) onSuccess();
+    } catch (e) {
+      // No propagar la excepción al render: mostrar el fallo como resultado controlado.
+      setResults({ success: 0, errors: [e?.message || 'Error de red al importar.'] });
+      setStatus('results');
+    }
   };
+
+  // Derivaciones defensivas para el bloque de resultados: nunca leer .length/.map
+  // directamente sobre results.errors (puede llegar undefined en respuestas de error).
+  const safeSuccess = Number(results?.success) || 0;
+  const safeErrors = Array.isArray(results?.errors) ? results.errors : [];
+  const errText = (e) => (typeof e === 'string' ? e : (e?.message ?? JSON.stringify(e)));
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -904,16 +1035,16 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
           {/* Resultados */}
           {status === 'results' && results && (
             <div className="space-y-4">
-              <div className={`rounded-2xl p-5 ${results.success > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
-                <p className="text-2xl font-black text-emerald-700">{results.success} <span className="text-sm font-bold text-emerald-600">filas importadas correctamente</span></p>
-                {results.errors.length > 0 && <p className="text-sm font-bold text-amber-600 mt-1">{results.errors.length} errores</p>}
+              <div className={`rounded-2xl p-5 ${safeSuccess > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
+                <p className="text-2xl font-black text-emerald-700">{safeSuccess} <span className="text-sm font-bold text-emerald-600">filas importadas correctamente</span></p>
+                {safeErrors.length > 0 && <p className="text-sm font-bold text-amber-600 mt-1">{safeErrors.length} errores</p>}
               </div>
-              {results.errors.length > 0 && (
+              {safeErrors.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-1">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Detalle de errores</p>
                     <button onClick={() => {
-                      const csv = 'Fila,Error\n' + results.errors.map((e,i) => `${i+1},"${e.replace(/"/g,'""')}"`).join('\n');
+                      const csv = 'Fila,Error\n' + safeErrors.map((e,i) => `${i+1},"${errText(e).replace(/"/g,'""')}"`).join('\n');
                       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
                       a.download = 'errores_importacion.csv'; a.click();
                     }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase flex items-center gap-1">
@@ -921,7 +1052,7 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
                     </button>
                   </div>
                   <div className="max-h-48 overflow-y-auto space-y-1">
-                    {results.errors.map((e, i) => <p key={i} className="text-xs text-red-700 font-bold">{e}</p>)}
+                    {safeErrors.map((e, i) => <p key={i} className="text-xs text-red-700 font-bold">{errText(e)}</p>)}
                   </div>
                 </div>
               )}
@@ -1174,7 +1305,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
     setLoading(roleId);
     try {
       const res = await fetch(`${host}/api/demo/login`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': 'true' },
         body: JSON.stringify({ scenario: selectedScenario, role: roleId }),
       });
       if (res.ok) {
@@ -1201,7 +1332,12 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
     blue:   { border: 'border-blue-300 hover:border-blue-400', bg: 'bg-blue-50', badge: 'bg-blue-100 text-blue-700', glow: 'hover:shadow-blue-200/60' },
     violet: { border: 'border-violet-300 hover:border-violet-400', bg: 'bg-violet-50', badge: 'bg-violet-100 text-violet-700', glow: 'hover:shadow-violet-200/60' },
     cyan:   { border: 'border-cyan-300 hover:border-cyan-400', bg: 'bg-cyan-50', badge: 'bg-cyan-100 text-cyan-700', glow: 'hover:shadow-cyan-200/60' },
+    amber:  { border: 'border-amber-300 hover:border-amber-400', bg: 'bg-amber-50', badge: 'bg-amber-100 text-amber-700', glow: 'hover:shadow-amber-200/60' },
   };
+  // Fallback para roles/escenarios cuyo color no esté mapeado (evita que un color
+  // nuevo en constants.js tumbe el panel del sandbox).
+  const FALLBACK_ROLE_COLOR = roleColors.blue;
+  const FALLBACK_SCENARIO_COLOR = scenarioColors.blue;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
@@ -1222,7 +1358,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
             </p>
             <div className="grid gap-4 md:grid-cols-3">
               {scenarios.map(sc => {
-                const c = scenarioColors[sc.color];
+                const c = scenarioColors[sc.color] || FALLBACK_SCENARIO_COLOR;
                 return (
                   <button key={sc.id} onClick={() => { setSelectedScenario(sc.id); setStep('role'); }}
                     className={`group relative bg-gradient-to-br ${c.card} rounded-3xl p-6 text-left shadow-2xl ${c.glow} transition-all hover:scale-[1.03] hover:-translate-y-1 active:scale-[0.98]`}>
@@ -1251,7 +1387,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
               </div>
               {selectedScenario && (() => {
                 const sc = SANDBOX_SCENARIOS[selectedScenario];
-                const c = scenarioColors[sc.color];
+                const c = scenarioColors[sc.color] || FALLBACK_SCENARIO_COLOR;
                 return <span className={`${c.bg} ${c.text} px-3 py-1 rounded-full text-[10px] font-black uppercase`}>{sc.icon} {sc.label}</span>;
               })()}
             </div>
@@ -1261,7 +1397,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
                 if (selectedScenario === 'PROPIO' && r.id === 'CLIENTE') return false;
                 return true;
               }).map(r => {
-                const c = roleColors[r.color];
+                const c = roleColors[r.color] || FALLBACK_ROLE_COLOR;
                 const isLoading = loading === r.id;
                 return (
                   <button key={r.id} onClick={() => handleStart(r.id)} disabled={!!loading}
@@ -1534,6 +1670,402 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
   );
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ReceivePreviewModal — Ingreso masivo (recepción) con previsualización y
+// validación client-side ANTES de insertar. El parseo es client-side (SheetJS,
+// vía parseSpreadsheet) y solo las filas VÁLIDAS se envían a /api/receive_batch
+// (transaccional, todo-o-nada). Las filas con error nunca se insertan.
+// ─────────────────────────────────────────────────────────────────────────────
+// Formato de ubicación: 4 segmentos bodega-pasillo-columna-fila (ej. 1-a-01-1).
+const LOCATION_4SEG_RE = /^[A-Za-z0-9]+(-[A-Za-z0-9]+){3}$/;
+const SPECIAL_LOCATIONS = ['PISO-RECEPCION'];
+
+// ── Validadores reutilizables ────────────────────────────────────────────────
+const vReqText = (label) => (v) => (String(v ?? '').trim() ? null : `${label} vacío`);
+const vPosNum = (label) => (v) => {
+  const s = String(v ?? '').trim();
+  if (s === '') return `${label} vacía`;
+  const n = parseFloat(s);
+  if (isNaN(n)) return `${label} no numérica`;
+  if (n <= 0) return `${label} debe ser mayor a 0`;
+  return null;
+};
+const vLocation = (v) => {
+  const s = String(v ?? '').trim();
+  if (!s) return null; // opcional → vacío usa PISO-RECEPCION
+  if (SPECIAL_LOCATIONS.includes(s.toUpperCase())) return null;
+  return LOCATION_4SEG_RE.test(s) ? null : `Ubicación '${s}' con formato inválido (ej. 1-a-01-1)`;
+};
+const vSkuExists = (skuSet) => (v) => {
+  const s = String(v ?? '').trim();
+  if (!s) return 'SKU vacío';
+  if (skuSet && skuSet.size > 0 && !skuSet.has(s.toUpperCase())) return `SKU '${s}' no existe en el catálogo`;
+  return null;
+};
+
+// Interpreta el valor de una celda booleana (TRUE/FALSE/1/sí/x...) como marcado.
+const isTruthyCell = (v) => v === true || ['true','1','sí','si','x','yes','verdadero'].includes(String(v ?? '').trim().toLowerCase());
+
+// Normaliza los errores del backend a un array (strings u objetos {row,message}).
+const normBackendErrors = (d) => {
+  if (!d) return [];
+  if (d.error) return [{ row: '-', message: d.error }];
+  return Array.isArray(d.errors) ? d.errors : [];
+};
+
+// ── Esquemas por tipo de carga masiva ────────────────────────────────────────
+// columns: campos a mostrar/editar · required: obligatorios · duplicateCheck:
+// llama al dry-run /validate · validators(ctx): { campo: fn } · toBody: arma la
+// llamada de inserción · parseResult: traduce la respuesta a { ok, info[], errors[] }.
+const IMPORT_SCHEMAS = {
+  receive: {
+    title: 'Recepción masiva', template: 'receive',
+    columns: ['sku','qty','location_id','batch_number','expiry_date','serial_number','glosa'],
+    required: ['sku','qty'], duplicateCheck: true, docLabel: 'N° documento de recepción (opcional)',
+    hint: 'Ubicación: bodega-pasillo-columna-fila (ej. 1-a-01-1) o vacío (PISO-RECEPCION)',
+    validators: (ctx) => ({ sku: vSkuExists(ctx.skuSet), qty: vPosNum('Cantidad'), location_id: vLocation }),
+    toBody: (rows, ctx) => ({ endpoint: 'receive_batch', body: {
+      items: rows.map(r => ({
+        sku: String(r.sku).trim(), qty: parseFloat(r.qty),
+        batch: String(r.batch_number ?? '').trim() || null,
+        expDate: String(r.expiry_date ?? '').trim() || null,
+        serial: String(r.serial_number ?? '').trim() || null,
+        location_id: String(r.location_id ?? '').trim() || 'PISO-RECEPCION',
+      })),
+      docNum: ctx.docNum || `REC-IMP-${Date.now()}`, docType: 'REC',
+      glosa: 'Ingreso masivo por Excel', username: ctx.username,
+    }}),
+    parseResult: (d, n) => ({ ok: Number(d.imported) || n, info: [], errors: normBackendErrors(d) }),
+  },
+  dispatch: {
+    title: 'Despacho masivo', template: 'dispatch',
+    columns: ['sku','qty_to_pick','lpn_id'],
+    required: ['sku','qty_to_pick'], duplicateCheck: true, docLabel: 'N° documento de despacho (opcional)',
+    hint: 'LPN opcional: vacío = selección automática FEFO',
+    validators: (ctx) => ({ sku: vSkuExists(ctx.skuSet), qty_to_pick: vPosNum('Cantidad') }),
+    toBody: (rows, ctx) => ({ endpoint: 'import/dispatch', body: {
+      rows: rows.map(r => ({ sku: String(r.sku).trim(), qty_to_pick: r.qty_to_pick, lpn_id: String(r.lpn_id ?? '').trim() })),
+      doc_num: ctx.docNum || `DESP-IMP-${Date.now()}`, username: ctx.username,
+    }}),
+    parseResult: (d, n) => ({ ok: Number(d.success) || 0, info: [], errors: normBackendErrors(d) }),
+  },
+  skus: {
+    title: 'Importar productos (SKUs)', template: 'skus',
+    columns: ['sku','desc','client_id','category','uom','requires_lot','requires_serial','barcode','weight','length','width','height','abc_class','manufacturer_code','manufacturer_sku','brand'],
+    required: ['sku','desc'], duplicateCheck: false,
+    booleans: ['requires_lot','requires_serial'],
+    hint: 'Marca la casilla para activar control de lote / serie',
+    validators: () => ({ sku: vReqText('SKU'), desc: vReqText('Descripción') }),
+    toBody: (rows, ctx) => ({ endpoint: 'import/skus', body: { rows, username: ctx.username } }),
+    parseResult: (d, n) => {
+      const info = [];
+      if (d.inserted != null || d.updated != null) info.push(`${d.inserted || 0} nuevos · ${d.updated || 0} actualizados`);
+      if (Array.isArray(d.versioned) && d.versioned.length)
+        info.push(`${d.versioned.length} con nueva versión de control: ` + d.versioned.map(v => `${v.sku} (v${v.from}→v${v.to})`).join(', '));
+      return { ok: Number(d.success) || 0, info, errors: normBackendErrors(d) };
+    },
+  },
+  clients: {
+    title: 'Importar clientes', template: 'clients',
+    columns: ['id','name','contact','email'],
+    required: ['id','name'], duplicateCheck: false,
+    validators: () => ({ id: vReqText('ID'), name: vReqText('Nombre') }),
+    toBody: (rows) => ({ endpoint: 'import/clients', body: { rows } }),
+    parseResult: (d, n) => ({ ok: Number(d.success) || 0, info: [], errors: normBackendErrors(d) }),
+  },
+  inventory: {
+    title: 'Importar inventario', template: 'inventory',
+    columns: ['sku','qty','client_id','location_id','batch_number','expiry_date','serial_number','glosa'],
+    required: ['sku','qty'], duplicateCheck: false,
+    hint: 'Ubicación: bodega-pasillo-columna-fila (ej. 1-a-01-1) o vacío (PISO-RECEPCION)',
+    validators: (ctx) => ({ sku: vSkuExists(ctx.skuSet), qty: vPosNum('Cantidad'), location_id: vLocation }),
+    toBody: (rows, ctx) => ({ endpoint: 'import/inventory', body: { rows, username: ctx.username } }),
+    parseResult: (d, n) => ({ ok: Number(d.success) || 0, info: [], errors: normBackendErrors(d) }),
+  },
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BulkImportModal — Carga masiva unificada para los 5 flujos (recepción, despacho,
+// SKUs, clientes, inventario). Parseo client-side (SheetJS), validación por fila,
+// celdas EDITABLES con re-validación en vivo, detección de duplicados (dentro del
+// archivo + dry-run contra BD para recepción/despacho) y confirmación que envía
+// SOLO las filas válidas. Las filas con error nunca se insertan.
+// ─────────────────────────────────────────────────────────────────────────────
+const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {}, onClose, onSuccess }) => {
+  const schema = IMPORT_SCHEMAS[type] || IMPORT_SCHEMAS.receive;
+  const [status, setStatus] = useState('idle'); // idle | preview | importing | results
+  const [error, setError] = useState('');
+  const [rows, setRows] = useState([]);          // [{ data, localErrors[], dupErrors[], dupWarnings[] }]
+  const [docNum, setDocNum] = useState('');
+  const [docDuplicate, setDocDuplicate] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [results, setResults] = useState(null);  // { ok, info[], errors[] }
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const skuSet = useMemo(() => new Set((Array.isArray(skus) ? skus : []).map(s => String(s.sku ?? '').toUpperCase()).filter(Boolean)), [skus]);
+  const validators = useMemo(() => schema.validators({ skuSet }), [schema, skuSet]);
+
+  const validateData = (data) => {
+    const errs = [];
+    Object.entries(validators).forEach(([field, fn]) => { const e = fn(data[field]); if (e) errs.push(e); });
+    // Requeridos sin validador específico → chequeo genérico de no-vacío.
+    schema.required.forEach(f => { if (!validators[f] && String(data[f] ?? '').trim() === '') errs.push(`${f} vacío`); });
+    return errs;
+  };
+
+  const isRowValid = (r) => r.localErrors.length === 0 && r.dupErrors.length === 0;
+  const validRows = rows.filter(isRowValid);
+  const errorRows = rows.filter(r => !isRowValid(r));
+
+  const runDupCheck = async (currentRows, currentDoc) => {
+    if (!schema.duplicateCheck) return;
+    setChecking(true);
+    try {
+      const res = await apiFetch(`${host}/api/import/${type}/validate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: currentRows.map(r => r.data), doc_num: currentDoc || '' }),
+      });
+      const d = await res.json().catch(() => null);
+      if (d && Array.isArray(d.rows)) {
+        setRows(prev => prev.map((r, i) => ({ ...r, dupErrors: d.rows[i]?.errors ?? [], dupWarnings: d.rows[i]?.warnings ?? [] })));
+        setDocDuplicate(!!d.doc_duplicate);
+      }
+    } catch { /* el backend revalida en el insert; el dry-run es solo informativo */ }
+    finally { setChecking(false); }
+  };
+
+  const handleFile = async (file) => {
+    if (!file) return;
+    setError(''); setStatus('idle');
+    try {
+      const { headers, rows: parsed } = await parseSpreadsheet(file);
+      const lower = headers.map(h => String(h).trim().toLowerCase());
+      const missing = schema.required.filter(h => !lower.includes(h.toLowerCase()));
+      if (missing.length) { setError(`El archivo no tiene las columnas requeridas: ${missing.join(', ')}.`); return; }
+      if (!parsed.length) { setError('El archivo no contiene filas de datos.'); return; }
+      const newRows = parsed.map(data => ({ data, localErrors: validateData(data), dupErrors: [], dupWarnings: [] }));
+      setRows(newRows);
+      setStatus('preview');
+      runDupCheck(newRows, docNum);
+    } catch (e) { setError('No se pudo leer el archivo: ' + (e?.message || 'formato no válido')); }
+  };
+
+  const updateCell = (idx, field, value) => {
+    setRows(prev => prev.map((r, i) => {
+      if (i !== idx) return r;
+      const data = { ...r.data, [field]: value };
+      return { ...r, data, localErrors: validateData(data) };
+    }));
+  };
+
+  const handleConfirm = async () => {
+    const valids = rows.filter(isRowValid).map(r => r.data);
+    if (!valids.length) return;
+    setStatus('importing');
+    const { endpoint, body } = schema.toBody(valids, { docNum, username: currentUser?.username, ...extraParams });
+    try {
+      const res = await apiFetch(`${host}/api/${endpoint}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...body, ...extraParams }),
+      });
+      let d = null; try { d = await res.json(); } catch { d = null; }
+      if (!res.ok || !d || d.error) {
+        setResults({ ok: 0, info: [], errors: [{ row: '-', message: (d && d.error) || `Error del servidor (HTTP ${res.status}).` }] });
+        setStatus('results'); return;
+      }
+      const parsed = schema.parseResult(d, valids.length);
+      setResults(parsed);
+      setStatus('results');
+      if (parsed.ok > 0) onSuccess?.();
+    } catch (e) {
+      setResults({ ok: 0, info: [], errors: [{ row: '-', message: e?.message || 'Error de red.' }] });
+      setStatus('results');
+    }
+  };
+
+  const handleCancel = () => { setRows([]); setResults(null); setError(''); setDocNum(''); setDocDuplicate(false); setStatus('idle'); onClose?.(); };
+
+  const cols = schema.columns;
+  const boolFields = schema.booleans || [];
+  const rowMotivo = (r) => [...r.localErrors, ...r.dupErrors].join('; ');
+  const safeResultErrors = Array.isArray(results?.errors) ? results.errors : [];
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && handleCancel()}>
+      <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+          <div>
+            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center"><Upload className="w-5 h-5 mr-2 text-emerald-500"/>{schema.title} — Previsualización</h2>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Edita, verifica y confirma · CSV o XLSX</p>
+          </div>
+          <button onClick={handleCancel} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={18} className="text-slate-400"/></button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Plantilla + columnas (solo en idle) */}
+          {status === 'idle' && (
+            <>
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-black text-emerald-800">Plantilla de ejemplo</p>
+                  <p className="text-[10px] text-emerald-600 mt-0.5">Descarga el Excel con las columnas correctas</p>
+                </div>
+                <a href={`${host}/api/templates/${schema.template}`} download className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-colors">
+                  <Download size={14}/> Descargar plantilla
+                </a>
+              </div>
+              <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Columnas</p>
+                <div className="flex flex-wrap gap-2">
+                  {schema.required.map(f => <span key={f} className="bg-red-100 text-red-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase">{f} *</span>)}
+                  {cols.filter(c => !schema.required.includes(c)).map(f => <span key={f} className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-lg uppercase">{f}</span>)}
+                </div>
+                <p className="text-[9px] text-slate-400">* Obligatorio{schema.hint ? ` · ${schema.hint}` : ''}</p>
+              </div>
+              <div
+                className={`border-2 border-dashed rounded-2xl p-10 text-center transition-colors cursor-pointer ${isDragOver ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-emerald-300 hover:bg-slate-50'}`}
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={(e) => { e.preventDefault(); setIsDragOver(false); const f = e.dataTransfer.files[0]; if (f) handleFile(f); }}
+                onClick={() => document.getElementById('bulk-file-input').click()}
+              >
+                <Upload className="w-10 h-10 mx-auto mb-2 text-slate-300"/>
+                <p className="text-sm font-black text-slate-500">Arrastra tu archivo aquí</p>
+                <p className="text-[10px] text-slate-400 mt-1">o haz clic para seleccionar · CSV o XLSX</p>
+                <input id="bulk-file-input" type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ''; }}/>
+              </div>
+            </>
+          )}
+
+          {error && <p className="text-sm font-bold text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-3">{error}</p>}
+
+          {/* Previsualización editable */}
+          {status === 'preview' && (
+            <div className="space-y-4">
+              {schema.duplicateCheck && (
+                <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{schema.docLabel}</label>
+                    <input value={docNum} onChange={e => setDocNum(e.target.value)} onBlur={() => runDupCheck(rows, docNum)} placeholder="Déjalo vacío para autogenerar" className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500"/>
+                  </div>
+                  <button onClick={() => runDupCheck(rows, docNum)} disabled={checking} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 disabled:opacity-50">
+                    {checking ? <Loader2 size={12} className="animate-spin"/> : <ShieldAlert size={12}/>} Revalidar duplicados
+                  </button>
+                </div>
+              )}
+              {docDuplicate && <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">⚠️ El documento '{docNum}' ya fue procesado anteriormente.</p>}
+
+              {/* Resumen */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-slate-700">{rows.length}</p><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Filas</p></div>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-emerald-700">{validRows.length}</p><p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Válidas</p></div>
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-red-600">{errorRows.length}</p><p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Con error</p></div>
+              </div>
+              <p className="text-[10px] text-slate-400 font-bold">Puedes corregir cualquier celda directamente en la tabla; la validación se actualiza al instante.</p>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-96 overflow-y-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[9px]">#</th>
+                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[9px]">Estado</th>
+                      {cols.map(h => <th key={h} className="px-2 py-2 font-black text-slate-500 uppercase text-[9px] whitespace-nowrap">{h}{schema.required.includes(h) && <span className="text-red-500"> *</span>}</th>)}
+                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[9px]">Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {rows.map((r, i) => {
+                      const ok = isRowValid(r);
+                      return (
+                        <tr key={i} className={ok ? 'hover:bg-slate-50' : 'bg-red-50/50'}>
+                          <td className="px-2 py-1 text-slate-400 font-bold">{i + 2}</td>
+                          <td className="px-2 py-1">
+                            {ok
+                              ? <span className="inline-flex items-center gap-1 text-emerald-700 font-black text-[10px] uppercase"><CheckCircle2 size={12}/> OK</span>
+                              : <span className="inline-flex items-center gap-1 text-red-700 font-black text-[10px] uppercase"><XCircle size={12}/> Error</span>}
+                          </td>
+                          {cols.map(h => {
+                            // Campos booleanos (ej. requires_lot/serial) → casilla en vez de texto.
+                            if (boolFields.includes(h)) {
+                              return (
+                                <td key={h} className="px-1 py-1 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={isTruthyCell(r.data[h])}
+                                    onChange={(e) => updateCell(i, h, e.target.checked ? 'TRUE' : 'FALSE')}
+                                    className="w-4 h-4 accent-emerald-600 cursor-pointer"
+                                  />
+                                </td>
+                              );
+                            }
+                            const fieldErr = r.localErrors.some(e => e.toLowerCase().includes(h.replace('_',' ')) || e.toLowerCase().startsWith(h));
+                            return (
+                              <td key={h} className="px-1 py-1">
+                                <input
+                                  value={String(r.data[h] ?? '')}
+                                  onChange={(e) => updateCell(i, h, e.target.value)}
+                                  className={`w-full min-w-[80px] border rounded-md px-2 py-1 text-[11px] font-bold outline-none focus:border-emerald-500 ${fieldErr ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
+                                />
+                              </td>
+                            );
+                          })}
+                          <td className="px-2 py-1 text-[10px] font-bold max-w-[200px]">
+                            {rowMotivo(r) && <span className="text-red-600">{rowMotivo(r)}</span>}
+                            {r.dupWarnings.length > 0 && <span className="text-amber-600 block">{r.dupWarnings.join('; ')}</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={handleCancel} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">Cancelar</button>
+                <button
+                  onClick={handleConfirm}
+                  disabled={validRows.length === 0}
+                  className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex justify-center items-center"
+                >
+                  <Database size={16} className="mr-2"/> Confirmar ({validRows.length} {validRows.length === 1 ? 'fila válida' : 'filas válidas'})
+                </button>
+              </div>
+              {validRows.length === 0 && <p className="text-[11px] text-red-500 font-bold text-center">No hay filas válidas. Corrige las celdas marcadas y reintenta.</p>}
+            </div>
+          )}
+
+          {/* Importando */}
+          {status === 'importing' && (
+            <div className="py-10 text-center"><Loader2 className="w-12 h-12 mx-auto mb-3 text-emerald-400 animate-spin"/><p className="text-sm font-black text-slate-600 uppercase">Procesando...</p></div>
+          )}
+
+          {/* Resultados */}
+          {status === 'results' && results && (
+            <div className="space-y-4">
+              <div className={`rounded-2xl p-5 ${results.ok > 0 ? 'bg-emerald-50 border border-emerald-200' : 'bg-slate-50 border border-slate-200'}`}>
+                <p className="text-2xl font-black text-emerald-700">{Number(results.ok) || 0} <span className="text-sm font-bold text-emerald-600">filas procesadas correctamente</span></p>
+                {safeResultErrors.length > 0 && <p className="text-sm font-bold text-amber-600 mt-1">{safeResultErrors.length} con error</p>}
+              </div>
+              {Array.isArray(results.info) && results.info.length > 0 && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 space-y-1">
+                  {results.info.map((t, i) => <p key={i} className="text-xs text-indigo-700 font-bold">{t}</p>)}
+                </div>
+              )}
+              {safeResultErrors.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-1 max-h-48 overflow-y-auto">
+                  {safeResultErrors.map((e, i) => <p key={i} className="text-xs text-red-700 font-bold">{typeof e === 'string' ? e : `Fila ${e?.row ?? '-'}${e?.sku ? ` · ${e.sku}` : ''}: ${e?.message ?? JSON.stringify(e)}`}</p>)}
+                </div>
+              )}
+              <button onClick={handleCancel} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">Cerrar</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
 export {
   GlobalStyles,
   SimpleDonut,
@@ -1541,6 +2073,7 @@ export {
   LocPicker,
   DigitalTwinView,
   ImportModal,
+  BulkImportModal,
   ConfirmModal,
   DemoHint,
   SandboxWelcome,

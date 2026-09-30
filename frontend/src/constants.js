@@ -1,6 +1,6 @@
 // Constantes extraídas de App.js (split)
 
-export const initialSkuForm = { sku: '', barcode: '', desc: '', category: 'General', uom: 'UN', weight: '', length: '', width: '', height: '', abc_class: '-', traceability: 'NONE', client_id: '', manufacturer_id: '', manufacturer_code: '', manufacturer_sku: '', brand: '', allow_substitutes: false, substitute_scope: 'any', substitute_threshold: '' };
+export const initialSkuForm = { sku: '', barcode: '', desc: '', category: 'General', uom: 'UN', weight: '', length: '', width: '', height: '', abc_class: '-', requires_lot: false, requires_serial: false, client_id: '', manufacturer_id: '', manufacturer_code: '', manufacturer_sku: '', brand: '', allow_substitutes: false, substitute_scope: 'any', substitute_threshold: '' };
 
 // Módulos que el modo PROPIO oculta automáticamente
 export const MODULES_3PL_ONLY = ['clients', '3pl-billing', 'billing'];
@@ -27,6 +27,7 @@ export const APP_MODULES = [
   { id: 'cycle-count', label: 'Contar físicamente' },
   { id: 'docks', label: 'Agenda de muelles' },
   { id: 'kits', label: 'Armar kits' },
+  { id: 'insumos', label: 'Insumos de bodega' },
   // Compras y proveedores
   { id: 'suppliers', label: 'Proveedores' },
   { id: 'manufacturers', label: 'Fabricantes' },
@@ -155,7 +156,9 @@ export const SANDBOX_SCENARIOS = {
 
 export const SANDBOX_ROLES = {
   ADMIN:            { id: 'ADMIN', label: 'Administrador', icon: '🏢', color: 'red', desc: 'Control total del sistema', shortDesc: 'Ve y modifica todo' },
-  EJECUTIVO_CUENTA: { id: 'EJECUTIVO_CUENTA', label: 'Jefe de Bodega', icon: '📦', color: 'teal', desc: 'Operaciones diarias de almacén', shortDesc: 'Recibe, despacha, reubica' },
+  JEFE_BODEGA:      { id: 'JEFE_BODEGA', label: 'Jefe de Bodega', icon: '📦', color: 'teal', desc: 'Supervisión y operaciones de almacén', shortDesc: 'Supervisa, aprueba, opera' },
+  EJECUTIVO_CUENTA: { id: 'EJECUTIVO_CUENTA', label: 'Ejecutivo de Cuenta', icon: '📋', color: 'emerald', desc: 'Operario de piso: recibe, despacha, reubica', shortDesc: 'Operaciones de stock' },
+  COORDINADOR_TRANSPORTE: { id: 'COORDINADOR_TRANSPORTE', label: 'Coordinador de Transporte', icon: '🚚', color: 'amber', desc: 'Gestiona flota, solicitudes y envíos; lectura de despachos', shortDesc: 'Transporte y logística' },
   AUDITOR:          { id: 'AUDITOR', label: 'Auditor', icon: '🔎', color: 'blue', desc: 'Vista de solo lectura para control', shortDesc: 'Solo observa y audita' },
   PICKER:           { id: 'PICKER', label: 'Picker', icon: '📱', color: 'violet', desc: 'Tareas de picking en el piso', shortDesc: 'Cola de tareas móvil' },
   CLIENTE:          { id: 'CLIENTE', label: 'Cliente 3PL', icon: '🏪', color: 'cyan', desc: 'Portal de solo lectura para clientes', shortDesc: 'Ve su propio stock' },
@@ -170,12 +173,19 @@ export const SANDBOX_MISSIONS = {
     { id: 'admin-5', label: 'Despachar un pedido', tab: 'dispatch', desc: 'Procesa una salida del almacén' },
     { id: 'admin-6', label: 'Explorar el Mapa 3D', tab: 'digital-twin', desc: 'Visualiza la bodega en 3D' },
   ],
+  JEFE_BODEGA: [
+    { id: 'jb-1', label: 'Ver el Dashboard', tab: 'dashboard', desc: 'Revisa los KPIs operativos' },
+    { id: 'jb-2', label: 'Crear tarea de picking', tab: 'picking-monitor', desc: 'Asigna trabajo a los pickers' },
+    { id: 'jb-3', label: 'Programar un despacho', tab: 'dispatch-schedule', desc: 'Agenda una salida futura' },
+    { id: 'jb-4', label: 'Aprobar un conteo cíclico', tab: 'cycle-count', desc: 'Revisa y aprueba diferencias' },
+    { id: 'jb-5', label: 'Gestionar clientes', tab: 'clients', desc: 'Da de alta una cuenta 3PL' },
+  ],
   EJECUTIVO_CUENTA: [
     { id: 'ej-1', label: 'Ver el Dashboard', tab: 'dashboard', desc: 'Revisa los KPIs operativos' },
-    { id: 'ej-2', label: 'Recibir mercadería', tab: 'receive', desc: 'Procesa una recepción' },
-    { id: 'ej-3', label: 'Crear tarea de picking', tab: 'picking-monitor', desc: 'Asigna trabajo a los pickers' },
+    { id: 'ej-2', label: 'Recibir mercadería', tab: 'receive', desc: 'Procesa una recepción (pide re-clave)' },
+    { id: 'ej-3', label: 'Despachar un pedido', tab: 'dispatch', desc: 'Procesa una salida (pide re-clave)' },
     { id: 'ej-4', label: 'Reubicar stock', tab: 'relocate', desc: 'Mueve un LPN a otra ubicación' },
-    { id: 'ej-5', label: 'Programar un despacho', tab: 'dispatch-schedule', desc: 'Agenda una salida futura' },
+    { id: 'ej-5', label: 'Solicitar un ajuste', tab: 'adjust', desc: 'Crea una solicitud para que un jefe apruebe' },
   ],
   AUDITOR: [
     { id: 'aud-1', label: 'Ver inventario actual', tab: 'inventory', desc: 'Consulta el stock sin modificarlo' },
@@ -192,6 +202,11 @@ export const SANDBOX_MISSIONS = {
     { id: 'cl-1', label: 'Ver tu Dashboard', tab: 'dashboard', desc: 'Métricas de tu inventario' },
     { id: 'cl-2', label: 'Consultar tu stock', tab: 'inventory', desc: 'Ve qué tienes almacenado' },
     { id: 'cl-3', label: 'Revisar documentos', tab: 'doc-history', desc: 'Historial de recepciones y despachos' },
+  ],
+  COORDINADOR_TRANSPORTE: [
+    { id: 'ct-1', label: 'Ver el panel de transporte', tab: 'transporte-coord', desc: 'Flota, solicitudes y envíos en un solo lugar' },
+    { id: 'ct-2', label: 'Gestionar solicitudes', tab: 'transporte-coord', desc: 'Revisa y asigna solicitudes de transporte' },
+    { id: 'ct-3', label: 'Planificar un envío', tab: 'transporte-coord', desc: 'Crea un envío con sus paradas y tramos' },
   ],
 };
 

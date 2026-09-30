@@ -4,8 +4,8 @@
 
 const express = require('express');
 
-const { pool, mapDbError } = require('../db');
-const { requireAuth, requireJefeOrAbove, checkClientAccess } = require('../middleware');
+const { pool, mapDbError, isUniqueViolation } = require('../db');
+const { requireAuth, requireJefe, requireJefeOrAbove, requireStockWrite, checkClientAccess } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId, logStorageEvent } = require('../helpers');
 
@@ -85,11 +85,11 @@ router.post('/asns', requireJefeOrAbove, checkClientAccess('write'), async (req,
     }
     await client.query('COMMIT');
     res.json({ success: true, id });
-  } catch(e){ await client.query('ROLLBACK'); res.status(500).json({ error: mapDbError(e) }); }
+  } catch(e){ await client.query('ROLLBACK'); if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe un ASN con la referencia '${reference}' para este proveedor.` }); res.status(500).json({ error: mapDbError(e) }); }
   finally { client.release(); }
 });
 
-router.post('/asns/:id/receive', requireJefeOrAbove, validateBody(schemas.asnReceive), async (req, res) => {
+router.post('/asns/:id/receive', requireStockWrite, validateBody(schemas.asnReceive), async (req, res) => {
   const rawLines = req.body.received || req.body.lines || [];
   const received = rawLines.map(r => ({
     asn_line_id: r.asn_line_id || r.line_id,
@@ -139,8 +139,8 @@ router.post('/asns/:id/receive', requireJefeOrAbove, validateBody(schemas.asnRec
     );
     const newStatus = parseInt(pending.rows[0].cnt) === 0 ? 'RECIBIDO' : 'PARCIAL';
     await client.query(
-      `UPDATE asns SET status=$1, received_at=CASE WHEN $1='RECIBIDO' THEN NOW() ELSE received_at END WHERE id=$2`,
-      [newStatus, req.params.id]
+      `UPDATE asns SET status=$1, received_at=CASE WHEN $2 THEN NOW() ELSE received_at END WHERE id=$3`,
+      [newStatus, newStatus === 'RECIBIDO', req.params.id]
     );
     await client.query('COMMIT');
     res.json({ success: true, status: newStatus, lpns_created: createdLpns });

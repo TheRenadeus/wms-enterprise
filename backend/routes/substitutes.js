@@ -5,7 +5,7 @@
 
 const express = require('express');
 const { pool, mapDbError } = require('../db');
-const { requireAuth, requireAdmin } = require('../middleware');
+const { requireAuth, requireStockWrite } = require('../middleware');
 
 const router = express.Router();
 
@@ -180,7 +180,7 @@ router.get('/skus/:sku/substitutes', requireAuth, async (req, res) => {
 });
 
 // POST /api/skus/substitutes — upsert
-router.post('/skus/substitutes', requireAdmin, async (req, res) => {
+router.post('/skus/substitutes', requireStockWrite, async (req, res) => {
   const { sku_original, sku_subst, priority, notes, confirmed_by } = req.body || {};
   if (!sku_original || !sku_subst) return res.status(400).json({ error: 'sku_original y sku_subst son requeridos.' });
   if (sku_original === sku_subst) return res.status(400).json({ error: 'No se puede sustituir un SKU por sí mismo.' });
@@ -202,7 +202,7 @@ router.post('/skus/substitutes', requireAdmin, async (req, res) => {
 });
 
 // DELETE /api/skus/substitutes/:id
-router.delete('/skus/substitutes/:id', requireAdmin, async (req, res) => {
+router.delete('/skus/substitutes/:id', requireStockWrite, async (req, res) => {
   try {
     const r = await pool.query(`DELETE FROM sku_substitutes WHERE id = $1 RETURNING id`, [req.params.id]);
     if (!r.rowCount) return res.status(404).json({ error: 'Sustituto no encontrado' });

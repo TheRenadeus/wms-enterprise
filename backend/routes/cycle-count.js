@@ -4,7 +4,7 @@
 
 const express = require('express');
 const { pool, mapDbError } = require('../db');
-const { requireAuth, requireAdmin, requireStaff, requireJefeOrAbove, checkClientAccess } = require('../middleware');
+const { requireAuth, requireAdmin, requireStaff, requireJefeOrAbove, checkClientAccess , requireStockWrite, requireJefe } = require('../middleware');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
@@ -21,7 +21,7 @@ function buildScopeLabel({ zone_code, client_id, sku, location_id }) {
 
 // ── CYCLE COUNT ──────────────────────────────────────────────────────────────
 
-router.post('/cycle-count/create', requireStaff, async (req, res) => {
+router.post('/cycle-count/create', requireStaff, checkClientAccess('write'), async (req, res) => {
   try {
     const { zone_code, client_id, sku, location_id, username, notes, blind } = req.body;
 
@@ -301,8 +301,8 @@ router.post('/cycle-count/:id/complete', requireStaff, async (req, res) => {
 });
 
 // ── ADJUSTMENT REQUESTS ──────────────────────────────────────────────────────
-router.post('/adjust-request', requireAuth, async (req, res) => {
-  if (['ADMIN','SUPERADMIN'].includes(req.user.role))
+router.post('/adjust-request', requireStockWrite, async (req, res) => {
+  if (['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(req.user.role))
     return res.status(400).json({ error: 'Los administradores aplican ajustes directamente.' });
   const { items, docNum, glosa } = req.body;
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Items requeridos.' });
@@ -317,8 +317,8 @@ router.post('/adjust-request', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.post('/adjust-requests', requireAuth, checkClientAccess('write'), async (req, res) => {
-  if (['ADMIN','SUPERADMIN'].includes(req.user.role))
+router.post('/adjust-requests', requireStockWrite, checkClientAccess('write'), async (req, res) => {
+  if (['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(req.user.role))
     return res.status(400).json({ error: 'Los administradores aplican ajustes directamente.' });
   const { lpn_id, sku, type, qty, reason, username } = req.body || {};
   if (!sku || qty === undefined || qty === null) return res.status(400).json({ error: 'sku y qty son requeridos.' });
@@ -338,7 +338,7 @@ router.post('/adjust-requests', requireAuth, checkClientAccess('write'), async (
 
 router.get('/adjust-requests', requireAuth, async (req, res) => {
   const { status } = req.query;
-  const isAdmin = ['ADMIN','SUPERADMIN'].includes(req.user.role);
+  const isAdmin = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(req.user.role);
   try {
     let q = `SELECT * FROM adjustment_requests`;
     const params = []; const conds = [];
@@ -350,7 +350,7 @@ router.get('/adjust-requests', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.post('/adjust-requests/:id/approve', requireAdmin, async (req, res) => {
+router.post('/adjust-requests/:id/approve', requireJefe, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -393,7 +393,7 @@ router.post('/adjust-requests/:id/approve', requireAdmin, async (req, res) => {
   finally { client.release(); }
 });
 
-router.post('/adjust-requests/:id/reject', requireAdmin, async (req, res) => {
+router.post('/adjust-requests/:id/reject', requireJefe, async (req, res) => {
   const { reject_reason } = req.body;
   try {
     const r = await pool.query(

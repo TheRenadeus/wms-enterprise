@@ -9,7 +9,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const { pool, mapDbError } = require('../db');
-const { JWT_SECRET, requireAuth, loginLimiter } = require('../middleware');
+const { JWT_SECRET, requireAuth, loginLimiter, getLicenseStatus } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 
 const router = express.Router();
@@ -29,7 +29,7 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
       return res.status(401).json({ error: 'Credenciales inválidas' });
     }
     const u = result.rows[0];
-    if (u.status === 'SUSPENDED') return res.status(403).json({ error: 'Cuenta Suspendida.' });
+    if (u.status === 'SUSPENDED') return res.status(403).json({ error: 'Cuenta inhabilitada. Contacte a un administrador.' });
 
     let valid = false;
     if (u.password && (u.password.startsWith('$2b$') || u.password.startsWith('$2a$'))) {
@@ -48,6 +48,14 @@ router.post('/login', loginLimiter, validateBody(schemas.login), async (req, res
     }
 
     pool.query(`INSERT INTO login_history(username,ip,success) VALUES($1,$2,TRUE)`, [u.username, ip]).catch(() => {});
+
+    // Bloqueo por licencia vencida: solo SUPERADMIN puede entrar (para renovarla).
+    if (u.role !== 'SUPERADMIN') {
+      const lic = await getLicenseStatus();
+      if (lic.expired) {
+        return res.status(403).json({ error: `Licencia vencida el ${lic.expiry}. Contacte al proveedor para renovarla.`, license_expired: true });
+      }
+    }
 
     // Resolver scope y assigned_clients
     const isAdminRole = ['ADMIN','SUPERADMIN'].includes(u.role);

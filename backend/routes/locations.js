@@ -5,12 +5,23 @@
 
 const express = require('express');
 const { pool, mapDbError } = require('../db');
-const { requireAdmin, requireSuperAdmin } = require('../middleware');
+const { requireSuperAdmin, requireJefe } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 
 const router = express.Router();
 
 const VALID_LOC_TYPES = ['RACK', 'SHELF', 'FLOOR', 'DOCK', 'PALLET'];
+
+// Formato canónico del código de ubicación: 4 segmentos bodega-pasillo-columna-fila.
+// La zona NO va embebida en el código (vive en zone_code). La columna lleva 2 dígitos.
+// Acepta: '1-a-01-1', '3-A-01-1'.  Rechaza: 'B1-RES-A-01-01' (zona embebida, 5 seg),
+// '1-a-1-1' (columna sin padding), 'RACK-A-01' (legacy 3 seg).
+// PISO-RECEPCION y otras ubicaciones de staging se validan aparte (no son racks).
+const CANONICAL_LOC = /^[A-Za-z0-9]+-[A-Za-z]+-\d{2}-\d+$/;
+const isCanonicalLoc = (id) => typeof id === 'string' && CANONICAL_LOC.test(id);
+// Tipos de ubicación de staging/área: usan código libre (no rack direccionable),
+// por lo que se eximen del formato canónico de 4 segmentos.
+const STAGING_LOC_TYPES = ['FLOOR', 'DOCK'];
 
 // Calcula x/y/z automáticamente a partir de aisle/row_num/level.
 // Patrón espaciado: 2.5m entre pasillos, 1.5m entre columnas, 2.2m entre niveles.
@@ -34,7 +45,7 @@ function buildLocId(warehouse, aisle, row_num, level) {
   return `${warehouse}-${aisle}-${String(row_num).padStart(2, '0')}-${level}`;
 }
 
-router.post('/locations', requireAdmin, async (req, res) => {
+router.post('/locations', requireJefe, async (req, res) => {
   const b = req.body || {};
 
   // Validar campos estructurales del nuevo formato de 4 segmentos
@@ -54,6 +65,13 @@ router.post('/locations', requireAdmin, async (req, res) => {
 
   const locType = (b.loc_type && VALID_LOC_TYPES.includes(String(b.loc_type).toUpperCase()))
     ? String(b.loc_type).toUpperCase() : 'RACK';
+
+  // Rechazar formatos no canónicos (zona embebida, sin padding, legacy) en ubicaciones
+  // direccionables (rack/estante/pallet). Las de staging/área (FLOOR/DOCK, ej. PISO-RECEPCION)
+  // usan código libre y se eximen de la regla de 4 segmentos.
+  if (!STAGING_LOC_TYPES.includes(locType) && !isCanonicalLoc(locId)) {
+    return res.status(400).json({ error: `Formato de ubicación inválido: '${locId}'. Debe ser bodega-pasillo-columna-fila (ej: 1-a-01-1). La zona va en zone_code, no en el código.` });
+  }
 
   // Coordenadas 3D — calcular siempre desde aisle/row/level si no vienen explícitas
   const auto = autoCoords(aisle, rowNum, lvl);
@@ -92,7 +110,7 @@ router.post('/locations', requireAdmin, async (req, res) => {
 
 // PUT /locations/:id — actualizar campos (incluye 3D).
 // Busca el ID tal como llega (case-sensitive) para soportar pasillos en minúscula.
-router.put('/locations/:id', requireAdmin, async (req, res) => {
+router.put('/locations/:id', requireJefe, async (req, res) => {
   const b = req.body || {};
   const locId = String(req.params.id);  // sin toUpperCase
   try {
@@ -153,7 +171,7 @@ router.put('/locations/:id', requireAdmin, async (req, res) => {
 });
 
 // GET /locations/audit-3d — detecta ubicaciones sin posición 3D, duplicados y huérfanos.
-router.get('/locations/audit-3d', requireAdmin, async (req, res) => {
+router.get('/locations/audit-3d', requireJefe, async (req, res) => {
   try {
     const [counts, dupes, withoutCoords, orphans] = await Promise.all([
       pool.query(`
@@ -282,10 +300,27 @@ router.post('/locations/migrate-3d', requireSuperAdmin, async (req, res) => {
 });
 
 // Inserción masiva — evita N peticiones desde el frontend (REN-05)
-router.post('/locations/bulk', requireAdmin, async (req, res) => {
+router.post('/locations/bulk', requireJefe, async (req, res) => {
   const { locations, overwrite } = req.body;
   if (!Array.isArray(locations) || locations.length === 0) return res.status(400).json({ error: 'Enviar array locations.' });
   if (locations.length > 5000) return res.status(400).json({ error: 'Máximo 5.000 ubicaciones por operación.' });
+
+  // Validación previa: todos los códigos deben ser canónicos. Si alguno falla, se rechaza
+  // el lote completo (no se inserta nada) para no reintroducir formatos duplicados.
+  const invalid = [];
+  for (const loc of locations) {
+    const id = loc.location_id
+      ? String(loc.location_id).trim()
+      : (loc.warehouse && loc.aisle != null && loc.row_num != null && loc.level != null
+          ? buildLocId(loc.warehouse, loc.aisle, loc.row_num, loc.level)
+          : null);
+    const lt = (loc.loc_type || 'RACK').toUpperCase();
+    if (!id || (!STAGING_LOC_TYPES.includes(lt) && !isCanonicalLoc(id))) invalid.push(id || '(incompleto)');
+  }
+  if (invalid.length) {
+    return res.status(400).json({ error: `Se rechazó el lote: ${invalid.length} código(s) con formato no canónico (ej: ${invalid.slice(0, 3).join(', ')}). Debe ser bodega-pasillo-columna-fila como 1-a-01-1.` });
+  }
+
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
@@ -349,7 +384,7 @@ router.post('/locations/bulk', requireAdmin, async (req, res) => {
 });
 
 // Update masivo de zona/tipo
-router.put('/locations/bulk', requireAdmin, async (req, res) => {
+router.put('/locations/bulk', requireJefe, async (req, res) => {
   const { location_ids, zone_code, loc_type } = req.body;
   if (!Array.isArray(location_ids) || location_ids.length === 0) return res.status(400).json({ error: 'Enviar array location_ids.' });
   try {
@@ -364,7 +399,7 @@ router.put('/locations/bulk', requireAdmin, async (req, res) => {
 });
 
 // Delete masivo por IDs (no toca PISO-RECEPCION ni ubicaciones con stock)
-router.post('/locations/bulk-delete', requireAdmin, async (req, res) => {
+router.post('/locations/bulk-delete', requireJefe, async (req, res) => {
   const { location_ids } = req.body;
   if (!Array.isArray(location_ids) || location_ids.length === 0) return res.status(400).json({ error: 'Enviar array location_ids.' });
   try {
@@ -377,7 +412,7 @@ router.post('/locations/bulk-delete', requireAdmin, async (req, res) => {
 });
 
 // Delete masivo de TODAS las vacías (REN-09)
-router.delete('/locations/bulk', requireAdmin, async (req, res) => {
+router.delete('/locations/bulk', requireJefe, async (req, res) => {
   try {
     const result = await pool.query(
       `DELETE FROM locations_master WHERE location_id != 'PISO-RECEPCION'
@@ -388,7 +423,7 @@ router.delete('/locations/bulk', requireAdmin, async (req, res) => {
   } catch(err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.delete('/locations/:id', requireAdmin, async (req, res) => {
+router.delete('/locations/:id', requireJefe, async (req, res) => {
   try {
     if (req.params.id === 'PISO-RECEPCION') return res.status(400).json({ error: "'PISO-RECEPCION' es la ubicación base del sistema y no puede eliminarse." });
     const check = await pool.query('SELECT COUNT(*) as count FROM inventory_lpns WHERE location_id=$1 AND qty>0', [req.params.id]);
@@ -402,7 +437,7 @@ router.delete('/locations/:id', requireAdmin, async (req, res) => {
 // POST /locations/move-orphans-to-reception
 // Mueve todos los LPNs en ubicaciones huérfanas (no existen en locations_master)
 // a PISO-RECEPCION. Requiere admin.
-router.post('/locations/move-orphans-to-reception', requireAdmin, async (req, res) => {
+router.post('/locations/move-orphans-to-reception', requireJefe, async (req, res) => {
   try {
     const result = await pool.query(`
       UPDATE inventory_lpns
