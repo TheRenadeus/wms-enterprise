@@ -244,7 +244,7 @@ const writeHandlers = {
   // POST /api/cycle-count
   'POST:/api/cycle-count': (state, body) => {
     const id = genDemoLpnId('CC');
-    state.cycleCount.unshift({ id, ...body, status: 'EN_PROGRESO', created_by: 'sandbox', created_at: nowIso() });
+    state.cycleCount.unshift({ id, ...body, status: 'PENDING', created_by: 'sandbox', created_at: nowIso() });
     return { success: true, demo: true, id };
   },
 
