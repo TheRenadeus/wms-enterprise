@@ -367,10 +367,10 @@ router.post('/sku-resources', requireJefeOrAbove, async (req, res) => {
   if (!sku || !client_id) return res.status(400).json({ error: 'Se requieren sku y client_id.' });
   if (!resource_name || !String(resource_name).trim()) return res.status(400).json({ error: 'Nombre del recurso es requerido.' });
   const rType = (resource_type === 'HH') ? 'HH' : 'MATERIAL';
-  const qtyVal = parseFloat(qty_per_unit) || 1;
+  const qtyVal = (qty_per_unit !== undefined && qty_per_unit !== null && qty_per_unit !== '') ? parseFloat(qty_per_unit) : 1;
   const hrsVal = parseFloat(hours_per_unit) || 0;
   const tUnit = (time_unit === 'MINUTOS') ? 'MINUTOS' : 'HORAS';
-  const persVal = parseInt(personnel_count) || 1;
+  const persVal = (personnel_count !== undefined && personnel_count !== null && personnel_count !== '') ? parseInt(personnel_count) : 1;
   if (qtyVal <= 0) return res.status(400).json({ error: 'qty_per_unit debe ser mayor a 0.' });
   try {
     const result = await pool.query(

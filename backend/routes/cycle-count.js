@@ -302,7 +302,7 @@ router.post('/cycle-count/:id/complete', requireStaff, async (req, res) => {
 
 // ── ADJUSTMENT REQUESTS ──────────────────────────────────────────────────────
 router.post('/adjust-request', requireStockWrite, async (req, res) => {
-  if (['ADMIN','SUPERADMIN'].includes(req.user.role))
+  if (['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(req.user.role))
     return res.status(400).json({ error: 'Los administradores aplican ajustes directamente.' });
   const { items, docNum, glosa } = req.body;
   if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Items requeridos.' });
@@ -318,7 +318,7 @@ router.post('/adjust-request', requireStockWrite, async (req, res) => {
 });
 
 router.post('/adjust-requests', requireStockWrite, checkClientAccess('write'), async (req, res) => {
-  if (['ADMIN','SUPERADMIN'].includes(req.user.role))
+  if (['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(req.user.role))
     return res.status(400).json({ error: 'Los administradores aplican ajustes directamente.' });
   const { lpn_id, sku, type, qty, reason, username } = req.body || {};
   if (!sku || qty === undefined || qty === null) return res.status(400).json({ error: 'sku y qty son requeridos.' });
@@ -338,7 +338,7 @@ router.post('/adjust-requests', requireStockWrite, checkClientAccess('write'), a
 
 router.get('/adjust-requests', requireAuth, async (req, res) => {
   const { status } = req.query;
-  const isAdmin = ['ADMIN','SUPERADMIN'].includes(req.user.role);
+  const isAdmin = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(req.user.role);
   try {
     let q = `SELECT * FROM adjustment_requests`;
     const params = []; const conds = [];

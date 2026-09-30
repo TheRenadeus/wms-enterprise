@@ -463,6 +463,17 @@ function getSandboxResponse(path, scenario, user) {
   if (cleanPath.startsWith('/api/billing/invoices')) return DEMO_INVOICES;
   if (cleanPath.startsWith('/api/reports/')) return [];
 
+  // Aislar sandbox de kitting-v2/insumos/transporte: sin esto, una cuenta demo
+  // terminaba cayendo al backend real conectado a Postgres y leyendo datos de
+  // producción (recetas, stock de insumos, flota). Shapes específicos donde el
+  // frontend espera un objeto; arreglo vacío como default seguro para listas.
+  if (cleanPath === '/api/transporte/dashboard') return { solicitudes: [], vehiculos: [], choferes: [], pionetas: [], pendientesCount: 0, envios: [] };
+  if (cleanPath.startsWith('/api/kitting/disponibilidad')) return { available: true, components: [] };
+  if (cleanPath.startsWith('/api/insumos/analisis')) return { total: 0, items: [] };
+  if (cleanPath.startsWith('/api/insumos')) return [];
+  if (cleanPath.startsWith('/api/kitting/')) return [];
+  if (cleanPath.startsWith('/api/transporte/')) return [];
+
   return null; // null = no interceptar, dejar pasar al handler real
 }
 

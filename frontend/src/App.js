@@ -3,8 +3,8 @@ import {
   LayoutDashboard, Package, Box, Map as MapIcon, ArrowDownRight,
   ArrowUpRight, Search, CheckCircle2, X, FileText,
   Calendar, Tag, Sliders, MessageSquare, ArrowRightLeft, History, ClipboardCheck,
-  Trash2, Plus, ListPlus, MinusCircle, FolderOpen, ArrowLeft, Pause, PlaySquare, Database, Warehouse, ShieldCheck, Truck, Loader2, Users, Building2, Pencil, Activity, RefreshCcw, ShieldAlert, FileType, UserCog, ArrowDownUp, LogOut, Eye, EyeOff, Settings2, Globe, Combine, Split, Edit, Layers, Scan, XCircle, PieChart, ChevronRight, BarChart3, Printer, Download, Upload, Menu, Bell, Key, Info, Lightbulb, ChevronDown, ChevronUp, Play,
-  ClipboardList, UserCheck, UserX, AlertTriangle, SkipForward, CheckCheck, ListTodo, CalendarClock, Clock, Send,
+  Trash2, Plus, ListPlus, MinusCircle, FolderOpen, ArrowLeft, Pause, PlaySquare, Database, Warehouse, ShieldCheck, Truck, Loader2, Users, Building2, Pencil, Activity, RefreshCcw, ShieldAlert, FileType, UserCog, ArrowDownUp, LogOut, Eye, EyeOff, Settings2, Globe, Combine, Split, Edit, Layers, Scan, PieChart, ChevronRight, BarChart3, Printer, Download, Upload, Menu, Bell, Key, Info, Lightbulb, ChevronDown, ChevronUp, Play,
+  ClipboardList, UserCheck, AlertTriangle, SkipForward, CheckCheck, ListTodo, CalendarClock, Clock, Send,
   HardHat, Wrench, Timer, Moon, Sun, BookOpen
 } from 'lucide-react';
 import { useAutoSaveState, apiFetch, setDemoMode, timeAgo, exportToExcel, descargarArchivoAutenticado } from './utils';
@@ -309,7 +309,7 @@ export default function App() {
         }
       } catch(e) {}
       try {
-        const isAdmin = ['ADMIN','SUPERADMIN'].includes(currentUser?.role);
+        const isAdmin = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
         const isEjec = currentUser?.role === 'EJECUTIVO_CUENTA';
         if (isAdmin || isEjec) {
           const rAR = await apiFetch(`${host}/api/adjust-requests${isAdmin ? '?status=PENDIENTE' : ''}`).catch(()=>null);
@@ -833,7 +833,7 @@ export default function App() {
   // En 3PL puro el cliente debe elegirse explícitamente; en PROPIO se fuerza siempre.
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN';
   const isDemo = currentUser?.role === 'DEMO' || currentUser?.is_demo === true;
-  const canManageMasters = isAdmin || currentUser?.role === 'EJECUTIVO_CUENTA' || isDemo;
+  const canManageMasters = isAdmin || currentUser?.role === 'JEFE_BODEGA' || isDemo;
   // Maestro/entradas/ajuste de INSUMOS: JEFE_BODEGA+. Consumo: EJECUTIVO_CUENTA+.
   const canManageInsumos = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) || isDemo;
   const canConsumeInsumos = ['EJECUTIVO_CUENTA','JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) || isDemo;
@@ -4903,7 +4903,7 @@ export default function App() {
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
                       <p className="text-sm font-black text-amber-800 uppercase tracking-tighter flex items-center gap-2">
-                        <ClipboardList size={15}/> {['ADMIN','SUPERADMIN'].includes(currentUser?.role) ? 'Solicitudes de Ajuste Pendientes' : 'Mis Solicitudes de Ajuste'}
+                        <ClipboardList size={15}/> {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) ? 'Solicitudes de Ajuste Pendientes' : 'Mis Solicitudes de Ajuste'}
                         {adjustRequests.filter(r=>r.status==='PENDIENTE').length > 0 && <span className="bg-amber-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black">{adjustRequests.filter(r=>r.status==='PENDIENTE').length}</span>}
                       </p>
                       <button onClick={async()=>{ const r=await apiFetch(`${host}/api/adjust-requests`); if(r.ok) setAdjustRequests(await r.json()); }} className="text-[9px] text-slate-400 hover:text-slate-700 font-black uppercase flex items-center gap-1"><RefreshCcw size={10}/> Actualizar</button>
@@ -4922,7 +4922,7 @@ export default function App() {
                             {req.reject_reason && <p className="text-[10px] text-red-500 mt-1">Rechazo: "{req.reject_reason}"</p>}
                             {req.authorized_by && <p className="text-[10px] text-slate-400">Procesado por <strong>{req.authorized_by}</strong></p>}
                           </div>
-                          {req.status === 'PENDIENTE' && ['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
+                          {req.status === 'PENDIENTE' && ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
                             <div className="flex gap-2 shrink-0">
                               <button onClick={async()=>{
                                 if(!(await confirm({ message: `¿Aprobar el ajuste de stock del documento ${req.doc_num}?`, danger: true }))) return;

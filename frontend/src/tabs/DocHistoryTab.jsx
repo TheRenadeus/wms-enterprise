@@ -26,7 +26,7 @@ export default function DocHistoryTab({
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><History className="text-slate-500"/> Historial de Documentos</h1>
         <div className="flex gap-2">
-          {['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
+          {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
             <button onClick={async()=>{ const r=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`); if(r.ok){const d=await r.json();setAnulationRequests(d);} setAnulHistoryTab('requests'); }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-colors ${anulHistoryTab==='requests'?'bg-red-600 text-white shadow-md':'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200'}`}>
               <XCircle size={12}/> Solicitudes Anulación
               {anulationRequests.filter(r=>r.status==='PENDIENTE').length > 0 && <span className="bg-white text-red-600 px-1.5 rounded-full text-[8px] font-black">{anulationRequests.filter(r=>r.status==='PENDIENTE').length}</span>}
@@ -38,7 +38,7 @@ export default function DocHistoryTab({
       </div>
 
       {/* ── SOLICITUDES DE ANULACIÓN (solo admins) ── */}
-      {anulHistoryTab === 'requests' && ['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
+      {anulHistoryTab === 'requests' && ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
         <div className="space-y-3">
           <div className="flex gap-2 items-center">
             {['PENDIENTE','APROBADA','RECHAZADA'].map(s=>(
@@ -122,7 +122,7 @@ export default function DocHistoryTab({
             {docHistory.slice(docHistoryPage * 50, (docHistoryPage + 1) * 50).map(doc => {
               const isVoided = doc.status === 'ANULADO';
               const canVoid = ['receive','dispatch'].includes(doc.module) && !isVoided;
-              const isAdmin = ['ADMIN','SUPERADMIN'].includes(currentUser?.role);
+              const isAdmin = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
               return (
                 <div key={doc.id} className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${isVoided?'border-red-200 opacity-70':'border-slate-200'}`}>
                   <div className="flex items-center justify-between p-5 cursor-pointer hover:bg-slate-50" onClick={() => setExpandedHistoryDoc(expandedHistoryDoc===doc.id ? null : doc.id)}>
@@ -192,18 +192,18 @@ export default function DocHistoryTab({
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md">
             <div className="bg-red-600 rounded-t-3xl px-6 py-5 flex items-center justify-between">
               <div>
-                <p className="text-white font-black uppercase tracking-tight flex items-center gap-2"><XCircle size={18}/> {['ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Documento':'Solicitar Anulación'}</p>
+                <p className="text-white font-black uppercase tracking-tight flex items-center gap-2"><XCircle size={18}/> {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Documento':'Solicitar Anulación'}</p>
                 <p className="text-red-200 text-[11px] mt-0.5 uppercase font-bold">[{voidModal.doc.doc_type||voidModal.doc.module}] {voidModal.doc.doc_num}</p>
               </div>
               <button onClick={()=>setVoidModal(null)} className="text-white/70 hover:text-white"><X size={18}/></button>
             </div>
             <div className="p-6 space-y-4">
-              {!['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
+              {!['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[11px] text-amber-800 font-bold">
                   ⚠️ No tienes permisos para anular directamente. Se enviará una solicitud a un administrador para su aprobación.
                 </div>
               )}
-              {['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
+              {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-[11px] text-red-800 font-bold">
                   ⚠️ Esta acción {voidModal.doc.module==='receive'?'eliminará los LPNs creados en esta recepción':'restaurará las cantidades despachadas al inventario'}. No se puede deshacer.
                 </div>
@@ -215,7 +215,7 @@ export default function DocHistoryTab({
               <div className="flex gap-3">
                 <button onClick={()=>setVoidModal(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl py-3 font-black uppercase text-[10px] transition-colors">Cancelar</button>
                 <button disabled={!voidReason.trim()} onClick={async()=>{
-                  const isAdmin = ['ADMIN','SUPERADMIN'].includes(currentUser?.role);
+                  const isAdmin = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
                   const endpoint = isAdmin
                     ? `${host}/api/document-history/${voidModal.doc.id}/void`
                     : `${host}/api/document-history/${voidModal.doc.id}/void-request`;
@@ -229,7 +229,7 @@ export default function DocHistoryTab({
                     if(isAdmin) fetchData();
                   } else {const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
                 }} className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl py-3 font-black uppercase text-[10px] transition-colors flex items-center justify-center gap-2">
-                  <XCircle size={14}/> {['ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Ahora':'Enviar Solicitud'}
+                  <XCircle size={14}/> {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Ahora':'Enviar Solicitud'}
                 </button>
               </div>
             </div>

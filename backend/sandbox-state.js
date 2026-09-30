@@ -119,8 +119,8 @@ const writeHandlers = {
     return { success: true, demo: true };
   },
 
-  // POST /api/change-status { id, new_status, glosa, ... }
-  'POST:/api/change-status': (state, body) => {
+  // POST /api/inventory/status { id, new_status, glosa, ... }
+  'POST:/api/inventory/status': (state, body) => {
     const id = body.id || body.lpn_id;
     if (id) {
       state.inventoryOverrides.set(id, { ...(state.inventoryOverrides.get(id) || {}), status: body.new_status });
@@ -157,8 +157,8 @@ const writeHandlers = {
   },
   'POST:/api/inventory_batch': (state, body) => writeHandlers['POST:/api/receive_batch'](state, body),
 
-  // POST /api/dispatch — reduce qty / marca deleted
-  'POST:/api/dispatch': (state, body) => {
+  // POST /api/dispatch_batch — reduce qty / marca deleted
+  'POST:/api/dispatch_batch': (state, body) => {
     const items = body.items || [];
     for (const it of items) {
       const lpnId = it.lpnId || it.lpn_id;
@@ -242,7 +242,7 @@ const writeHandlers = {
   },
 
   // POST /api/cycle-count
-  'POST:/api/cycle-count': (state, body) => {
+  'POST:/api/cycle-count/create': (state, body) => {
     const id = genDemoLpnId('CC');
     state.cycleCount.unshift({ id, ...body, status: 'PENDING', created_by: 'sandbox', created_at: nowIso() });
     return { success: true, demo: true, id };
@@ -256,18 +256,27 @@ const writeHandlers = {
   },
 };
 
-// Resuelve un handler de write. Soporta paths con `:id` simples.
+// Resuelve un handler de write. Soporta paths con `:id` al final
+// (/prefix/:id) y con `:id` seguido de una acción literal (/prefix/:id/accion,
+// ej. /relocate-requests/:id/approve) — antes esta última forma era
+// permanentemente inalcanzable porque el regex ponía `:id` en el segmento
+// equivocado.
 function findWriteHandler(method, path) {
   const exact = `${method}:${path}`;
   if (writeHandlers[exact]) return { fn: writeHandlers[exact], params: {} };
-  // intentar match con :id al final
-  const m = path.match(/^(.+\/)([^/]+)(\/[^/]+)?$/);
-  if (!m) return null;
-  const tryPaths = [
-    `${method}:${m[1]}:id${m[3] || ''}`,
-  ];
-  for (const tp of tryPaths) {
-    if (writeHandlers[tp]) return { fn: writeHandlers[tp], params: { id: m[2] } };
+  const segments = path.split('/').filter(Boolean);
+  // Caso "/prefix/:id"
+  if (segments.length >= 1) {
+    const id = segments[segments.length - 1];
+    const key = `${method}:/${segments.slice(0, -1).join('/')}/:id`;
+    if (writeHandlers[key]) return { fn: writeHandlers[key], params: { id } };
+  }
+  // Caso "/prefix/:id/accion"
+  if (segments.length >= 2) {
+    const id = segments[segments.length - 2];
+    const suffix = segments[segments.length - 1];
+    const key = `${method}:/${segments.slice(0, -2).join('/')}/:id/${suffix}`;
+    if (writeHandlers[key]) return { fn: writeHandlers[key], params: { id } };
   }
   return null;
 }
