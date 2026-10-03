@@ -13,7 +13,6 @@ services:
       # Solo accesible desde localhost del host (no exponer Postgres a la red).
       - "127.0.0.1:5432:5432"
     volumes:
-      - ./db-init:/docker-entrypoint-initdb.d
       - wms-pgdata:/var/lib/postgresql/data
   wms-api:
     build: ./backend
