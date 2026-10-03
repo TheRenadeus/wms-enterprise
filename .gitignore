@@ -2,6 +2,8 @@
 # Patrón sin slash → ignora .env en cualquier carpeta (raíz y backend/).
 # Las plantillas .env.example NO se ignoran (no coinciden con este patrón).
 .env
+.env.*
+!.env.example
 
 # ── Dependencias / builds ────────────────────────────────────────
 node_modules/
