@@ -120,6 +120,10 @@ borra la línea «Próximamente» y quita estos marcadores de comentario.
 | ![Recepción](docs/capturas/recepcion.png) | ![Despacho](docs/capturas/despacho.png) |
 -->
 
+## Hoja de ruta
+
+Las mejoras planificadas están en [ROADMAP.md](ROADMAP.md).
+
 ## Autor
 
 **Renato Cavalcanti**
