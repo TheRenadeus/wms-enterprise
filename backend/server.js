@@ -56,7 +56,16 @@ const {
 const path = require('path');
 const fs = require('fs');
 const app = express();
-app.set('trust proxy', 1); // Necesario para rate-limit detrás de ngrok/nginx
+// Saltos de proxy de confianza para obtener la IP real (rate limit y registro de accesos).
+// 1 = nginx del frontend (instalación base); 2 = Caddy + nginx (deploy/docker-compose.https.yml).
+// Acepta también los valores de Express: 'loopback', una lista de IP o subredes, 'true' o 'false'.
+const parseTrustProxy = (v) => {
+  if (v === undefined || v === '') return 1;
+  if (/^\d+$/.test(v)) return Number(v);
+  if (v === 'true' || v === 'false') return v === 'true';
+  return v;
+};
+app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
 
 // JWT_SECRET: fatal en producción, advertencia en desarrollo
 if (!process.env.JWT_SECRET) {

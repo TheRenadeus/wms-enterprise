@@ -83,6 +83,12 @@ Para detenerlo: `docker compose down` (los datos quedan en el volumen `wms-pgdat
 `start.sh` y `stop.sh` son scripts del entorno del autor: levantan el backend con pm2 y lo exponen con
 ngrok, sin Docker.
 
+## Implementación en clientes
+
+- [Instalación en servidor, HTTPS, respaldos y actualizaciones](docs/instalacion.md)
+- [Carga inicial de datos](docs/carga-inicial.md)
+- [Lista de verificación de puesta en marcha](docs/checklist-puesta-en-marcha.md)
+
 ## Estructura del proyecto
 
 ```
