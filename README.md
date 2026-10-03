@@ -101,11 +101,8 @@ wms-enterprise/
 
 ## Capturas
 
-_Próximamente._
-
-<!--
-Para mostrarlas: guarda las imágenes en docs/capturas/ con estos nombres (ver docs/capturas/LEEME.md),
-borra la línea «Próximamente» y quita estos marcadores de comentario.
+Con los datos de ejemplo que trae el sistema (`SEED_DEMO_DATA=true`). El mapa de la bodega es del
+modo de prueba (escenario Operador 3PL).
 
 | Panel principal | Inventario por LPN |
 |---|---|
@@ -118,7 +115,6 @@ borra la línea «Próximamente» y quita estos marcadores de comentario.
 | Recepción | Despacho |
 |---|---|
 | ![Recepción](docs/capturas/recepcion.png) | ![Despacho](docs/capturas/despacho.png) |
--->
 
 ## Hoja de ruta
 

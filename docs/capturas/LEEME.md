@@ -1,7 +1,7 @@
 # Capturas
 
-Imágenes que muestra el README. Guarda aquí las capturas con estos nombres (PNG, idealmente 1600 px de
-ancho) o cambia las rutas en el README:
+Imágenes que muestra el README. Guarda aquí las capturas con estos nombres (PNG de 1280 × 800 px,
+tomadas a 1600 × 1000 y reducidas) o cambia las rutas en el README:
 
 - `panel.png`: panel principal
 - `inventario.png`: inventario por LPN
