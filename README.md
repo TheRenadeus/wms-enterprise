@@ -90,11 +90,10 @@ wms-enterprise/
 ├── backend/            API REST (Node.js + Express)
 │   ├── server.js       arranque: migraciones, middleware, alertas y rutas
 │   ├── routes/         un módulo por área: inventario, recepción, despacho, conteos, transporte…
-│   ├── migrations/     cambios de esquema versionados (001, 002, …)
+│   ├── migrations/     esquema de la base, versionado (001, 002, …); se aplica al arrancar
 │   └── middleware.js   autenticación JWT, roles y límites de solicitudes
 ├── frontend/           aplicación web (React)
 │   └── src/            App.js, componentes y pestañas (tabs/) de cada módulo
-├── db-init/            init.sql: esquema base que PostgreSQL carga al crear la base
 ├── docker-compose.yml  base de datos, API y frontend
 └── .env.example        variables de entorno de ejemplo
 ```

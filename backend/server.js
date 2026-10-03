@@ -279,15 +279,6 @@ app.use('/api', docHistoryRouter);        // /document-history, /anulation-reque
 
 // Escrituras de SKU (POST/PUT/DELETE, versiones) -> routes/skus.js (COD-02)
 
-// Migración dinámica: columnas extra para locations_master (MEJORA 5)
-(async () => {
-  try {
-    await pool.query(`ALTER TABLE locations_master ADD COLUMN IF NOT EXISTS loc_type VARCHAR(20) DEFAULT 'PALLET'`);
-    await pool.query(`ALTER TABLE locations_master ADD COLUMN IF NOT EXISTS max_kg NUMERIC DEFAULT 0`);
-    await pool.query(`ALTER TABLE locations_master ADD COLUMN IF NOT EXISTS max_pallets INTEGER DEFAULT 0`);
-  } catch(e) { /* tabla aún no existe en bootstrap, se reintentará */ }
-})();
-
 // /api/locations writes (+ bulk) → routes/locations.js
 
 // Transiciones de estado permitidas

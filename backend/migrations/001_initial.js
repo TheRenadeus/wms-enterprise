@@ -50,10 +50,12 @@ async function run(pool) {
 
   await pool.query(`CREATE TABLE IF NOT EXISTS users (username VARCHAR(50) PRIMARY KEY, full_name VARCHAR(150), password VARCHAR(255), role VARCHAR(50) DEFAULT 'EJECUTIVO_CUENTA', status VARCHAR(20) DEFAULT 'ACTIVE', allowed_clients TEXT DEFAULT 'ALL', allowed_modules TEXT DEFAULT 'ALL')`);
 
-  // ── Seeds de admin/demo, hasheadas con bcrypt ────────────────────────────
+  // ── Seed del admin, hasheada con bcrypt ──────────────────────────────────
   // (Cambio de siembra, no de schema: solo afecta instalaciones nuevas.) Ninguna contraseña queda en el código:
-  // se toma de SEED_ADMIN_PASSWORD / SEED_DEMO_PASSWORD o, si falta, se genera una aleatoria que se muestra una
-  // sola vez en la consola del backend, para el primer ingreso.
+  // se toma de SEED_ADMIN_PASSWORD o, si falta, se genera una aleatoria que se muestra una sola vez en la
+  // consola del backend, para el primer ingreso.
+  // No se crea un usuario 'demo': DEMO no es un rol asignable (CHECK users_role_chk de la migración 015, que
+  // fallaba si existía) y el modo de prueba emite ese rol en el token desde /api/demo/login.
   const seedUser = async (username, fullName, role, envVar) => {
     const fromEnv = process.env[envVar];
     const pwd = fromEnv || crypto.randomBytes(12).toString('base64url');
@@ -69,9 +71,6 @@ async function run(pool) {
     }
   };
   await seedUser('admin', 'Administrador del Sistema', 'ADMIN', 'SEED_ADMIN_PASSWORD');
-  if (process.env.SEED_DEMO_PASSWORD || process.env.NODE_ENV !== 'production') {
-    await seedUser('demo', 'Usuario Demo', 'DEMO', 'SEED_DEMO_PASSWORD');
-  }
 
   // Migrar contraseñas en texto plano heredadas (legacy) a bcrypt
   const plainUsers = await pool.query("SELECT username, password FROM users WHERE password NOT LIKE '$2b$%' AND password NOT LIKE '$2a$%'");

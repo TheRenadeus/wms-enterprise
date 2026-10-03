@@ -13,7 +13,6 @@ services:
       # Solo accesible desde localhost del host (no exponer Postgres a la red).
       - "127.0.0.1:5432:5432"
     volumes:
-      - ./db-init:/docker-entrypoint-initdb.d
       - wms-pgdata:/var/lib/postgresql/data
   wms-api:
     build: ./backend
@@ -33,10 +32,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:?Define JWT_SECRET en el .env de la raíz}
       ALLOWED_ORIGIN: ${ALLOWED_ORIGIN:-*}
       LOAD_TEST: "${LOAD_TEST:-0}"
-      # Contraseña inicial de 'admin' (y de 'demo' fuera de producción). Si falta, el backend genera una
-      # aleatoria y la muestra una sola vez en su consola: docker compose logs wms-api
+      # Contraseña inicial de 'admin'. Si falta, el backend genera una aleatoria y la muestra una sola vez
+      # en su consola: docker compose logs wms-api
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-}
-      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-}
       # Secreto de los tokens del portal de clientes (por defecto se deriva de JWT_SECRET).
       PORTAL_SECRET: ${PORTAL_SECRET:-}
       # SEC-10: cuenta SUPERADMIN fija (ver ensureSuperadmin en server.js). Opcional:
