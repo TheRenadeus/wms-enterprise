@@ -218,8 +218,6 @@ const bootstrap = async (retries = 6, delay = 3000) => {
     await checkDisasterRecovery();
     await ensureSuperadmin();
     console.log('✅ Base de Datos V11.0 iniciada correctamente');
-    setTimeout(generateAlerts, 5000);
-    setInterval(generateAlerts, 60 * 60 * 1000);
   } catch (err) {
     if (retries > 0) {
       console.log(`⏳ DB no disponible, reintentando en ${Math.round(delay/1000)}s... (${retries} intentos restantes): ${err.message}`);
@@ -449,6 +447,16 @@ app.get('*', (req, res) => {
   });
 });
 
-bootstrap().then(() => {
-  app.listen(3000, '0.0.0.0', () => console.log('🚀 API V10.0 ONLINE'));
-});
+// Arranque: migraciones, tareas periódicas y servidor HTTP. Las pruebas importan
+// `app` y `bootstrap` sin escuchar el puerto ni programar tareas.
+const start = async () => {
+  await bootstrap();
+  setTimeout(generateAlerts, 5000);
+  setInterval(generateAlerts, 60 * 60 * 1000);
+  const port = Number(process.env.PORT) || 3000;
+  return app.listen(port, '0.0.0.0', () => console.log(`🚀 API V10.0 ONLINE en el puerto ${port}`));
+};
+
+if (require.main === module) start();
+
+module.exports = { app, bootstrap, start };

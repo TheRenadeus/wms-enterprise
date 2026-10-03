@@ -11,7 +11,12 @@
     "jsonwebtoken": "^9.0.2",
     "node-cache": "^5.1.2",
     "pg": "^8.20.0",
-    "uuid": "^9.0.1",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "embedded-postgres": "^15.18.0-beta.17"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 --test-force-exit test/*.test.js"
   }
 }

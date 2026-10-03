@@ -1,7 +1,7 @@
 // Helpers compartidos entre routers. Originalmente vivían inline en server.js.
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 
-const genLpnId = (prefix = 'LPN') => `${prefix}-${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+const genLpnId = (prefix = 'LPN') => `${prefix}-${randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
 
 // Registra un evento de almacenaje para cobro 3PL. No-op si client_id es propio.
 // Use la conexión transaccional del caller (`dbClient`) para que el evento se
