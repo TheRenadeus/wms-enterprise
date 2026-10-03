@@ -64,7 +64,7 @@ if (!process.env.JWT_SECRET) {
     console.error('❌ [SEGURIDAD] JWT_SECRET no configurado. Abortando inicio en modo producción.');
     process.exit(1);
   }
-  console.warn('⚠️  [SEGURIDAD] JWT_SECRET no configurado — se usa valor por defecto. Configura la variable de entorno en producción.');
+  console.warn('⚠️  [SEGURIDAD] JWT_SECRET no configurado — se usa un secreto aleatorio temporal (las sesiones se cierran al reiniciar). Defínelo en el .env.');
 }
 
 app.use(cors({

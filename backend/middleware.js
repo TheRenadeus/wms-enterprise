@@ -3,7 +3,11 @@ const bcrypt = require('bcryptjs');
 const rateLimit = require('express-rate-limit');
 const { pool } = require('./db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'wms-dev-secret-cambiar-en-produccion';
+const crypto = require('crypto');
+
+// Sin JWT_SECRET (solo en desarrollo: en producción server.js aborta el arranque) se usa un secreto aleatorio
+// por arranque, nunca uno fijo en el código: las sesiones se cierran al reiniciar el backend.
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
 // ── AUTENTICACIÓN ────────────────────────────────────────────────────────────
 const requireAuth = (req, res, next) => {

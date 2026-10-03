@@ -97,11 +97,8 @@ CREATE TABLE IF NOT EXISTS users (
   allowed_clients TEXT DEFAULT 'ALL',
   allowed_modules TEXT DEFAULT 'ALL'
 );
--- SEC-10: la cuenta 'admin' genérica de ejemplo se conserva solo para instalaciones
--- nuevas (password en texto plano de bajo riesgo, pensada para cambiarse al primer login).
-INSERT INTO users (username, full_name, password, role, status, allowed_clients, allowed_modules)
-VALUES ('admin', 'Administrador del Sistema', 'admin123', 'ADMIN', 'ACTIVE', 'ALL', 'ALL')
-ON CONFLICT DO NOTHING;
+-- La cuenta 'admin' inicial NO se siembra aquí: la crea el backend al arrancar (migración 001) con
+-- SEED_ADMIN_PASSWORD del .env o, si falta, con una contraseña aleatoria que muestra en su consola.
 -- SEC-10: la cuenta SUPERADMIN fija YA NO se siembra aquí en texto plano.
 -- La crea/recrea ensureSuperadmin() en backend/server.js leyendo SUPERADMIN_USER/HASH
 -- desde el .env de la raíz (no versionado). Ver docker-compose.yml.

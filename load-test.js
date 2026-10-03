@@ -17,6 +17,7 @@
 //   CONC_SKUS=50
 //   CONC_MOVES=20
 //   API=http://localhost:3000
+//   LOAD_TEST_USER=admin  LOAD_TEST_PASSWORD=…   (credenciales del usuario con que se prueba)
 
 const http = require('http');
 const { performance } = require('perf_hooks');
@@ -67,7 +68,10 @@ function req(method, path, body) {
 }
 
 async function login() {
-  const r = await req('POST', '/api/login', { username: 'admin', password: 'admin123' });
+  // Credenciales desde el entorno (nunca en el código): LOAD_TEST_USER (por defecto admin) y LOAD_TEST_PASSWORD
+  const password = process.env.LOAD_TEST_PASSWORD;
+  if (!password) throw new Error('Define LOAD_TEST_PASSWORD (y LOAD_TEST_USER si no es admin) para el login de la prueba');
+  const r = await req('POST', '/api/login', { username: process.env.LOAD_TEST_USER || 'admin', password });
   const j = JSON.parse(r.body);
   if (!j.token) throw new Error('Login falló: ' + r.body);
   TOKEN = j.token;
