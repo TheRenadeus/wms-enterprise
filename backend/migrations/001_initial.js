@@ -9,6 +9,7 @@
 // runner de migraciones funciona correctamente, solo se ejecuta una vez.
 
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const silentExists = (prefix) => (e) => {
   if (!String(e.message).includes('already exists')) console.error(`[${prefix}]`, e.message);
@@ -49,37 +50,27 @@ async function run(pool) {
 
   await pool.query(`CREATE TABLE IF NOT EXISTS users (username VARCHAR(50) PRIMARY KEY, full_name VARCHAR(150), password VARCHAR(255), role VARCHAR(50) DEFAULT 'EJECUTIVO_CUENTA', status VARCHAR(20) DEFAULT 'ACTIVE', allowed_clients TEXT DEFAULT 'ALL', allowed_modules TEXT DEFAULT 'ALL')`);
 
-  // ── Seeds de admin/demo desde env vars, hasheadas con bcrypt ─────────────
-  const seedAdminPwd = process.env.SEED_ADMIN_PASSWORD;
-  const seedDemoPwd  = process.env.SEED_DEMO_PASSWORD;
-  if (seedAdminPwd) {
-    const hashedAdmin = await bcrypt.hash(seedAdminPwd, 12);
-    await pool.query(
+  // ── Seeds de admin/demo, hasheadas con bcrypt ────────────────────────────
+  // (Cambio de siembra, no de schema: solo afecta instalaciones nuevas.) Ninguna contraseña queda en el código:
+  // se toma de SEED_ADMIN_PASSWORD / SEED_DEMO_PASSWORD o, si falta, se genera una aleatoria que se muestra una
+  // sola vez en la consola del backend, para el primer ingreso.
+  const seedUser = async (username, fullName, role, envVar) => {
+    const fromEnv = process.env[envVar];
+    const pwd = fromEnv || crypto.randomBytes(12).toString('base64url');
+    const r = await pool.query(
       `INSERT INTO users (username, full_name, password, role, status, allowed_clients, allowed_modules)
-       VALUES ('admin', 'Administrador del Sistema', $1, 'ADMIN', 'ACTIVE', 'ALL', 'ALL')
-       ON CONFLICT DO NOTHING`, [hashedAdmin]);
-  } else if (process.env.NODE_ENV === 'production') {
-    console.error('❌ [SEGURIDAD] SEED_ADMIN_PASSWORD no configurado en producción. El usuario admin no será creado.');
-  } else {
-    const hashedAdmin = await bcrypt.hash('admin123', 12);
-    await pool.query(
-      `INSERT INTO users (username, full_name, password, role, status, allowed_clients, allowed_modules)
-       VALUES ('admin', 'Administrador del Sistema', $1, 'ADMIN', 'ACTIVE', 'ALL', 'ALL')
-       ON CONFLICT DO NOTHING`, [hashedAdmin]);
-    console.warn('⚠️  [SEGURIDAD] Usuario admin creado con contraseña por defecto (dev). Configure SEED_ADMIN_PASSWORD.');
-  }
-  if (seedDemoPwd) {
-    const hashedDemo = await bcrypt.hash(seedDemoPwd, 12);
-    await pool.query(
-      `INSERT INTO users (username, full_name, password, role, status, allowed_clients, allowed_modules)
-       VALUES ('demo', 'Usuario Demo', $1, 'DEMO', 'ACTIVE', 'ALL', 'ALL')
-       ON CONFLICT DO NOTHING`, [hashedDemo]);
-  } else if (process.env.NODE_ENV !== 'production') {
-    const hashedDemo = await bcrypt.hash('demo', 12);
-    await pool.query(
-      `INSERT INTO users (username, full_name, password, role, status, allowed_clients, allowed_modules)
-       VALUES ('demo', 'Usuario Demo', $1, 'DEMO', 'ACTIVE', 'ALL', 'ALL')
-       ON CONFLICT DO NOTHING`, [hashedDemo]);
+       VALUES ($1, $2, $3, $4, 'ACTIVE', 'ALL', 'ALL')
+       ON CONFLICT DO NOTHING RETURNING username`, [username, fullName, await bcrypt.hash(pwd, 12), role]);
+    if (r.rowCount && !fromEnv) {
+      console.log('\n' + '═'.repeat(64));
+      console.log(`🔑 Usuario inicial '${username}' creado con contraseña aleatoria: ${pwd}`);
+      console.log(`   Se muestra solo esta vez. Cámbiala al ingresar (o define ${envVar} en el .env).`);
+      console.log('═'.repeat(64) + '\n');
+    }
+  };
+  await seedUser('admin', 'Administrador del Sistema', 'ADMIN', 'SEED_ADMIN_PASSWORD');
+  if (process.env.SEED_DEMO_PASSWORD || process.env.NODE_ENV !== 'production') {
+    await seedUser('demo', 'Usuario Demo', 'DEMO', 'SEED_DEMO_PASSWORD');
   }
 
   // Migrar contraseñas en texto plano heredadas (legacy) a bcrypt
