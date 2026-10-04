@@ -58,17 +58,19 @@ const returnsInspectSchema = Joi.object({
   })).max(10000),
 }).or('qty_accepted', 'lines'); // al menos uno
 
+const asnReceiveLine = Joi.object({
+  asn_line_id: Joi.alternatives().try(Joi.number(), Joi.string()),
+  line_id: Joi.alternatives().try(Joi.number(), Joi.string()),
+  qty_received: Joi.number().min(0).max(1_000_000).required(),
+  location_id: Joi.string().trim().max(50).allow('', null),
+  batch_number: Joi.string().trim().max(100).allow('', null),
+  expiry_date: Joi.string().trim().max(30).allow('', null),
+  serial_number: Joi.string().trim().max(100).allow('', null),
+});
 const asnReceiveSchema = Joi.object({
-  received: Joi.array().items(Joi.object({
-    asn_line_id: Joi.alternatives().try(Joi.number(), Joi.string()),
-    line_id: Joi.alternatives().try(Joi.number(), Joi.string()),
-    qty_received: Joi.number().min(0).required(),
-  })),
-  lines: Joi.array().items(Joi.object({
-    asn_line_id: Joi.alternatives().try(Joi.number(), Joi.string()),
-    line_id: Joi.alternatives().try(Joi.number(), Joi.string()),
-    qty_received: Joi.number().min(0).required(),
-  })),
+  client_id: Joi.string().trim().max(50).allow('', null),
+  received: Joi.array().items(asnReceiveLine).max(10000),
+  lines: Joi.array().items(asnReceiveLine).max(10000),
 }).or('received', 'lines');
 
 const pickWaveCreateSchema = Joi.object({

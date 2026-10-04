@@ -5,6 +5,7 @@ const XLSX = require('xlsx');
 const { pool, mapDbError } = require('../db');
 const { requireAuth, requireStockWrite, requireJefe, stockWriteLimiter, checkClientAccess, checkBatchSkuClientAccess } = require('../middleware');
 const { genLpnId, logStorageEvent } = require('../helpers');
+const { erroresDeSerie } = require('../stock-entrante');
 const { clientAllowed, scopeCondition, OWN_CLIENTS } = require('../scope');
 const {
   getImportRows, validateStockRows, TEMPLATES, MAX_IMPORT_ROWS,
@@ -315,26 +316,6 @@ router.post('/import/clients', stockWriteLimiter, requireJefe, attachRows('clien
   } finally { dbClient.release(); }
   res.json({ success: prepared.length, errors: [] });
 });
-
-// Series ya usadas (en stock o repetidas en el archivo): el índice único (sku, serie)
-// haría fallar el insert completo con un error genérico.
-async function erroresDeSerie(db, valid) {
-  const conSerie = valid.filter(v => v.serial);
-  if (!conSerie.length) return [];
-  const errors = [];
-  const vistas = new Set();
-  for (const v of conSerie) {
-    const k = `${v.sku}||${v.serial}`;
-    if (vistas.has(k)) errors.push({ row: v.row, sku: v.sku, message: `Serie '${v.serial}' repetida en el archivo` });
-    vistas.add(k);
-  }
-  const r = await db.query(`SELECT sku, serial_number FROM inventory_lpns WHERE serial_number = ANY($1)`, [conSerie.map(v => v.serial)]);
-  const existentes = new Set(r.rows.map(x => `${String(x.sku).toUpperCase()}||${x.serial_number}`));
-  for (const v of conSerie) {
-    if (existentes.has(`${v.sku}||${v.serial}`)) errors.push({ row: v.row, sku: v.sku, message: `Serie '${v.serial}' ya existe para ${v.sku}` });
-  }
-  return errors;
-}
 
 router.post('/import/inventory', stockWriteLimiter, requireStockWrite, attachRows('inventory'), checkClientAccess('write'), async (req, res) => {
   const username = req.user.username;

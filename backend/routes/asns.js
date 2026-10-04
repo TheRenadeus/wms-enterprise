@@ -4,11 +4,12 @@
 
 const express = require('express');
 
-const { pool, mapDbError, isUniqueViolation } = require('../db');
+const { pool, mapDbError, isUniqueViolation, userError } = require('../db');
 const { requireAuth, requireJefe, requireJefeOrAbove, requireStockWrite, checkClientAccess } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId, logStorageEvent } = require('../helpers');
-const { scopeCondition } = require('../scope');
+const { scopeCondition, clientAllowed } = require('../scope');
+const { clienteDelDocumento, validarEntrada, rechazoEntrada, crearLpnsEntrada, httpError } = require('../stock-entrante');
 
 const router = express.Router();
 
@@ -75,90 +76,83 @@ router.post('/asns', requireJefeOrAbove, checkClientAccess('write'), async (req,
   if (supplier_id && !resolvedSupplierName) {
     try { const sr = await pool.query('SELECT name FROM suppliers WHERE id=$1', [supplier_id]); resolvedSupplierName = sr.rows[0]?.name || null; } catch(e){}
   }
-  // Dueño de la mercancía: el indicado, o el único cliente de los SKU del aviso.
-  let asnClientId = req.body.client_id ? String(req.body.client_id).trim().toUpperCase() : null;
-  if (!asnClientId && Array.isArray(lines)) {
-    const skus = [...new Set(lines.map(l => String(l?.sku || '').toUpperCase()).filter(Boolean))];
-    if (skus.length) {
-      const owners = await pool.query('SELECT DISTINCT client_id FROM master_skus WHERE sku = ANY($1)', [skus]);
-      if (owners.rows.length === 1) asnClientId = owners.rows[0].client_id;
-    }
-  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // Dueño de la mercancía: el indicado, o el único cliente de los SKU del aviso.
+    const lineas = Array.isArray(lines) ? lines.filter(l => l?.sku && parseFloat(l.qty_expected) > 0) : [];
+    const asnClientId = await clienteDelDocumento(client, req.body.client_id, lineas.map(l => l.sku));
+    if (!clientAllowed(req.clientScope, asnClientId)) throw httpError(403, `Acceso denegado al cliente '${asnClientId}'.`);
+    const skus = [...new Set(lineas.map(l => String(l.sku).trim().toUpperCase()))];
+    const existentes = new Set((await client.query('SELECT sku FROM master_skus WHERE sku = ANY($1) AND client_id=$2 AND deleted_at IS NULL', [skus, asnClientId])).rows.map(r => r.sku));
+    const faltan = skus.filter(s => !existentes.has(s));
+    if (faltan.length) throw httpError(400, `SKU que no existen para el cliente ${asnClientId}: ${faltan.join(', ')}`);
     await client.query(`INSERT INTO asns (id,supplier_id,supplier_name,expected_date,reference,notes,created_by,client_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
       [id, supplier_id||null, resolvedSupplierName, expected_date||null, reference||null, notes||null, req.user.username, asnClientId]);
-    if (Array.isArray(lines)) {
-      for (const l of lines) {
-        if (l.sku && parseFloat(l.qty_expected)>0)
-          await client.query(`INSERT INTO asn_lines (asn_id,sku,qty_expected,lot,notes) VALUES ($1,$2,$3,$4,$5)`,
-            [id, l.sku.toUpperCase(), parseFloat(l.qty_expected), l.lot||null, l.notes||null]);
-      }
+    for (const l of lineas) {
+      await client.query(`INSERT INTO asn_lines (asn_id,sku,qty_expected,lot,notes) VALUES ($1,$2,$3,$4,$5)`,
+        [id, String(l.sku).trim().toUpperCase(), parseFloat(l.qty_expected), l.lot||null, l.notes||null]);
     }
     await client.query('COMMIT');
     res.json({ success: true, id });
-  } catch(e){ await client.query('ROLLBACK'); if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe un ASN con la referencia '${reference}' para este proveedor.` }); res.status(500).json({ error: mapDbError(e) }); }
+  } catch(e){
+    await client.query('ROLLBACK').catch(() => {});
+    if (isUniqueViolation(e)) return res.status(409).json({ error: `Ya existe un ASN con la referencia '${reference}' para este proveedor.` });
+    res.status(e.status || (e.severity ? 500 : 400)).json({ error: userError(e) });
+  }
   finally { client.release(); }
 });
 
+// Recepción contra ASN: el stock es del cliente del aviso; no se recibe un aviso ya
+// completo ni por encima de lo esperado en cada línea.
 router.post('/asns/:id/receive', requireStockWrite, validateBody(schemas.asnReceive), async (req, res) => {
   const rawLines = req.body.received || req.body.lines || [];
-  const received = rawLines.map(r => ({
-    asn_line_id: r.asn_line_id || r.line_id,
-    qty_received: parseFloat(r.qty_received) || 0,
-    location_id: r.location_id || 'PISO-RECEPCION',
-    serial_number: r.serial_number || null,
-  }));
-  const defaultClientId = req.body.client_id || null;
-  const username = req.user.username;
+  const received = rawLines
+    .map(r => ({ ...r, asn_line_id: r.asn_line_id || r.line_id, qty_received: Number(r.qty_received) || 0 }))
+    .filter(r => r.asn_line_id && r.qty_received > 0);
+  if (!received.length) return res.status(400).json({ error: 'Ingrese al menos una cantidad a recibir.' });
+  const ids = received.map(r => String(r.asn_line_id));
+  if (new Set(ids).size !== ids.length) return res.status(400).json({ error: 'Cada línea del ASN puede venir una sola vez.' });
   const client = await pool.connect();
-  const createdLpns = [];
   try {
     await client.query('BEGIN');
+    const asn = (await client.query(`SELECT * FROM asns WHERE id=$1 FOR UPDATE`, [req.params.id])).rows[0];
+    if (!asn) throw httpError(404, 'ASN no encontrado.');
+    const lineasAsn = (await client.query(`SELECT id, sku, lot, qty_expected, qty_received FROM asn_lines WHERE asn_id=$1 ORDER BY id FOR UPDATE`, [asn.id])).rows;
+    const clientId = asn.client_id || await clienteDelDocumento(client, req.body.client_id, lineasAsn.map(l => l.sku));
+    if (!clientAllowed(req.clientScope, clientId)) throw httpError(404, 'ASN no encontrado.');
+    if (asn.status === 'RECIBIDO') throw httpError(409, 'Este ASN ya fue recibido completo.');
+    const porId = new Map(lineasAsn.map(l => [String(l.id), l]));
+    const filas = [];
     for (const r of received) {
-      if (!r.asn_line_id || r.qty_received <= 0) continue;
-      const lineQ = await client.query(
-        `SELECT id, sku, lot, qty_expected, qty_received FROM asn_lines WHERE id=$1 AND asn_id=$2 FOR UPDATE`,
-        [r.asn_line_id, req.params.id]
-      );
-      if (!lineQ.rows.length) continue;
-      const line = lineQ.rows[0];
-      await client.query(`UPDATE asn_lines SET qty_received = qty_received + $1 WHERE id=$2`,
-        [r.qty_received, r.asn_line_id]);
-      // Resolver client_id: cuerpo > master_skus.client_id por SKU > 'GENERAL'
-      let clientId = defaultClientId;
-      if (!clientId) {
-        const ms = await client.query(`SELECT client_id FROM master_skus WHERE sku=$1 LIMIT 1`, [line.sku]);
-        clientId = ms.rows[0]?.client_id || 'GENERAL';
-      }
-      const lpnId = genLpnId('ASN');
-      await client.query(
-        `INSERT INTO inventory_lpns (id, sku, qty, client_id, status, batch_number, serial_number, location_id, glosa)
-         VALUES ($1,$2,$3,$4,'DISPONIBLE',$5,$6,$7,$8)`,
-        [lpnId, line.sku, r.qty_received, clientId, line.lot || null, r.serial_number, r.location_id, `Recepción ASN ${req.params.id}`]
-      );
-      await client.query(
-        `INSERT INTO audit_log (type, sku, qty, glosa, username) VALUES ('INBOUND', $1, $2, $3, $4)`,
-        [line.sku, r.qty_received, `Recepción ASN ${req.params.id} LPN:${lpnId}`, username]
-      );
-      // Cobro 3PL: evento de movimiento de entrada
-      await logStorageEvent(client, { client_id: clientId, event_type: 'MOVIMIENTO_IN', sku: line.sku, lpn_id: lpnId, qty: r.qty_received, location_id: r.location_id });
-      createdLpns.push({ lpn_id: lpnId, sku: line.sku, qty: r.qty_received, client_id: clientId });
+      const line = porId.get(String(r.asn_line_id));
+      if (!line) throw httpError(400, `La línea ${r.asn_line_id} no pertenece a este ASN.`);
+      const pendiente = Number(line.qty_expected) - Number(line.qty_received || 0);
+      if (r.qty_received > pendiente) throw httpError(400, `${line.sku}: se intenta recibir ${r.qty_received} y solo quedan ${pendiente} por recibir.`);
+      filas.push({ sku: line.sku, qty: r.qty_received, location_id: r.location_id, batch_number: r.batch_number || line.lot,
+        expiry_date: r.expiry_date, serial_number: r.serial_number, lineId: line.id });
     }
-    const pending = await client.query(
-      `SELECT COUNT(*) AS cnt FROM asn_lines WHERE asn_id=$1 AND qty_received < qty_expected`,
-      [req.params.id]
-    );
-    const newStatus = parseInt(pending.rows[0].cnt) === 0 ? 'RECIBIDO' : 'PARCIAL';
+    const { valid, errors } = await validarEntrada(client, filas, clientId);
+    if (errors.length) throw rechazoEntrada(errors);
+    for (const r of received) {
+      await client.query(`UPDATE asn_lines SET qty_received = qty_received + $1 WHERE id=$2`, [r.qty_received, r.asn_line_id]);
+    }
+    const creados = await crearLpnsEntrada(client, valid, {
+      prefijo: 'ASN', glosaLpn: `Recepción ASN ${asn.id}`, username: req.user.username,
+      glosaKardex: (lpnId) => `Recepción ASN ${asn.id} LPN:${lpnId}`,
+    });
+    const pending = await client.query(`SELECT COUNT(*)::int AS n FROM asn_lines WHERE asn_id=$1 AND qty_received < qty_expected`, [asn.id]);
+    const newStatus = pending.rows[0].n === 0 ? 'RECIBIDO' : 'PARCIAL';
     await client.query(
-      `UPDATE asns SET status=$1, received_at=CASE WHEN $2 THEN NOW() ELSE received_at END WHERE id=$3`,
-      [newStatus, newStatus === 'RECIBIDO', req.params.id]
+      `UPDATE asns SET status=$1, client_id=COALESCE(client_id, $3), received_at=CASE WHEN $2 THEN NOW() ELSE received_at END WHERE id=$4`,
+      [newStatus, newStatus === 'RECIBIDO', clientId, asn.id]
     );
     await client.query('COMMIT');
-    res.json({ success: true, status: newStatus, lpns_created: createdLpns });
-  } catch(e){ await client.query('ROLLBACK'); res.status(500).json({ error: mapDbError(e) }); }
-  finally { client.release(); }
+    res.json({ success: true, status: newStatus, lpns_created: creados.map(c => ({ lpn_id: c.lpnId, sku: c.sku, qty: c.qty, client_id: c.client_id })) });
+  } catch(e) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(e.status || (e.severity ? 500 : 400)).json({ error: userError(e), ...(e.errors ? { errors: e.errors } : {}) });
+  } finally { client.release(); }
 });
 
 router.delete('/asns/:id', requireJefeOrAbove, async (req, res) => {

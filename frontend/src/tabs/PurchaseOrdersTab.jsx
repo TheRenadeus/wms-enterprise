@@ -13,6 +13,7 @@ export default function PurchaseOrdersTab({
   is3PLMode, isHybridMode, permittedClients, permittedSkus, systemConfig, currentUser,
   showMsg, apiFetch, host,
 }) {
+  const [receiving, setReceiving] = React.useState(false);
   return (
     <div className="space-y-6 animate-in fade-in max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
@@ -81,18 +82,19 @@ export default function PurchaseOrdersTab({
             <thead className="bg-slate-50 border-b"><tr>
               <th className="p-4 text-[10px] font-black text-slate-400 uppercase">SKU / Producto</th>
               <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Esperado</th>
-              <th className="p-4 text-center text-[10px] font-black text-indigo-600 uppercase">Recibido Real</th>
+              <th className="p-4 text-center text-[10px] font-black text-indigo-600 uppercase">Recibir ahora</th>
               <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Diferencia</th>
               <th className="p-4 text-center text-[10px] font-black text-slate-400 uppercase">Estado</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
               {poLines.map(line => {
-                const received = parseFloat(poReceivedQtys[line.id] ?? line.received_qty ?? 0);
+                const yaRecibido = parseFloat(line.received_qty ?? 0) || 0;
+                const received = yaRecibido + (parseFloat(poReceivedQtys[line.id]) || 0);
                 const expected = parseFloat(line.expected_qty);
                 const diff = received - expected;
                 return (
                   <tr key={line.id} className={`hover:bg-slate-50 ${diff < 0 ? 'bg-red-50/30' : diff > 0 ? 'bg-amber-50/30' : ''}`}>
-                    <td className="p-4"><p className="text-xs font-black text-slate-800 uppercase">{line.sku}</p><p className="text-[9px] text-slate-500">{line.desc}</p></td>
+                    <td className="p-4"><p className="text-xs font-black text-slate-800 uppercase">{line.sku}</p><p className="text-[9px] text-slate-500">{line.desc}</p>{yaRecibido > 0 && <p className="text-[9px] font-bold text-indigo-500">Ya recibido: {yaRecibido}</p>}</td>
                     <td className="p-4 text-center font-black text-slate-700">{expected} <span className="text-[9px] text-slate-400">{line.uom||'UN'}</span></td>
                     <td className="p-4 text-center">
                       {line.status === 'RECEIVED' ? <span className="font-black text-emerald-700">{line.received_qty}</span> : (
@@ -128,12 +130,16 @@ export default function PurchaseOrdersTab({
               <span className="text-emerald-600">Completas: {poLines.filter(l=>l.status==='RECEIVED').length}</span>
               <span className="text-red-500">Pendientes: {poLines.filter(l=>l.status==='PENDING').length}</span>
             </div>
-            <button onClick={async () => {
-              const items = poLines.filter(l=>l.status!=='RECEIVED' && poReceivedQtys[l.id]!==undefined).map(l=>({lineId:l.id,received_qty:parseFloat(poReceivedQtys[l.id])||0}));
-              if (!items.length) return showMsg('⚠️ Ingresa cantidades recibidas primero', true);
-              const res = await apiFetch(`${host}/api/purchase-orders/${activePO.id}/receive`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({received_items:items,username:currentUser.username})});
-              if(res.ok){showMsg('✅ Recepción comparada y guardada');const r2=await apiFetch(`${host}/api/purchase-orders/${activePO.id}/lines`);const d=await r2.json();setPoLines(d.lines);setPoReceivedQtys({});}else showMsg('⛔ Error',true);
-            }} className="bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 py-3 rounded-2xl shadow-md uppercase text-[10px] tracking-widest flex items-center gap-2"><CheckCircle2 size={14}/> Confirmar Recepción</button>
+            <button disabled={receiving} onClick={async () => {
+              const items = poLines.filter(l=>l.status!=='RECEIVED' && (parseFloat(poReceivedQtys[l.id])||0) > 0).map(l=>({lineId:l.id,received_qty:parseFloat(poReceivedQtys[l.id])}));
+              if (!items.length) return showMsg('⚠️ Ingresa las cantidades que llegaron', true);
+              setReceiving(true);
+              try {
+                const res = await apiFetch(`${host}/api/purchase-orders/${activePO.id}/receive`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({received_items:items})});
+                if(res.ok){showMsg('✅ Recepción guardada');const r2=await apiFetch(`${host}/api/purchase-orders/${activePO.id}/lines`);const d=await r2.json();setPoLines(d.lines);setPoReceivedQtys({});}
+                else { const e=await res.json().catch(()=>({})); showMsg(`⛔ ${e.error||'Error al recibir'}`,true); }
+              } finally { setReceiving(false); }
+            }} className="disabled:opacity-50 bg-indigo-600 hover:bg-indigo-700 text-white font-black px-6 py-3 rounded-2xl shadow-md uppercase text-[10px] tracking-widest flex items-center gap-2"><CheckCircle2 size={14}/> Confirmar Recepción</button>
           </div>
         </div>
       ) : (
