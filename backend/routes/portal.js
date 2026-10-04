@@ -145,6 +145,10 @@ router.put('/clients/:id/portal', requireJefe, async (req, res) => {
       parts.push(`portal_password=$${params.length+1}`); params.push(hashed);
     }
     await pool.query(`UPDATE clients SET ${parts.join(',')} WHERE id=$1`, params);
+    await pool.query(
+      `INSERT INTO audit_log (type, sku, qty, glosa, username, client_id) VALUES ('SYSTEM','N/A',0,$1,$2,$3)`,
+      [`Portal del cliente ${req.params.id}: ${portal_enabled ? 'habilitado' : 'deshabilitado'}${portal_password ? ', contraseña cambiada' : ''}`, req.user.username, req.params.id],
+    ).catch(() => {});
     res.json({ success: true });
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });

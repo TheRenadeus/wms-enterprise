@@ -10,8 +10,12 @@
 const { mapDbError } = require('./db');
 
 function apiErrorHandler(err, req, res, next) {
-  // Si la respuesta ya empezó a enviarse, delegar al default de Express.
-  if (res.headersSent) return next(err);
+  // Si la respuesta ya se envió, solo registrar (el default de Express cortaría la conexión).
+  if (res.headersSent) {
+    console.error('[unhandled tras responder]', req.method, req.path, '—', err.message);
+    if (!res.writableEnded) res.end();
+    return;
+  }
 
   const isApi = req.path && req.path.startsWith('/api');
   // BodyParser: JSON malformado → 400 limpio, sin stack.
@@ -23,7 +27,9 @@ function apiErrorHandler(err, req, res, next) {
   if (err.stack) console.error(err.stack.split('\n').slice(0, 4).join('\n'));
 
   if (isApi) {
-    return res.status(err.statusCode || 500).json({ error: mapDbError(err) });
+    const status = err.statusCode || err.status || 500;
+    // Mensajes propios (4xx) se muestran; errores internos, nunca en crudo.
+    return res.status(status).json({ error: status < 500 && err.expose !== false ? err.message : mapDbError(err) });
   }
   return res.status(500).send('Internal Server Error');
 }

@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+require('./asyncErrors'); // errores de handlers async → apiErrorHandler (Express 4)
 const cors = require('cors');
 
 const { pool } = require('./db');
@@ -458,6 +459,11 @@ app.get('*', (req, res) => {
 // Arranque: migraciones, tareas periódicas y servidor HTTP. Las pruebas importan
 // `app` y `bootstrap` sin escuchar el puerto ni programar tareas.
 const start = async () => {
+  // Red de seguridad: un rechazo fuera de una petición (tareas programadas, eventos)
+  // queda en el log en vez de terminar el proceso.
+  process.on('unhandledRejection', (reason) => {
+    console.error('[unhandledRejection]', reason?.stack || reason);
+  });
   await bootstrap();
   setTimeout(generateAlerts, 5000);
   setInterval(generateAlerts, 60 * 60 * 1000);

@@ -429,6 +429,7 @@ module.exports = {
   apiClienteReadOnly,
   getClientesPermitidos,
   permIncludes,
+  rankOf,
   checkClientAccess,
   checkBatchSkuClientAccess,
   checkLpnClientAccess,
