@@ -1,25 +1,18 @@
 // Historial de documentos cerrados (receive/dispatch/adjust) + anulaciones con
 // aprobación (revierte el movimiento de stock). Extraído de server.js (COD-02).
 const express = require('express');
-const { pool, mapDbError } = require('../db');
+const { pool, mapDbError, userError } = require('../db');
 const { requireAuth, requireJefe, requireStockWrite } = require('../middleware');
 const { scopeCondition } = require('../scope');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
 
-router.post('/document-history', requireAuth, async (req, res) => {
-  const { id, module, doc_num, doc_type, glosa, username, items, doc_date, doc_ref, entered_at, client_id } = req.body;
-  try {
-    const totalQty = items.reduce((sum, i) => sum + parseFloat(i.qty || i.qtyToPick || 0), 0);
-    await pool.query(
-      `INSERT INTO document_history (id,module,doc_num,doc_type,glosa,username,items_json,total_qty,doc_date,doc_ref,entered_at,client_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) ON CONFLICT (id) DO NOTHING`,
-      [id, module, doc_num, doc_type||'', glosa||'', username, JSON.stringify(items), totalQty,
-       doc_date||null, doc_ref||null, entered_at||null, client_id||'']
-    );
-    res.json({ success: true });
-  } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
+// El historial lo graba el servidor al cerrar recepción, despacho o ajuste, dentro
+// de la misma transacción (registrarHistorial en helpers.js). Ya no se acepta desde
+// el cliente: permitiría documentos sin movimiento que luego se anulan o facturan.
+router.post('/document-history', requireAuth, (req, res) => {
+  res.status(410).json({ error: 'El historial de documentos lo registra el servidor al cerrar cada documento.' });
 });
 
 router.get('/document-history', requireAuth, async (req, res) => {
@@ -118,7 +111,7 @@ router.post('/document-history/:id/void', requireJefe, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: userError(err) });
   } finally { client.release(); }
 });
 
@@ -180,7 +173,7 @@ router.post('/anulation-requests/:id/approve', requireJefe, async (req, res) => 
     res.json({ success: true });
   } catch (err) {
     await client.query('ROLLBACK');
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: userError(err) });
   } finally { client.release(); }
 });
 

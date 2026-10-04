@@ -10,7 +10,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { pool, mapDbError } = require('../db');
+const { pool, mapDbError, userError } = require('../db');
 const { requireSuperAdmin } = require('../middleware');
 
 const router = express.Router();
@@ -256,7 +256,7 @@ router.post('/system/backups/:id/restore', requireSuperAdmin, async (req, res) =
     res.json({ restored_tables: restoredTables, rows_inserted: rowsInserted, duration_ms: Date.now() - t0 });
   } catch (e) {
     console.error('[RESTORE] ERROR:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: userError(e) });
   }
 });
 

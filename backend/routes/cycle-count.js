@@ -3,7 +3,7 @@
 // Stock se ajusta SOLO en /approve, nunca antes.
 
 const express = require('express');
-const { pool, mapDbError } = require('../db');
+const { pool, mapDbError, userError } = require('../db');
 const { requireAuth, requireAdmin, requireStaff, requireJefeOrAbove, checkClientAccess , requireStockWrite, requireJefe } = require('../middleware');
 const { genLpnId } = require('../helpers');
 
@@ -276,7 +276,7 @@ router.post('/cycle-count/:id/approve', requireJefeOrAbove, async (req, res) => 
     res.json({ success: true, adjustments_applied: lines.rows.length });
   } catch (e) {
     await client.query('ROLLBACK');
-    res.status(500).json({ error: e.message || mapDbError(e) });
+    res.status(500).json({ error: userError(e) });
   } finally { client.release(); }
 });
 
@@ -389,7 +389,7 @@ router.post('/adjust-requests/:id/approve', requireJefe, async (req, res) => {
     await client.query(`UPDATE adjustment_requests SET status='APROBADA', authorized_by=$1, resolved_at=NOW() WHERE id=$2`, [req.user.username, req.params.id]);
     await client.query('COMMIT');
     res.json({ success: true });
-  } catch (err) { await client.query('ROLLBACK'); res.status(400).json({ error: err.message }); }
+  } catch (err) { await client.query('ROLLBACK'); res.status(400).json({ error: userError(err) }); }
   finally { client.release(); }
 });
 

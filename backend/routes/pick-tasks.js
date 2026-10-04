@@ -278,17 +278,23 @@ router.post('/picker/lines/:lineId/confirm', requirePickerOrAbove, async (req, r
       const lpn = await client.query('SELECT batch_number, serial_number FROM inventory_lpns WHERE id=$1', [line.lpn_id]);
       if (lpn.rows.length) {
         const { batch_number, serial_number } = lpn.rows[0];
-        if (batch_number && !batch_confirmed)
+        if (batch_number && !batch_confirmed) {
+          await client.query('ROLLBACK');
           return res.status(400).json({ error: `El LPN ${line.lpn_id} tiene lote ${batch_number}. Debe confirmar el número de lote.` });
-        if (serial_number && !serial_confirmed)
+        }
+        if (serial_number && !serial_confirmed) {
+          await client.query('ROLLBACK');
           return res.status(400).json({ error: `El LPN ${line.lpn_id} tiene número de serie. Debe confirmarlo.` });
+        }
       }
     }
 
     const hasDiff = qtyConf !== parseFloat(line.qty_requested);
     const newStatus = hasDiff ? 'DIFERENCIA' : 'COMPLETADA';
-    if (hasDiff && !diff_reason)
+    if (hasDiff && !diff_reason) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'diff_reason es requerido cuando la cantidad confirmada difiere de la solicitada.' });
+    }
 
     await client.query(
       `UPDATE pick_task_lines SET status=$1, qty_confirmed=$2, batch_confirmed=$3, serial_confirmed=$4,

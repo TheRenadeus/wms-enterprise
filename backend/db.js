@@ -23,6 +23,40 @@ pool.on('error', (err) => {
   console.error('[pg-pool-error] conexión perdida:', err.code || '-', err.message);
 });
 
+// Red de seguridad: una conexión nunca vuelve al pool con una transacción abierta.
+// Si un handler responde tras BEGIN sin COMMIT ni ROLLBACK (un return temprano), la
+// siguiente consulta de otra petición en esa conexión correría dentro de esa
+// transacción y con sus bloqueos. Aquí se registra el caso y se hace ROLLBACK antes
+// de devolverla. client.inTransaction indica si hay una transacción abierta.
+const TX_ABRE = /^\s*(BEGIN|START\s+TRANSACTION)\b/i;
+const TX_CIERRA = /^\s*(COMMIT|END|ABORT|ROLLBACK(?!\s+TO\b))\b/i;
+const rawConnect = pool.connect.bind(pool);
+pool.connect = function connect(cb) {
+  if (typeof cb === 'function') return rawConnect(cb);
+  return rawConnect().then((client) => {
+    if (!client.__txGuard) {
+      const query = client.query;
+      client.query = function trackedQuery(config, ...rest) {
+        const sql = typeof config === 'string' ? config : config && config.text;
+        if (typeof sql === 'string') {
+          if (TX_ABRE.test(sql)) client.inTransaction = true;
+          else if (TX_CIERRA.test(sql)) client.inTransaction = false;
+        }
+        return query.call(this, config, ...rest);
+      };
+      client.__txGuard = true;
+    }
+    client.inTransaction = false;
+    const release = client.release;
+    client.release = (err) => {
+      if (err || !client.inTransaction) return release(err);
+      console.error('[pg-tx] conexión liberada con una transacción abierta: se hace ROLLBACK');
+      client.query('ROLLBACK').then(() => release(), (e) => release(e));
+    };
+    return client;
+  });
+};
+
 // Mapeo de errores de BD a mensajes amigables (UX-02).
 // Si el código no está mapeado, se loguea el error real pero se devuelve un
 // mensaje genérico para no filtrar estructura de BD al cliente.
@@ -64,4 +98,12 @@ const sendDbError = (res, err) => {
 // ¿El error es una violación de UNIQUE (documento duplicado)?
 const isUniqueViolation = (err) => !!err && err.code === '23505';
 
-module.exports = { pool, mapDbError, dbErrorStatus, sendDbError, isUniqueViolation };
+// Texto de error apto para mostrar: los mensajes de validación propios se muestran
+// tal cual; los de PostgreSQL y los errores de programación, nunca en crudo.
+const userError = (err) => {
+  if (!err) return 'Error interno.';
+  if (err.severity || err instanceof TypeError || err instanceof RangeError || err instanceof ReferenceError) return mapDbError(err);
+  return err.message || 'Error interno.';
+};
+
+module.exports = { pool, mapDbError, dbErrorStatus, sendDbError, isUniqueViolation, userError };

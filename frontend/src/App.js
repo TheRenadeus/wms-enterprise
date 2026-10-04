@@ -948,13 +948,7 @@ export default function App() {
           relocate: 'Producto movido correctamente',
         };
         showMsg(`✅ ${moduleMsg[module] || 'Operación completada'}`);
-        // Guardar en historial
-        try {
-          const firstSku = activeDoc.items[0]?.sku;
-          const docClientId = activeDoc.items[0]?.clientId || (Array.isArray(skus) && skus.find(s => s.sku === firstSku)?.client_id) || '';
-          await apiFetch(`${host}/api/document-history`, { method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ id: activeDoc.id, module, doc_num: activeDoc.docNum, doc_type: activeDoc.docType, glosa: activeDoc.glosa, doc_date: activeDoc.docDate||null, doc_ref: activeDoc.docRef||null, entered_at: activeDoc.docEnteredAt||null, username: currentUser.username, items: activeDoc.items, client_id: docClientId }) });
-        } catch(e) {}
+        // El historial del documento lo registra el servidor en la misma transacción.
         removeDoc(module, activeDocId); setActiveDocId(null); fetchData();
       } else {
         // M3: stock insuficiente con sustitutos disponibles → abrir modal
@@ -1104,16 +1098,9 @@ export default function App() {
     if (!isValid) { fetchData(); return; }
     setIsCommitting(true);
     try {
-      const res = await apiFetch(`${host}/api/dispatch_batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docNum: activeDoc.docNum, docType: activeDoc.docType, client_id: activeDoc.client, glosa: activeDoc.glosa, items: itemsToShip, username: currentUser.username, usePickConfirmations: usePickConf, reauth_password: reauthPw }) });
+      const res = await apiFetch(`${host}/api/dispatch_batch`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ docNum: activeDoc.docNum, docType: activeDoc.docType, client_id: activeDoc.client, glosa: activeDoc.glosa, docDate: activeDoc.docDate || null, docRef: activeDoc.docRef || null, docEnteredAt: activeDoc.docEnteredAt || null, items: itemsToShip, usePickConfirmations: usePickConf, reauth_password: reauthPw }) });
       if (res.ok) {
-        // Guardar en historial de documentos con client_id del primer LPN
-        try {
-          const firstNormal = itemsToShip.find(it => !it.isKit && it.lpnId);
-          const firstLpn = (Array.isArray(data) ? data : []).find(i => i.id === firstNormal?.lpnId);
-          const dispClientId = firstLpn?.client_id || activeDoc.client || '';
-          await apiFetch(`${host}/api/document-history`, { method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ id: activeDoc.id, module: 'dispatch', doc_num: activeDoc.docNum, doc_type: activeDoc.docType, glosa: activeDoc.glosa, username: currentUser.username, items: itemsToShip, client_id: dispClientId }) });
-        } catch(e) {}
+        // El historial del documento lo registra el servidor en la misma transacción.
         let remainingItems = [];
         activeDoc.items.forEach((it, idx) => { if (it.isKit) return; const shipped = shipQtys[idx] || 0; const remaining = parseFloat(it.qtyToPick) - parseFloat(shipped); if (remaining > 0) remainingItems.push({ ...it, qtyToPick: remaining }); });
         if (remainingItems.length === 0) { showMsg('✅ Pedido despachado completo'); removeDoc('dispatch', activeDocId); setActiveDocId(null); }

@@ -1,12 +1,12 @@
 // Escrituras/operaciones de inventario: status, receive/dispatch/adjust batch,
 // relocate, bulk-load, history, snapshot, fefo. Extraído de server.js (COD-02).
 const express = require('express');
-const { pool, mapDbError, isUniqueViolation } = require('../db');
+const { pool, mapDbError, isUniqueViolation, userError } = require('../db');
 const {
   requireAuth, requireAdmin, requireJefe, requireStockWrite, stockWriteLimiter,
   checkClientAccess, checkBatchSkuClientAccess, checkLpnClientAccess,
 } = require('../middleware');
-const { genLpnId, logStorageEvent } = require('../helpers');
+const { genLpnId, logStorageEvent, registrarHistorial } = require('../helpers');
 const { consumeComponentTracked } = require('../kitConsumo');
 const { clientAllowed, scopeCondition, auditScopeCondition } = require('../scope');
 
@@ -62,7 +62,8 @@ router.get('/processed-docs/exists', requireAuth, async (req, res) => {
 });
 
 router.post('/receive_batch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
-  const { items, docNum, glosa, docType, username } = req.body;
+  const { items, docNum, glosa, docType } = req.body;
+  const username = req.user.username;
   if (!docNum) return res.status(400).json({ error: 'docNum es requerido para trazabilidad.' });
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem.' });
   const client = await pool.connect();
@@ -77,6 +78,7 @@ router.post('/receive_batch', stockWriteLimiter, requireStockWrite, checkClientA
       await client.query('ROLLBACK');
       return res.status(409).json({ error: `El documento '${docNum}' ya fue procesado previamente para este cliente. No se puede registrar dos veces.` });
     }
+    const aplicados = [];
     for (let it of items) {
       const lpnId = genLpnId('LPN');
       const sku = String(it.sku);
@@ -123,25 +125,29 @@ router.post('/receive_batch', stockWriteLimiter, requireStockWrite, checkClientA
 
       // Cobro 3PL: registrar evento de movimiento de entrada (no-op si cliente propio)
       await logStorageEvent(client, { client_id: clientId, event_type: 'MOVIMIENTO_IN', sku, lpn_id: lpnId, qty, location_id: locId });
+      aplicados.push({ sku, qty, lpnId, batch, expDate, serial, location_id: locId, client_id: clientId });
     }
+    await registrarHistorial(client, {
+      module: 'receive', docNum, docType, glosa, username, items: aplicados, clientId: docClientId,
+      docDate: req.body.docDate, docRef: req.body.docRef, enteredAt: req.body.docEnteredAt,
+    });
     // Registrar documento como procesado para evitar doble ingreso
     await client.query('INSERT INTO processed_docs(doc_num,doc_type,client_id,processed_by) VALUES($1,$2,$3,$4)',
-      [docNum.toUpperCase(), (docType||'REC').toUpperCase(), docClientId, username||'SYSTEM']);
-    // Cerrar tareas de picking pendientes asociadas a este documento
-    await client.query(`UPDATE pick_tasks SET status='COMPLETADA' WHERE doc_num=$1 AND module='receive' AND status IN ('PENDIENTE','EN_PROCESO')`, [docNum.toUpperCase()])
-      .catch(e => console.error('[pick_tasks] Error cerrando tareas en receive:', e.message));
-    await client.query(`UPDATE pick_task_lines ptl SET status='COMPLETADA', updated_at=NOW() FROM pick_tasks pt WHERE ptl.task_id=pt.id AND pt.doc_num=$1 AND pt.module='receive' AND ptl.status='PENDIENTE'`, [docNum.toUpperCase()])
-      .catch(e => console.error('[pick_task_lines] Error cerrando líneas en receive:', e.message));
+      [docNum.toUpperCase(), (docType||'REC').toUpperCase(), docClientId, username]);
+    // Cerrar tareas de picking pendientes asociadas a este documento. Sin .catch: un
+    // error aquí abortaría la transacción y el COMMIT sería un ROLLBACK silencioso.
+    await client.query(`UPDATE pick_tasks SET status='COMPLETADA' WHERE doc_num=$1 AND module='receive' AND status IN ('PENDIENTE','EN_PROCESO')`, [docNum.toUpperCase()]);
+    await client.query(`UPDATE pick_task_lines ptl SET status='COMPLETADA', updated_at=NOW() FROM pick_tasks pt WHERE ptl.task_id=pt.id AND pt.doc_num=$1 AND pt.module='receive' AND ptl.status='PENDIENTE'`, [docNum.toUpperCase()]);
     await client.query('COMMIT');
     // Respuesta consistente { imported, errors }. Transaccional (todo-o-nada):
     // si llegó aquí, todas las filas válidas se insertaron. `success` se mantiene
     // por compatibilidad con el flujo de recepción manual (handleCommitAPI).
     res.json({ success: true, imported: items.length, errors: [] });
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     if (isUniqueViolation(err)) return res.status(409).json({ error: `El documento '${docNum}' ya fue procesado previamente para este cliente. No se puede registrar dos veces.` });
     console.error("Error Receive:", err.message);
-    res.status(500).json({ error: mapDbError(err) });
+    res.status(err.severity ? 500 : 400).json({ error: userError(err) });
   } finally { client.release(); }
 });
 
@@ -206,7 +212,8 @@ router.post('/inventory/bulk-load', requireAdmin, async (req, res) => {
 });
 
 router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
-  const { items, docNum, glosa, docType, username, usePickConfirmations, allow_substitutes: allowSubstFlag } = req.body;
+  const { items, docNum, glosa, docType, usePickConfirmations, allow_substitutes: allowSubstFlag } = req.body;
+  const username = req.user.username;
   if (!docNum) return res.status(400).json({ error: 'docNum es requerido para trazabilidad.' });
   if (!items || !Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem.' });
 
@@ -300,9 +307,10 @@ router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClient
       pickConf.rows.forEach(r => { pickConfirmMap[r.lpn_id] = r; });
     }
 
+    const aplicados = [];
     for (let it of items) {
       const docGlosa = glosa || '';
-      const user = username || (req.user?.username) || 'SYSTEM';
+      const user = username;
 
       // ── KITTING Modo A: línea de kit explotada al vuelo ──────────────────────
       // El kit es VIRTUAL: no genera stock propio. Se descuenta cada componente de
@@ -348,6 +356,7 @@ router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClient
                `[KIT] Componente de ${qtyKits}x ${kitSku}. Doc: [${docType || 'N/A'}] ${docNum}. LPN origen: ${cc.lpn_id}.${cc.lote ? ` Lote: ${cc.lote}.` : ''}${cc.serie ? ` Serie: ${cc.serie}.` : ''} ${docGlosa}`,
                user, kitClient]);
             await logStorageEvent(client, { client_id: kitClient || null, event_type: 'MOVIMIENTO_OUT', sku: comp.component_sku, lpn_id: cc.lpn_id, qty: cc.cantidad });
+            aplicados.push({ sku: comp.component_sku, lpnId: cc.lpn_id, qtyToPick: cc.cantidad, qty: cc.cantidad, location: cc.ubicacion, serial: cc.serie, kit: kitSku, client_id: kitClient });
           }
         }
         continue; // el kit no descuenta como SKU normal ni genera stock propio
@@ -363,7 +372,7 @@ router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClient
 
       // Bloquear solo inventory_lpns (sin JOIN) para evitar error de PG con outer join + FOR UPDATE
       const lpnLock = await client.query(
-        `SELECT id, qty, status, sku, client_id FROM inventory_lpns WHERE id = $1 FOR UPDATE`, [lpnId]
+        `SELECT id, qty, status, sku, client_id, location_id, serial_number FROM inventory_lpns WHERE id = $1 FOR UPDATE`, [lpnId]
       );
       const lpnRow = lpnLock.rows[0];
       if (!lpnRow || !clientAllowed(req.clientScope, lpnRow.client_id)) throw httpError(404, `LPN ${lpnId} no encontrado.`);
@@ -401,26 +410,29 @@ router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClient
 
       // Cobro 3PL: registrar evento de movimiento de salida (no-op si cliente propio)
       await logStorageEvent(client, { client_id: dispClientId || null, event_type: 'MOVIMIENTO_OUT', sku, lpn_id: lpnId, qty: qtyToPick });
+      aplicados.push({ sku: lpnRow.sku, lpnId, qtyToPick, qty: qtyToPick, location: lpnRow.location_id, serial: lpnRow.serial_number, client_id: lpnRow.client_id });
     }
     // Borrar solo LPNs que este dispatch dejó en 0; evita carrera con otras
     // sesiones que pudieran estar insertando filas con qty=0 transitorio.
     if (lpnsToDelete.length > 0) {
       await client.query('DELETE FROM inventory_lpns WHERE id = ANY($1::varchar[]) AND qty <= 0', [lpnsToDelete]);
     }
+    if (!aplicados.length) throw httpError(400, 'El despacho no tiene cantidades para descontar.');
+    await registrarHistorial(client, {
+      module: 'dispatch', docNum, docType, glosa, username, items: aplicados, clientId: dispClientId,
+      docDate: req.body.docDate, docRef: req.body.docRef, enteredAt: req.body.docEnteredAt,
+    });
     // Registrar documento como procesado para evitar doble despacho
-    const dispUser = username || (req.user?.username) || 'SYSTEM';
-    await client.query('INSERT INTO processed_docs(doc_num,doc_type,client_id,processed_by) VALUES($1,$2,$3,$4)', [docNum.toUpperCase(), (docType||'DIS').toUpperCase(), dispClientId, dispUser]);
-    // Cerrar tareas de picking asociadas a este documento
-    await client.query(`UPDATE pick_tasks SET status='COMPLETADA' WHERE doc_num=$1 AND module='dispatch' AND status IN ('PENDIENTE','EN_PROCESO')`, [docNum.toUpperCase()])
-      .catch(e => console.error('[pick_tasks] Error cerrando tareas en dispatch:', e.message));
-    await client.query(`UPDATE pick_task_lines ptl SET status='COMPLETADA', updated_at=NOW() FROM pick_tasks pt WHERE ptl.task_id=pt.id AND pt.doc_num=$1 AND pt.module='dispatch' AND ptl.status='PENDIENTE'`, [docNum.toUpperCase()])
-      .catch(e => console.error('[pick_task_lines] Error cerrando líneas en dispatch:', e.message));
+    await client.query('INSERT INTO processed_docs(doc_num,doc_type,client_id,processed_by) VALUES($1,$2,$3,$4)', [docNum.toUpperCase(), (docType||'DIS').toUpperCase(), dispClientId, username]);
+    // Cerrar tareas de picking asociadas a este documento (sin .catch, ver receive_batch).
+    await client.query(`UPDATE pick_tasks SET status='COMPLETADA' WHERE doc_num=$1 AND module='dispatch' AND status IN ('PENDIENTE','EN_PROCESO')`, [docNum.toUpperCase()]);
+    await client.query(`UPDATE pick_task_lines ptl SET status='COMPLETADA', updated_at=NOW() FROM pick_tasks pt WHERE ptl.task_id=pt.id AND pt.doc_num=$1 AND pt.module='dispatch' AND ptl.status='PENDIENTE'`, [docNum.toUpperCase()]);
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     if (isUniqueViolation(err)) return res.status(409).json({ error: `El documento '${docNum}' ya fue despachado previamente para este cliente. No se puede despachar dos veces.` });
-    res.status(err.status || 400).json({ error: err.message });
+    res.status(err.status || (err.severity ? 500 : 400)).json({ error: userError(err) });
   } finally { client.release(); }
 });
 
@@ -464,16 +476,19 @@ router.post('/relocate', requireStockWrite, checkClientAccess('write'), checkLpn
       await client.query(`INSERT INTO audit_log (type, sku, qty, glosa, username) VALUES ('RELOCATE', $1, $2, $3, $4)`, [originalLpn.sku, moveQty, `Separación de [${originalLpn.location_id || 'PISO-RECEPCION'}] (LPN Origen: ${id}) a [${new_location_id}] (Nuevo LPN: ${newLpnId}). ${glosa || ''}`, username || 'SYSTEM']);
     }
     await client.query('COMMIT'); res.json({ success: true });
-  } catch (err) { await client.query('ROLLBACK'); res.status(400).json({ error: err.message }); } finally { client.release(); }
+  } catch (err) { await client.query('ROLLBACK').catch(() => {}); res.status(err.severity ? 500 : 400).json({ error: userError(err) }); } finally { client.release(); }
 });
 
 router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
   if (!['ADMIN','SUPERADMIN'].includes(req.user.role))
     return res.status(403).json({ error: 'Solo administradores pueden aplicar ajustes directamente. Use /api/adjust-request para solicitar aprobación.' });
-  const { items, docNum, glosa, username } = req.body;
+  const { items, docNum, glosa } = req.body;
+  const username = req.user.username;
+  if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'Se requiere al menos un ítem.' });
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const aplicados = [];
     // Anti-reúso: el número de hoja de ajuste no se puede reutilizar por cliente.
     const adjType = 'ADJ';
     const firstAdjSku = await client.query('SELECT client_id FROM master_skus WHERE sku=$1 LIMIT 1', [String(items[0]?.sku)]);
@@ -493,7 +508,7 @@ router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('
       const serial = it.serial && String(it.serial).trim() !== '' ? String(it.serial).trim() : null;
       const locId = it.location_id || 'PISO-RECEPCION';
       const docGlosa = glosa || '';
-      const user = username || 'SYSTEM';
+      const user = username;
 
       if (it.action === 'ADD') {
         if (isNaN(qty) || qty <= 0) throw new Error(`La cantidad de ajuste debe ser mayor a 0 para SKU ${sku}.`);
@@ -512,6 +527,7 @@ router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('
           `INSERT INTO audit_log (type, sku, qty, glosa, username) VALUES ('ADJUST_IN', $1, $2, $3, $4)`,
           [sku, qty, `Ref: ${docNum || 'S/N'}. LPN: ${lpnId}`, user]
         );
+        aplicados.push({ action: 'ADD', sku, qty, lpnId, client_id: clientId });
       } else {
         if (serial) {
           const resUpd = await client.query(
@@ -519,6 +535,7 @@ router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('
             [sku, serial]
           );
           if(resUpd.rowCount === 0) throw new Error(`Serie ${serial} no disponible para mermar.`);
+          aplicados.push({ action: 'REMOVE', sku, qty: 1, lpnId: resUpd.rows[0].id, serial });
           await client.query(
             `INSERT INTO audit_log (type, sku, qty, glosa, username) VALUES ('ADJUST_OUT', $1, $2, $3, $4)`,
             [sku, 1, `Ref: ${docNum || 'S/N'}. Merma Serie ${serial}`, user]
@@ -547,18 +564,23 @@ router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('
             `INSERT INTO audit_log (type, sku, qty, glosa, username) VALUES ('ADJUST_OUT', $1, $2, $3, $4)`,
             [sku, qty, `Ref: ${docNum || 'S/N'}. Merma FIFO`, user]
           );
+          aplicados.push({ action: 'REMOVE', sku, qty });
         }
       }
     }
     await client.query('DELETE FROM inventory_lpns WHERE qty <= 0');
-    if (docNum) await client.query('INSERT INTO processed_docs(doc_num,doc_type,client_id,processed_by) VALUES($1,$2,$3,$4)', [String(docNum).toUpperCase(), adjType, adjClientId, username || 'SYSTEM']);
+    if (docNum) await client.query('INSERT INTO processed_docs(doc_num,doc_type,client_id,processed_by) VALUES($1,$2,$3,$4)', [String(docNum).toUpperCase(), adjType, adjClientId, username]);
+    await registrarHistorial(client, {
+      module: 'adjust', docNum: docNum || 'S/N', docType: adjType, glosa, username, items: aplicados, clientId: adjClientId,
+      docDate: req.body.docDate, docRef: req.body.docRef, enteredAt: req.body.docEnteredAt,
+    });
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     if (isUniqueViolation(err)) return res.status(409).json({ error: `La hoja de ajuste '${docNum}' ya fue cerrada para este cliente. No se puede reutilizar.` });
     console.error("Error Adjust:", err.message);
-    res.status(400).json({ error: err.message });
+    res.status(err.severity ? 500 : 400).json({ error: userError(err) });
   } finally { client.release(); }
 });
 

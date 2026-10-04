@@ -1,7 +1,7 @@
 // Módulo INSUMOS — materiales propios de la bodega (globales, no por cliente).
 // Fase 1: maestro de materiales (CRUD con borrado lógico).
 const express = require('express');
-const { pool, mapDbError, isUniqueViolation } = require('../db');
+const { pool, mapDbError, isUniqueViolation, userError } = require('../db');
 const { requireAuth, requireJefe, requireStockWrite, getClientesPermitidos } = require('../middleware');
 
 const router = express.Router();
@@ -154,7 +154,7 @@ router.post('/insumos/:id/entrada', requireJefe, async (req, res) => {
     const out = await aplicarMovimiento(client, { insumoId: req.params.id, tipo: 'entrada', delta: cantidad, meta: { usuario: req.user.username, fecha } });
     await client.query('COMMIT');
     res.json({ success: true, resumen: out });
-  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: userError(e) }); }
   finally { client.release(); }
 });
 
@@ -170,7 +170,7 @@ router.post('/insumos/:id/ajuste', requireJefe, async (req, res) => {
     const out = await aplicarMovimiento(client, { insumoId: req.params.id, tipo: 'ajuste', delta: nueva - antes, meta: { usuario: req.user.username } });
     await client.query('COMMIT');
     res.json({ success: true, resumen: out });
-  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: userError(e) }); }
   finally { client.release(); }
 });
 
@@ -185,7 +185,7 @@ router.post('/insumos/:id/consumo', requireStockWrite, async (req, res) => {
     const out = await aplicarMovimiento(client, { insumoId: req.params.id, tipo: 'consumo', delta: -cantidad, meta: { usuario: req.user.username } });
     await client.query('COMMIT');
     res.json({ success: true, resumen: out });
-  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: userError(e) }); }
   finally { client.release(); }
 });
 
@@ -284,7 +284,7 @@ router.post('/documentos/:tipo/:id/insumos', requireStockWrite, async (req, res)
     }
     await client.query('COMMIT');
     res.json({ success: true, documento: { tipo, id, client_id: docClientId }, resumenes });
-  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: userError(e) }); }
   finally { client.release(); }
 });
 
@@ -334,7 +334,7 @@ router.delete('/documentos/:tipo/:id/insumos/:movId', requireStockWrite, async (
     await client.query('UPDATE insumo_movimientos SET anulado = TRUE, anulado_at = NOW(), anulado_by = $2 WHERE id = $1', [movId, req.user.username]);
     await client.query('COMMIT');
     res.json({ success: true, reintegrado: parseFloat(row.cantidad), stock_despues: antes + parseFloat(row.cantidad) });
-  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: e.message || mapDbError(e) }); }
+  } catch (e) { await client.query('ROLLBACK'); res.status(e.status || 500).json({ error: userError(e) }); }
   finally { client.release(); }
 });
 
