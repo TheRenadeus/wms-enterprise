@@ -5,6 +5,7 @@
 const express = require('express');
 const { pool, mapDbError } = require('../db');
 const { requireAuth, requireJefe } = require('../middleware');
+const { scopeCondition } = require('../scope');
 
 const router = express.Router();
 
@@ -15,6 +16,8 @@ router.get('/clients', requireAuth, async (req, res) => {
     const params = [];
     let idx = 1;
     if (search) { conditions.push(`(id ILIKE $${idx} OR name ILIKE $${idx})`); params.push(`%${search}%`); idx++; }
+    conditions.push(scopeCondition(req.clientScope, 'id', params));
+    idx = params.length + 1;
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     let sql = `SELECT id, name, contact, email, portal_enabled, portal_email FROM clients ${where} ORDER BY name ASC`;
     if (limit !== undefined) {

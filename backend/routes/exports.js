@@ -2,22 +2,32 @@
 const express = require('express');
 const XLSX = require('xlsx');
 const { pool, mapDbError } = require('../db');
-const { requireAuth } = require('../middleware');
+const { requireAuth, requireJefe } = require('../middleware');
 const { applyRowStyles, xlsxHeaderStyle, xlsxDescStyle } = require('../import-export-helpers');
+const { scopeCondition } = require('../scope');
 
 const router = express.Router();
+
+// Celda CSV segura: comillas escapadas y sin fórmulas (=, +, -, @ al inicio se
+// ejecutarían al abrir el archivo en Excel).
+const csvCell = (v) => {
+  let s = String(v ?? '');
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+};
 
 router.get('/export/skus', requireAuth, async (req, res) => {
   try {
     // Columnas explícitas que coinciden con la plantilla de importación (round-trip):
     // export → editar → import. Se excluyen los SKU borrados (soft-delete) y columnas internas.
+    const params = [];
     const result = await pool.query(`
       SELECT sku, client_id, "desc", category, uom, weight, length, width, height, abc_class,
              requires_lot, requires_serial, barcode, manufacturer_code, manufacturer_sku, brand
         FROM master_skus
-       WHERE deleted_at IS NULL
+       WHERE deleted_at IS NULL AND ${scopeCondition(req.clientScope, 'client_id', params)}
        ORDER BY client_id, sku ASC
-    `);
+    `, params);
     const rows = result.rows;
     if (rows.length === 0) return res.status(404).json({ error: 'Sin datos' });
     const headers = Object.keys(rows[0]);
@@ -40,13 +50,17 @@ router.get('/export/skus', requireAuth, async (req, res) => {
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
 });
 
-router.get('/export/clients', requireAuth, async (req, res) => {
+router.get('/export/clients', requireJefe, async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, contact, email FROM clients ORDER BY name ASC');
+    const params = [];
+    const result = await pool.query(
+      `SELECT id, name, contact, email FROM clients WHERE ${scopeCondition(req.clientScope, 'id', params)} ORDER BY name ASC`,
+      params,
+    );
     const rows = result.rows;
     if (rows.length === 0) return res.status(404).json({ error: 'Sin datos' });
     const headers = Object.keys(rows[0]).join(',');
-    const csv = rows.map(r => Object.values(r).map(v => `"${v ?? ''}"`).join(',')).join('\n');
+    const csv = rows.map(r => Object.values(r).map(csvCell).join(',')).join('\n');
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=clientes.csv');
     res.send(headers + '\n' + csv);
@@ -68,6 +82,7 @@ router.get('/export/inventory', requireAuth, async (req, res) => {
       WHERE i.qty > 0
     `;
     const params = [];
+    sql += ` AND ${scopeCondition(req.clientScope, 'i.client_id', params)}`;
     if (client_id) { params.push(client_id); sql += ` AND i.client_id = $${params.length}`; }
     if (sku) { params.push(`%${sku}%`); sql += ` AND i.sku ILIKE $${params.length}`; }
     if (status) { params.push(status); sql += ` AND i.status = $${params.length}`; }

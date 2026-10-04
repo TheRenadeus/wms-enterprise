@@ -33,4 +33,5 @@ module.exports = [
   require('./032_contenedores'),
   require('./033_purchase_order_lines'),
   require('./034_locations_capacidad'),
+  require('./035_asn_client'),
 ];

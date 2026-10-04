@@ -3,6 +3,7 @@
 const express = require('express');
 const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireAuth, requireStockWrite, checkClientAccess } = require('../middleware');
+const { scopeCondition } = require('../scope');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
@@ -49,9 +50,12 @@ router.delete('/carriers/:id', requireAuth, async (req, res) => {
 
 router.get('/shipments', requireAuth, async (req, res) => {
   try {
+    const params = [];
     const r = await pool.query(`SELECT s.*,c.name as carrier_name,
       COALESCE(s.destination, s.destination_address) as destination
-      FROM shipments s LEFT JOIN carriers c ON s.carrier_id=c.id ORDER BY s.created_at DESC LIMIT 200`);
+      FROM shipments s LEFT JOIN carriers c ON s.carrier_id=c.id
+      WHERE ${scopeCondition(req.clientScope, 's.client_id', params)}
+      ORDER BY s.created_at DESC LIMIT 200`, params);
     res.json(r.rows);
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });

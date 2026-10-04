@@ -7,6 +7,7 @@ const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireAuth, requireJefeOrAbove, checkClientAccess } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId } = require('../helpers');
+const { scopeCondition } = require('../scope');
 
 const router = express.Router();
 
@@ -65,9 +66,12 @@ router.post('/returns', requireAuth, checkClientAccess('write', { required: true
 
 router.get('/returns', requireAuth, async (req, res) => {
   try {
+    const params = [];
     const q = `SELECT r.*, COALESCE(json_agg(rl ORDER BY rl.id) FILTER (WHERE rl.id IS NOT NULL),'[]') as lines
-             FROM returns r LEFT JOIN return_lines rl ON rl.return_id=r.id GROUP BY r.id ORDER BY r.created_at DESC LIMIT 200`;
-    res.json((await pool.query(q)).rows);
+             FROM returns r LEFT JOIN return_lines rl ON rl.return_id=r.id
+             WHERE ${scopeCondition(req.clientScope, 'r.client_id', params)}
+             GROUP BY r.id ORDER BY r.created_at DESC LIMIT 200`;
+    res.json((await pool.query(q, params)).rows);
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }
 });
 

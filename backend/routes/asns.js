@@ -8,6 +8,7 @@ const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireAuth, requireJefe, requireJefeOrAbove, requireStockWrite, checkClientAccess } = require('../middleware');
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId, logStorageEvent } = require('../helpers');
+const { scopeCondition } = require('../scope');
 
 const router = express.Router();
 
@@ -58,8 +59,11 @@ router.delete('/suppliers/:id', requireJefeOrAbove, async (req, res) => {
 // ── ASNs ─────────────────────────────────────────────────────────────────────
 router.get('/asns', requireAuth, async (req, res) => {
   try {
+    const params = [];
     const r = await pool.query(`SELECT a.*, COALESCE(json_agg(l ORDER BY l.id) FILTER (WHERE l.id IS NOT NULL),'[]') as lines
-      FROM asns a LEFT JOIN asn_lines l ON l.asn_id=a.id GROUP BY a.id ORDER BY a.created_at DESC LIMIT 200`);
+      FROM asns a LEFT JOIN asn_lines l ON l.asn_id=a.id
+      WHERE ${scopeCondition(req.clientScope, 'a.client_id', params)}
+      GROUP BY a.id ORDER BY a.created_at DESC LIMIT 200`, params);
     res.json(r.rows);
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }
 });
@@ -71,11 +75,20 @@ router.post('/asns', requireJefeOrAbove, checkClientAccess('write'), async (req,
   if (supplier_id && !resolvedSupplierName) {
     try { const sr = await pool.query('SELECT name FROM suppliers WHERE id=$1', [supplier_id]); resolvedSupplierName = sr.rows[0]?.name || null; } catch(e){}
   }
+  // Dueño de la mercancía: el indicado, o el único cliente de los SKU del aviso.
+  let asnClientId = req.body.client_id ? String(req.body.client_id).trim().toUpperCase() : null;
+  if (!asnClientId && Array.isArray(lines)) {
+    const skus = [...new Set(lines.map(l => String(l?.sku || '').toUpperCase()).filter(Boolean))];
+    if (skus.length) {
+      const owners = await pool.query('SELECT DISTINCT client_id FROM master_skus WHERE sku = ANY($1)', [skus]);
+      if (owners.rows.length === 1) asnClientId = owners.rows[0].client_id;
+    }
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(`INSERT INTO asns (id,supplier_id,supplier_name,expected_date,reference,notes,created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [id, supplier_id||null, resolvedSupplierName, expected_date||null, reference||null, notes||null, req.user.username]);
+    await client.query(`INSERT INTO asns (id,supplier_id,supplier_name,expected_date,reference,notes,created_by,client_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [id, supplier_id||null, resolvedSupplierName, expected_date||null, reference||null, notes||null, req.user.username, asnClientId]);
     if (Array.isArray(lines)) {
       for (const l of lines) {
         if (l.sku && parseFloat(l.qty_expected)>0)

@@ -6,17 +6,21 @@ const express = require('express');
 const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireAuth, requireAdmin, checkClientAccess } = require('../middleware');
 const { genLpnId } = require('../helpers');
+const { scopeCondition, clientAllowed } = require('../scope');
 
 const router = express.Router();
 
 router.get('/purchase-orders', requireAuth, async (req, res) => {
   try {
+    const params = [];
     const result = await pool.query(`
       SELECT po.*,
         (SELECT COUNT(*) FROM purchase_order_lines WHERE po_id=po.id) as total_lines,
         (SELECT COUNT(*) FROM purchase_order_lines WHERE po_id=po.id AND status='RECEIVED') as received_lines
-      FROM purchase_orders po ORDER BY created_at DESC LIMIT 50
-    `);
+      FROM purchase_orders po
+      WHERE ${scopeCondition(req.clientScope, 'po.client_id', params)}
+      ORDER BY created_at DESC LIMIT 50
+    `, params);
     res.json(result.rows);
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
@@ -50,13 +54,17 @@ router.post('/purchase-orders', requireAuth, checkClientAccess('write'), async (
 
 router.get('/purchase-orders/:id/lines', requireAuth, async (req, res) => {
   try {
+    const po = await pool.query(`SELECT * FROM purchase_orders WHERE id=$1`, [req.params.id]);
+    // Una OC de otro cliente se trata como inexistente (no se confirma que exista).
+    if (!po.rows[0] || !clientAllowed(req.clientScope, po.rows[0].client_id)) {
+      return res.status(404).json({ error: 'Orden de compra no encontrada.' });
+    }
     const lines = await pool.query(`
       SELECT pol.*, s."desc", s.uom
       FROM purchase_order_lines pol
-      LEFT JOIN master_skus s ON pol.sku = s.sku
+      LEFT JOIN master_skus s ON pol.sku = s.sku AND s.client_id = $2
       WHERE pol.po_id = $1 ORDER BY pol.id
-    `, [req.params.id]);
-    const po = await pool.query(`SELECT * FROM purchase_orders WHERE id=$1`, [req.params.id]);
+    `, [req.params.id, po.rows[0].client_id]);
     res.json({ po: po.rows[0], lines: lines.rows });
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });

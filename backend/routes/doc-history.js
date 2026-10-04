@@ -3,6 +3,7 @@
 const express = require('express');
 const { pool, mapDbError } = require('../db');
 const { requireAuth, requireJefe, requireStockWrite } = require('../middleware');
+const { scopeCondition } = require('../scope');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
@@ -29,6 +30,8 @@ router.get('/document-history', requireAuth, async (req, res) => {
     if (search) { conds.push(`(doc_num ILIKE $${idx} OR glosa ILIKE $${idx} OR username ILIKE $${idx})`); params.push(`%${search}%`); idx++; }
     if (date_from) { conds.push(`created_at >= $${idx++}`); params.push(date_from); }
     if (date_to) { conds.push(`created_at <= $${idx++}`); params.push(date_to + 'T23:59:59'); }
+    conds.push(scopeCondition(req.clientScope, 'client_id', params));
+    idx = params.length + 1;
     const limit = Math.min(parseInt(qLimit) || 500, 2000);
     const offset = Math.max(parseInt(qOffset) || 0, 0);
     params.push(limit); params.push(offset);

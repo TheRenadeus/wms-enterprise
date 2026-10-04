@@ -52,6 +52,7 @@ const {
   apiDemoBlock,
   apiClienteReadOnly,
   SANDBOX_ENABLED,
+  apiSessionCheck, apiClienteReadAllow,
 } = require('./middleware');
 
 const path = require('path');
@@ -109,6 +110,8 @@ app.use(globalLimiter);
 // apiLimiter (100/min) antes del auth gate: protege también el verificador de JWT.
 app.use('/api', apiLimiter);
 app.use('/api', apiAuthGate);
+app.use('/api', apiSessionCheck);
+app.use('/api', apiClienteReadAllow);
 // Bloqueo por licencia vencida (escrituras de no-SUPERADMIN). Va tras el auth gate
 // (necesita req.user). El SUPERADMIN pasa para poder renovar.
 app.use('/api', apiLicenseGate);

@@ -7,8 +7,18 @@ const bcrypt = require('bcryptjs');
 
 const { pool, mapDbError } = require('../db');
 const { requireAuth, requireAdmin, requireResetPassword } = require('../middleware');
+const { invalidateUser } = require('../scope');
 
 const router = express.Router();
+
+// Cualquier cambio sobre usuarios (aquí o en /system/users/*) invalida la caché de
+// permisos para que suspensiones, cambios de rol o de clientes rijan de inmediato.
+router.use((req, res, next) => {
+  if (req.method !== 'GET' && /^\/(system\/)?users(\/|$)/.test(req.path)) {
+    res.on('finish', () => invalidateUser());
+  }
+  next();
+});
 
 // PASO 2: JEFE_BODEGA+ puede resetear SOLO la contraseña de usuarios de rango
 // inferior (no toca rol ni scope). El gate requireResetPassword valida el rango.
