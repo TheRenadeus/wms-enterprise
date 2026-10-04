@@ -9,6 +9,7 @@ const { runMigrations } = require('./migrations');
 const migrationList = require('./migrations/list');
 const { invalidate: cacheInvalidate } = require('./cache');
 const { apiErrorHandler } = require('./errorHandler');
+const { demoInstanceGuard, iniciarDemo } = require('./demo-instance');
 const authRouter = require('./routes/auth');
 const notificationsRouter = require('./routes/notifications');
 const inventoryRouter = require('./routes/inventory');
@@ -113,6 +114,8 @@ app.use('/api', apiLimiter);
 app.use('/api', apiAuthGate);
 app.use('/api', apiSessionCheck);
 app.use('/api', apiClienteReadAllow);
+// Instancia de demostración: bloquea respaldos, gestión de usuarios y borrados masivos.
+app.use('/api', demoInstanceGuard);
 // Bloqueo por licencia vencida (escrituras de no-SUPERADMIN). Va tras el auth gate
 // (necesita req.user). El SUPERADMIN pasa para poder renovar.
 app.use('/api', apiLicenseGate);
@@ -225,6 +228,7 @@ const bootstrap = async (retries = 6, delay = 3000) => {
     await runMigrations(pool, migrationList);
     await checkDisasterRecovery();
     await ensureSuperadmin();
+    await iniciarDemo(pool);
     console.log('✅ Base de Datos V11.0 iniciada correctamente');
   } catch (err) {
     if (retries > 0) {

@@ -46,6 +46,10 @@ services:
       SUPERADMIN_USER: ${SUPERADMIN_USER:-}
       SUPERADMIN_HASH: ${SUPERADMIN_HASH:-}
       SUPERADMIN_FULLNAME: ${SUPERADMIN_FULLNAME:-}
+      # Solo para un servidor de demostración con su propia base (docs/demo.md).
+      DEMO_INSTANCE: ${DEMO_INSTANCE:-false}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      DEMO_RESET_HOUR: ${DEMO_RESET_HOUR:-7}
   wms-frontend:
     build: ./frontend
     container_name: wms-frontend
