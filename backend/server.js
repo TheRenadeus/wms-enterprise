@@ -51,6 +51,7 @@ const {
   apiClientScope,
   apiDemoBlock,
   apiClienteReadOnly,
+  SANDBOX_ENABLED,
 } = require('./middleware');
 
 const path = require('path');
@@ -135,13 +136,16 @@ app.use('/api', apiClientScope);
 app.use('/api', apiDemoBlock);
 // Sandbox: interceptar GETs de usuarios demo y devolver datos simulados (con overlay
 // de mutaciones registradas por POST/PUT/DELETE de la misma sesión).
+// Denegar por defecto: una sesión de sandbox nunca llega a un handler real con datos
+// de la base, ni siquiera por una variante de la URL (mayúsculas, barra final).
 app.use('/api', (req, res, next) => {
-  if (req.method !== 'GET') return next();
   if (!req.user || !req.user.is_demo) return next();
+  if (req.method !== 'GET') return next(); // escrituras: ya resueltas por apiDemoBlock
+  if (req.path.startsWith('/demo/')) return next();
   const fullPath = '/api' + req.path;
   const data = getSandboxResponse(fullPath, req.user.sandbox_scenario, req.user);
   if (data !== null) return res.json(data);
-  next();
+  return res.status(403).json({ error: 'Esta consulta no está disponible en la demostración.' });
 });
 app.use('/api', apiClienteReadOnly);
 
@@ -242,7 +246,8 @@ app.use('/api', clientsRouter);       // /clients (GET/POST/DELETE)
 app.use('/api', returnsRouter);       // /returns (POST/GET), /returns/:id/inspect, /returns/create
 app.use('/api', asnsRouter);          // /suppliers, /asns (+ /asns/:id/receive)
 app.use('/api', pickWavesRouter);     // /pick-waves (+ release/close/available-lines)
-app.use('/api', demoRouter);          // /demo/* (sandbox-config, login, switch-role, switch-scenario, feedback)
+// /demo/* (sandbox-config, login, switch-role, switch-scenario, feedback): solo con DEMO_SANDBOX=true.
+if (SANDBOX_ENABLED) app.use('/api', demoRouter);
 app.use('/api', locationsRouter);     // /locations (POST/PUT/DELETE + bulk)
 app.use('/api', cycleCountRouter);    // /cycle-count/*, /adjust-request, /adjust-requests/*
 app.use('/api', pickTasksRouter);     // /pick-tasks/*, /picker/* (queue, start, confirm, skip)

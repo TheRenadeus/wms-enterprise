@@ -566,6 +566,16 @@ export default function App() {
   // Sandbox demo — se muestra como pantalla completa
   const [showSandbox, setShowSandbox] = useState(false);
   const [showSandboxWelcome, setShowSandboxWelcome] = useState(false);
+  // El acceso al sandbox solo se ofrece si el servidor lo tiene encendido (DEMO_SANDBOX).
+  const [sandboxAvailable, setSandboxAvailable] = useState(false);
+  useEffect(() => {
+    if (currentUser) return;
+    let cancelled = false;
+    fetch(`${host}/api/demo/sandbox-config`)
+      .then(r => { if (!cancelled) setSandboxAvailable(r.ok); })
+      .catch(() => { if (!cancelled) setSandboxAvailable(false); });
+    return () => { cancelled = true; };
+  }, [host, currentUser]);
   const tutorial = useTutorial({ apiFetch, host, isDemo: currentUser?.is_demo === true });
   // Feedback / sugerencias del staff
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
@@ -2335,7 +2345,7 @@ export default function App() {
           )}
           {msg && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs font-bold mb-4 text-center border border-red-200">{msg.text}</div>}
           {/* SANDBOX DEMO */}
-          <div className="mb-6 border-b border-slate-100 pb-6">
+          {sandboxAvailable && <div className="mb-6 border-b border-slate-100 pb-6">
             <button onClick={() => setShowSandbox(true)}
               className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl px-5 py-4 text-left transition-all shadow-lg shadow-amber-200/50 hover:shadow-amber-300/60 hover:scale-[1.01] active:scale-[0.99] group">
               <div className="flex items-center justify-between">
@@ -2351,7 +2361,7 @@ export default function App() {
                 </div>
               </div>
             </button>
-          </div>
+          </div>}
 
           <form onSubmit={handleLogin} method="post" action="javascript:void(0)" className="space-y-4">
             <div>

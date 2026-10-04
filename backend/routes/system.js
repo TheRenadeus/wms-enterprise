@@ -9,11 +9,15 @@ const backupsRouter = require('./backups');
 
 const router = express.Router();
 
+// Claves internas que no son configuración: nunca se envían en GET /system/config
+// (cada usuario descarga esta respuesta al iniciar la app).
+const INTERNAL_CONFIG_KEY = /^(demo_feedback|tutorial_progress_)|(secret|token|password|hash)/i;
+
 router.get('/system/config', requireAuth, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT * FROM system_config`);
+    const result = await pool.query(`SELECT key, value FROM system_config`);
     const config = {};
-    result.rows.forEach(r => { config[r.key] = r.value; });
+    result.rows.forEach(r => { if (!INTERNAL_CONFIG_KEY.test(r.key)) config[r.key] = r.value; });
     res.json(config);
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });

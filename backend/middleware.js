@@ -9,12 +9,23 @@ const crypto = require('crypto');
 // por arranque, nunca uno fijo en el código: las sesiones se cierran al reiniciar el backend.
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
+// Sandbox de demostración con datos simulados (/api/demo/*). Apagado por defecto:
+// solo se enciende con DEMO_SANDBOX=true en una instancia sin datos reales.
+const SANDBOX_ENABLED = process.env.DEMO_SANDBOX === 'true';
+
 // ── AUTENTICACIÓN ────────────────────────────────────────────────────────────
 const requireAuth = (req, res, next) => {
   const auth = req.headers['authorization'];
   if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'No autorizado — token requerido' });
-  try { req.user = jwt.verify(auth.slice(7), JWT_SECRET); next(); }
+  let payload;
+  try { payload = jwt.verify(auth.slice(7), JWT_SECRET); }
   catch (e) { return res.status(401).json({ error: 'Token inválido o expirado. Vuelva a iniciar sesión.' }); }
+  // Un token de sandbox nunca vale si el sandbox está apagado (incluidos los emitidos antes).
+  if (payload.is_demo && !SANDBOX_ENABLED) {
+    return res.status(401).json({ error: 'Sesión de demostración no válida en esta instalación.' });
+  }
+  req.user = payload;
+  next();
 };
 
 // ── MODELO DE ROLES v2 — allowlist por gate (default DENEGAR) ─────────────────
@@ -123,9 +134,8 @@ const apiAuthGate = (req, res, next) => {
   if (req.path === '/portal/login') return next();
   if (req.path.startsWith('/portal/')) return next();
   if (req.path.startsWith('/v1/')) return next();
-  if (req.path === '/demo/login') return next();
-  if (req.method === 'GET' && req.path === '/demo/personas') return next();
-  if (req.method === 'GET' && req.path === '/demo/sandbox-config') return next();
+  if (SANDBOX_ENABLED && req.path === '/demo/login') return next();
+  if (SANDBOX_ENABLED && req.method === 'GET' && req.path === '/demo/sandbox-config') return next();
   // Banner pre-login: el frontend lo consulta antes de autenticarse.
   if (req.path === '/system/maintenance/check') return next();
   requireAuth(req, res, next);
@@ -355,6 +365,7 @@ const apiLicenseGate = async (req, res, next) => {
 
 module.exports = {
   JWT_SECRET,
+  SANDBOX_ENABLED,
   getLicenseStatus,
   apiLicenseGate,
   requireAuth,

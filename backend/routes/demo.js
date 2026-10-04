@@ -109,11 +109,19 @@ router.post('/demo/switch-scenario', requireAuth, async (req, res) => {
 
 router.post('/demo/feedback', requireAuth, async (req, res) => {
   const { message, rating, persona_label } = req.body;
-  if (!message || !message.trim()) return res.status(400).json({ error: 'Mensaje requerido.' });
+  if (typeof message !== 'string' || !message.trim()) return res.status(400).json({ error: 'Mensaje requerido.' });
+  if (message.length > 2000) return res.status(400).json({ error: 'El mensaje no puede superar 2.000 caracteres.' });
+  const ratingNum = Number(rating);
   try {
     const r = await pool.query(`SELECT value FROM system_config WHERE key='demo_feedback'`);
     const existing = r.rows.length ? JSON.parse(r.rows[0].value) : [];
-    const entry = { id: Date.now(), username: req.user.username, persona_label: persona_label || '', message: message.trim(), rating: rating || null, created_at: new Date().toISOString() };
+    const entry = {
+      id: Date.now(), username: req.user.username,
+      persona_label: String(persona_label || '').slice(0, 80),
+      message: message.trim(),
+      rating: Number.isInteger(ratingNum) && ratingNum >= 1 && ratingNum <= 5 ? ratingNum : null,
+      created_at: new Date().toISOString(),
+    };
     const updated = [entry, ...existing].slice(0, 300);
     await pool.query(`INSERT INTO system_config (key, value, updated_by, updated_at) VALUES ('demo_feedback',$1,$2,NOW()) ON CONFLICT (key) DO UPDATE SET value=$1, updated_by=$2, updated_at=NOW()`, [JSON.stringify(updated), req.user.username]);
     res.json({ success: true });
