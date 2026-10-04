@@ -274,8 +274,7 @@ test('despacho masivo: un SKU de varios clientes no se descuenta a ciegas', asyn
   const r = await h.request('POST', '/api/import/dispatch', {
     token: admin, body: { rows: [{ sku: 'SKU-X', qty_to_pick: 5 }] },
   });
-  assert.equal(r.status, 200);
-  assert.equal(r.body.success, 0);
+  assert.equal(r.status, 422);
   assert.equal(Number(await qtyDe('LPN-XB')), 10);
   assert.equal(Number(await qtyDe('LPN-XA')), 10);
 

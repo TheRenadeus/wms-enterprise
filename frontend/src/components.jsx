@@ -906,7 +906,7 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
   // que sin esto el render reventaba al leer results.errors.length (errors undefined).
   const normalizeResult = (d, fallbackMsg) => {
     if (!d || typeof d !== 'object') return { success: 0, errors: [fallbackMsg || 'Respuesta inesperada del servidor.'] };
-    if (d.error) return { success: Number(d.success) || 0, errors: [d.error] };
+    if (d.error) return { success: Number(d.success) || 0, errors: [d.error, ...(Array.isArray(d.errors) ? d.errors : [])] };
     return {
       success: Number(d.success) || 0,
       errors: Array.isArray(d.errors) ? d.errors : [],
@@ -1859,6 +1859,7 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {},
   };
 
   const handleConfirm = async () => {
+    if (errorRows.length > 0) return;
     const valids = rows.filter(isRowValid).map(r => r.data);
     if (!valids.length) return;
     setStatus('importing');
@@ -1870,7 +1871,8 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {},
       });
       let d = null; try { d = await res.json(); } catch { d = null; }
       if (!res.ok || !d || d.error) {
-        setResults({ ok: 0, info: [], errors: [{ row: '-', message: (d && d.error) || `Error del servidor (HTTP ${res.status}).` }] });
+        const detalle = Array.isArray(d?.errors) ? d.errors.map(e => (typeof e === 'string' ? { row: '-', message: e } : e)) : [];
+        setResults({ ok: 0, info: [], errors: [{ row: '-', message: (d && d.error) || `Error del servidor (HTTP ${res.status}).` }, ...detalle] });
         setStatus('results'); return;
       }
       const parsed = schema.parseResult(d, valids.length);
@@ -2022,15 +2024,21 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {},
 
               <div className="flex gap-3">
                 <button onClick={handleCancel} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">Cancelar</button>
+                {errorRows.length > 0 && (
+                  <button onClick={() => setRows(prev => prev.filter(isRowValid))} className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">
+                    Quitar {errorRows.length} {errorRows.length === 1 ? 'fila con error' : 'filas con error'}
+                  </button>
+                )}
                 <button
                   onClick={handleConfirm}
-                  disabled={validRows.length === 0}
+                  disabled={validRows.length === 0 || errorRows.length > 0}
                   className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex justify-center items-center"
                 >
                   <Database size={16} className="mr-2"/> Confirmar ({validRows.length} {validRows.length === 1 ? 'fila válida' : 'filas válidas'})
                 </button>
               </div>
               {validRows.length === 0 && <p className="text-[11px] text-red-500 font-bold text-center">No hay filas válidas. Corrige las celdas marcadas y reintenta.</p>}
+              {validRows.length > 0 && errorRows.length > 0 && <p className="text-[11px] text-red-500 font-bold text-center">La importación es completa o no se hace: corrige las filas marcadas o quítalas para confirmar.</p>}
             </div>
           )}
 
