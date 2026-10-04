@@ -188,7 +188,7 @@ router.post('/system/factory-reset', requireSuperAdmin, async (req, res) => {
     try {
       await client.query('BEGIN');
       // 3) Vaciar TODO menos la tabla de migraciones.
-      const tbls = (await client.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> 'schema_migrations'`))
+      const tbls = (await client.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations', 'system_backups')`))
         .rows.map(r => `"${r.tablename}"`);
       await client.query(`TRUNCATE TABLE ${tbls.join(', ')} RESTART IDENTITY CASCADE`);
       // 4) Re-insertar el esqueleto (superadmins + catálogos/config base).

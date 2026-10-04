@@ -179,7 +179,7 @@ const checkDisasterRecovery = async () => {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const { rowsInserted } = await aplicarRestore(client, payload.tables || {});
+        const { rowsInserted } = await aplicarRestore(client, payload);
         await client.query('COMMIT');
         console.log(`✅ [RECOVERY] Restauración automática completa desde ${latest} (${rowsInserted} filas).`);
       } catch (e) {

@@ -320,7 +320,7 @@ router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClient
                `[KIT] Componente de ${qtyKits}x ${kitSku}. Doc: [${docType || 'N/A'}] ${docNum}. LPN origen: ${cc.lpn_id}.${cc.lote ? ` Lote: ${cc.lote}.` : ''}${cc.serie ? ` Serie: ${cc.serie}.` : ''} ${docGlosa}`,
                user, kitClient]);
             await logStorageEvent(client, { client_id: kitClient || null, event_type: 'MOVIMIENTO_OUT', sku: comp.component_sku, lpn_id: cc.lpn_id, qty: cc.cantidad });
-            aplicados.push({ sku: comp.component_sku, lpnId: cc.lpn_id, qtyToPick: cc.cantidad, qty: cc.cantidad, location: cc.ubicacion, serial: cc.serie, kit: kitSku, client_id: kitClient });
+            aplicados.push({ sku: comp.component_sku, lpnId: cc.lpn_id, qtyToPick: cc.cantidad, qty: cc.cantidad, location: cc.ubicacion, serial: cc.serie, batch: cc.lote, kit: kitSku, client_id: kitClient });
           }
         }
         continue; // el kit no descuenta como SKU normal ni genera stock propio
@@ -336,7 +336,7 @@ router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClient
 
       // Bloquear solo inventory_lpns (sin JOIN) para evitar error de PG con outer join + FOR UPDATE
       const lpnLock = await client.query(
-        `SELECT id, qty, status, sku, client_id, location_id, serial_number FROM inventory_lpns WHERE id = $1 FOR UPDATE`, [lpnId]
+        `SELECT id, qty, status, sku, client_id, location_id, serial_number, batch_number, expiry_date FROM inventory_lpns WHERE id = $1 FOR UPDATE`, [lpnId]
       );
       const lpnRow = lpnLock.rows[0];
       if (!lpnRow || !clientAllowed(req.clientScope, lpnRow.client_id)) throw httpError(404, `LPN ${lpnId} no encontrado.`);
@@ -374,7 +374,8 @@ router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClient
 
       // Cobro 3PL: registrar evento de movimiento de salida (no-op si cliente propio)
       await logStorageEvent(client, { client_id: dispClientId || null, event_type: 'MOVIMIENTO_OUT', sku, lpn_id: lpnId, qty: qtyToPick });
-      aplicados.push({ sku: lpnRow.sku, lpnId, qtyToPick, qty: qtyToPick, location: lpnRow.location_id, serial: lpnRow.serial_number, client_id: lpnRow.client_id });
+      aplicados.push({ sku: lpnRow.sku, lpnId, qtyToPick, qty: qtyToPick, location: lpnRow.location_id, serial: lpnRow.serial_number,
+        batch: lpnRow.batch_number, expiry: lpnRow.expiry_date, client_id: lpnRow.client_id });
     }
     // Borrar solo LPNs que este dispatch dejó en 0; evita carrera con otras
     // sesiones que pudieran estar insertando filas con qty=0 transitorio.

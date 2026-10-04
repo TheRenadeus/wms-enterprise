@@ -3,7 +3,8 @@
 const express = require('express');
 const { pool, mapDbError, userError } = require('../db');
 const { requireAuth, requireJefe, requireStockWrite } = require('../middleware');
-const { scopeCondition } = require('../scope');
+const { scopeCondition, clientAllowed } = require('../scope');
+const { httpError } = require('../stock-entrante');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
@@ -33,69 +34,86 @@ router.get('/document-history', requireAuth, async (req, res) => {
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
-// Función compartida que ejecuta la reversión de stock
-async function executeVoid(client, docHistoryId, reason, executedBy) {
-  const docRow = await client.query('SELECT * FROM document_history WHERE id=$1', [docHistoryId]);
-  if (!docRow.rows.length) throw new Error('Documento no encontrado en historial.');
+// Función compartida que ejecuta la reversión de stock. Trabaja con los LPN que el
+// servidor registró en el historial al cerrar el documento; para documentos
+// anteriores a ese registro, con el kardex del documento (prefijo exacto, sin
+// comodines). No anula si algún LPN ya tuvo movimientos.
+async function executeVoid(client, docHistoryId, reason, executedBy, scope) {
+  const docRow = await client.query('SELECT * FROM document_history WHERE id=$1 FOR UPDATE', [docHistoryId]);
   const doc = docRow.rows[0];
-  if (doc.status === 'ANULADO') throw new Error('El documento ya fue anulado anteriormente.');
-  if (!['receive','dispatch'].includes(doc.module)) throw new Error('Solo se pueden anular recepciones y despachos.');
+  if (!doc || !clientAllowed(scope, doc.client_id)) throw httpError(404, 'Documento no encontrado en historial.');
+  if (doc.status === 'ANULADO') throw httpError(409, 'El documento ya fue anulado anteriormente.');
+  if (!['receive','dispatch'].includes(doc.module)) throw httpError(400, 'Solo se pueden anular recepciones y despachos.');
 
-  const items = JSON.parse(doc.items_json || '[]');
+  let items = [];
+  try { items = JSON.parse(doc.items_json || '[]'); } catch { items = []; }
+  if (!Array.isArray(items)) items = [];
   const docNum = doc.doc_num;
-  const module = doc.module;
+  const docClient = doc.client_id ? String(doc.client_id).toUpperCase() : null;
 
-  if (module === 'receive') {
-    // Buscar LPNs creados por esta recepción en el audit_log
-    const auditRows = await client.query(
-      `SELECT glosa FROM audit_log WHERE type='INBOUND' AND glosa LIKE $1`,
-      [`%] ${docNum}. LPN: %`]
-    );
-    const lpnIds = [];
-    for (const row of auditRows.rows) {
-      const m = row.glosa.match(/LPN:\s+([A-Z0-9-]+)/);
-      if (m && m[1]) lpnIds.push(m[1]);
+  if (doc.module === 'receive') {
+    let creados = items.filter(i => i && i.lpnId).map(i => ({ lpnId: String(i.lpnId), qty: Number(i.qty) }));
+    if (!creados.length) {
+      const prefijo = `Doc: [${doc.doc_type || 'N/A'}] ${docNum}. LPN: `;
+      const patron = prefijo.replace(/[\\%_]/g, '\\$&') + '%';
+      const kardex = await client.query(`SELECT glosa, qty FROM audit_log WHERE type='INBOUND' AND glosa LIKE $1 ESCAPE '\\'`, [patron]);
+      creados = kardex.rows.map(r => {
+        const m = r.glosa.slice(prefijo.length).match(/^([A-Za-z0-9-]+)/);
+        return m ? { lpnId: m[1], qty: Number(r.qty) } : null;
+      }).filter(Boolean);
     }
-    if (lpnIds.length === 0) throw new Error('No se encontraron LPNs asociados a esta recepción en el audit log.');
-    for (const lpnId of lpnIds) {
-      await client.query('DELETE FROM inventory_lpns WHERE id=$1', [lpnId]);
-    }
-    await client.query(
-      `INSERT INTO audit_log (type,sku,qty,glosa,username) VALUES ('VOID_INBOUND','N/A',0,$1,$2)`,
-      [`Anulación RECEPCIÓN Doc: ${docNum}. LPNs eliminados: ${lpnIds.join(', ')}. Motivo: ${reason}`, executedBy]
-    );
-  } else if (module === 'dispatch') {
-    // Restaurar qty de cada LPN despachado
-    for (const item of items) {
-      if (!item.lpnId || !(item.qtyToPick > 0)) continue;
-      const qty = parseFloat(item.qtyToPick);
-      const updated = await client.query(
-        'UPDATE inventory_lpns SET qty = qty + $1 WHERE id = $2 RETURNING id',
-        [qty, item.lpnId]
-      );
-      if (updated.rowCount === 0) {
-        // LPN fue eliminado por completo (qty=0) — re-insertar
-        const skuRow = await client.query('SELECT client_id FROM master_skus WHERE sku=$1 LIMIT 1', [item.sku]);
-        const clientId = skuRow.rows[0]?.client_id || 'GENERAL';
-        await client.query(
-          `INSERT INTO inventory_lpns (id,sku,qty,client_id,status,serial_number,location_id,glosa)
-           VALUES ($1,$2,$3,$4,'DISPONIBLE',$5,$6,$7)`,
-          [item.lpnId, item.sku, qty, clientId, item.serial||null,
-           item.location||'PISO-RECEPCION', `Restaurado por anulación Doc: ${docNum}`]
-        );
+    if (!creados.length) throw httpError(400, 'No se encontraron los LPN de esta recepción.');
+    for (const c of creados) {
+      const lpn = (await client.query('SELECT id, qty, sku, client_id FROM inventory_lpns WHERE id=$1 FOR UPDATE', [c.lpnId])).rows[0];
+      if (!lpn) throw httpError(409, `El LPN ${c.lpnId} ya no está en stock: no se puede anular la recepción.`);
+      if (docClient && String(lpn.client_id || '').toUpperCase() !== docClient) throw httpError(409, `El LPN ${c.lpnId} no pertenece al cliente del documento.`);
+      if (Number.isFinite(c.qty) && Number(lpn.qty) !== c.qty) {
+        throw httpError(409, `El LPN ${c.lpnId} ya tuvo movimientos (tiene ${Number(lpn.qty)} de ${c.qty}): no se puede anular la recepción.`);
       }
+      c.sku = lpn.sku; c.clientId = lpn.client_id; c.qty = Number(lpn.qty);
     }
-    await client.query(
-      `INSERT INTO audit_log (type,sku,qty,glosa,username) VALUES ('VOID_OUTBOUND','N/A',0,$1,$2)`,
-      [`Anulación DESPACHO Doc: ${docNum}. Stock restaurado. Motivo: ${reason}`, executedBy]
-    );
+    for (const c of creados) {
+      await client.query('DELETE FROM inventory_lpns WHERE id=$1', [c.lpnId]);
+      await client.query(
+        `INSERT INTO audit_log (type,sku,qty,glosa,username,client_id) VALUES ('VOID_INBOUND',$1,$2,$3,$4,$5)`,
+        [c.sku, c.qty, `Anulación RECEPCIÓN Doc: ${docNum}. LPN eliminado: ${c.lpnId}. Motivo: ${reason}`, executedBy, c.clientId]);
+    }
+  } else {
+    if (items.some(i => i && i.isKit && !i.lpnId)) {
+      throw httpError(400, 'Este despacho incluye kits registrados con el formato anterior: corrija el stock con un ajuste.');
+    }
+    for (const item of items) {
+      const qty = Number(item?.qtyToPick);
+      if (!item?.lpnId || !(qty > 0)) continue;
+      const clientId = String(item.client_id || docClient || '').toUpperCase();
+      if (!clientId) throw httpError(400, `No se puede determinar el cliente del LPN ${item.lpnId}.`);
+      const updated = await client.query('UPDATE inventory_lpns SET qty = qty + $1 WHERE id = $2 RETURNING client_id', [qty, item.lpnId]);
+      if (updated.rowCount && String(updated.rows[0].client_id || '').toUpperCase() !== clientId) {
+        throw httpError(409, `El LPN ${item.lpnId} pertenece a otro cliente.`);
+      }
+      if (updated.rowCount === 0) {
+        // El LPN se eliminó al quedar en 0: se recrea con sus datos del despacho.
+        const loc = item.location
+          ? ((await client.query('SELECT 1 FROM locations_master WHERE location_id=$1', [item.location])).rows.length ? item.location : 'PISO-RECEPCION')
+          : 'PISO-RECEPCION';
+        await client.query(
+          `INSERT INTO inventory_lpns (id,sku,qty,client_id,status,batch_number,expiry_date,serial_number,location_id,glosa)
+           VALUES ($1,$2,$3,$4,'DISPONIBLE',$5,$6,$7,$8,$9)`,
+          [item.lpnId, String(item.sku).toUpperCase(), qty, clientId, item.batch || null, item.expiry || null, item.serial || null,
+           loc, `Restaurado por anulación Doc: ${docNum}`]);
+      }
+      await client.query(
+        `INSERT INTO audit_log (type,sku,qty,glosa,username,client_id) VALUES ('VOID_OUTBOUND',$1,$2,$3,$4,$5)`,
+        [String(item.sku).toUpperCase(), qty, `Anulación DESPACHO Doc: ${docNum}. Stock restaurado en LPN ${item.lpnId}. Motivo: ${reason}`, executedBy, clientId]);
+    }
   }
 
-  // Marcar documento como ANULADO
-  await client.query(
-    `UPDATE document_history SET status='ANULADO', void_reason=$1, voided_by=$2, voided_at=NOW() WHERE id=$3`,
+  // Marcar documento como ANULADO (una sola vez).
+  const marca = await client.query(
+    `UPDATE document_history SET status='ANULADO', void_reason=$1, voided_by=$2, voided_at=NOW() WHERE id=$3 AND COALESCE(status,'ACTIVO') <> 'ANULADO'`,
     [reason, executedBy, docHistoryId]
   );
+  if (!marca.rowCount) throw httpError(409, 'El documento ya fue anulado anteriormente.');
 }
 
 // Anulación directa (ADMIN / SUPERADMIN)
@@ -106,12 +124,12 @@ router.post('/document-history/:id/void', requireJefe, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await executeVoid(client, req.params.id, reason.trim(), req.user.username);
+    await executeVoid(client, req.params.id, reason.trim(), req.user.username, req.clientScope);
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(400).json({ error: userError(err) });
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(err.status || 400).json({ error: userError(err) });
   } finally { client.release(); }
 });
 
@@ -125,6 +143,7 @@ router.post('/document-history/:id/void-request', requireStockWrite, async (req,
     const docRow = await pool.query('SELECT * FROM document_history WHERE id=$1', [req.params.id]);
     if (!docRow.rows.length) return res.status(404).json({ error: 'Documento no encontrado.' });
     const doc = docRow.rows[0];
+    if (!clientAllowed(req.clientScope, doc.client_id)) return res.status(404).json({ error: 'Documento no encontrado.' });
     if (doc.status === 'ANULADO') return res.status(409).json({ error: 'El documento ya fue anulado.' });
     if (!['receive','dispatch'].includes(doc.module)) return res.status(400).json({ error: 'Solo se pueden anular recepciones y despachos.' });
     // Verificar que no haya solicitud pendiente para este doc
@@ -164,7 +183,7 @@ router.post('/anulation-requests/:id/approve', requireJefe, async (req, res) => 
     if (!reqRow.rows.length) throw new Error('Solicitud no encontrada.');
     const anulReq = reqRow.rows[0];
     if (anulReq.status !== 'PENDIENTE') throw new Error('La solicitud ya fue procesada.');
-    await executeVoid(client, anulReq.doc_history_id, anulReq.reason, req.user.username);
+    await executeVoid(client, anulReq.doc_history_id, anulReq.reason, req.user.username, req.clientScope);
     await client.query(
       `UPDATE anulation_requests SET status='APROBADA', authorized_by=$1, resolved_at=NOW() WHERE id=$2`,
       [req.user.username, req.params.id]
@@ -172,8 +191,8 @@ router.post('/anulation-requests/:id/approve', requireJefe, async (req, res) => 
     await client.query('COMMIT');
     res.json({ success: true });
   } catch (err) {
-    await client.query('ROLLBACK');
-    res.status(400).json({ error: userError(err) });
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(err.status || 400).json({ error: userError(err) });
   } finally { client.release(); }
 });
 

@@ -25,7 +25,7 @@ const path = require('path');
 const { pool } = require('./db');
 const { runMigrations } = require('./migrations');
 const migrationList = require('./migrations/list');
-const { aplicarRestore, BACKUP_TABLES, BACKUPS_DIR } = require('./routes/backups');
+const { aplicarRestore, validarRespaldo, BACKUPS_DIR } = require('./routes/backups');
 
 const args = process.argv.slice(2);
 const has = (flag) => args.includes(flag);
@@ -72,8 +72,10 @@ async function main() {
   let payload;
   try { payload = JSON.parse(fs.readFileSync(filepath, 'utf8')); }
   catch (e) { return fail(`No se pudo leer/parsear el backup: ${e.message}`); }
-  const tables = payload.tables || {};
-  const counts = BACKUP_TABLES.map(t => [t, Array.isArray(tables[t]) ? tables[t].length : 0]);
+  try { validarRespaldo(payload); }
+  catch (e) { return fail(e.message); }
+  const tables = payload.tables;
+  const counts = Object.keys(tables).sort().map(t => [t, tables[t].length]);
   const totalRows = counts.reduce((s, [, n]) => s + n, 0);
 
   log('────────────────────────────────────────────────────────');
@@ -86,7 +88,7 @@ async function main() {
 
   if (!has('--yes')) {
     log('\n⚠️  VISTA PREVIA — no se modificó nada.');
-    log('   Para restaurar de verdad (TRUNCATE + recarga de las tablas de arriba):');
+    log('   Para restaurar de verdad (se vacían y recargan todas las tablas):');
     log(`     node recover.js ${fileArg ? path.basename(filepath) + ' ' : ''}--yes\n`);
     return;
   }
@@ -107,7 +109,7 @@ async function main() {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { restoredTables, rowsInserted } = await aplicarRestore(client, tables);
+    const { restoredTables, rowsInserted } = await aplicarRestore(client, payload);
     await client.query('COMMIT');
     log(`\n✅ Recuperación completa: ${rowsInserted} filas restauradas en ${restoredTables.length} tablas.`);
     log('   Reinicia la app (pm2 restart wms) y verifica el acceso.');
