@@ -175,7 +175,9 @@ export default function App() {
   const [supplierForm, setSupplierForm] = useState({ name: '', rut: '', contact: '', email: '', phone: '', country: 'CL', notes: '' });
   const [supplierEditId, setSupplierEditId] = useState(null);
   const [asns, setAsns] = useState([]);
-  const [asnForm, setAsnForm] = useState({ supplier_id: '', expected_date: '', reference: '', notes: '', lines: [] });
+  const [asnForm, setAsnForm] = useState({ supplier_id: '', client_id: '', expected_date: '', reference: '', notes: '', lines: [] });
+  // Cliente con que se recibe un ASN antiguo que quedó sin cliente.
+  const [asnReceiveClient, setAsnReceiveClient] = useState('');
   const [asnLineForm, setAsnLineForm] = useState({ sku: '', qty_expected: '' });
   const [asnView, setAsnView] = useState('list'); // 'list' | 'new' | 'receive'
   const [activeAsn, setActiveAsn] = useState(null);
@@ -1765,6 +1767,11 @@ export default function App() {
   }).filter(lpn => lpn.effectiveQty > 0);
   
   const totalAvailDisp = stockForDisp.reduce((sum, item) => sum + item.effectiveQty, 0);
+  // Merma: si se elige una ubicación, solo cuenta el stock de esa ubicación (el
+  // backend descuenta solo de ahí); vacío = cualquier ubicación, por FIFO.
+  const availMerma = lineItem.location_id
+    ? stockForDisp.filter(i => i.location_id === lineItem.location_id).reduce((sum, item) => sum + item.effectiveQty, 0)
+    : totalAvailDisp;
 
   const addReceiveLine = () => {
     if (!lineItem.sku || !lineItem.qty || !lineItem.location_id) return;
@@ -2385,6 +2392,7 @@ export default function App() {
           host={host}
           currentUser={currentUser}
           skus={skus}
+          clients={is3PLMode ? clients : []}
           extraParams={importModal.extraParams || {}}
           onClose={() => setImportModal(null)}
           onSuccess={() => { fetchData(); }}
@@ -4971,8 +4979,8 @@ export default function App() {
                     <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4 mb-6">
                       
                       <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
-                        <button onClick={() => setLineItem({...lineItem, action: 'ADD', sku: ''})} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-lg transition-colors ${lineItem.action === 'ADD' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>Sobrante (+)</button>
-                        <button onClick={() => setLineItem({...lineItem, action: 'SUBTRACT', sku: ''})} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-lg transition-colors ${lineItem.action === 'SUBTRACT' ? 'bg-red-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>Merma (-)</button>
+                        <button onClick={() => setLineItem({...lineItem, action: 'ADD', sku: '', location_id: 'PISO-RECEPCION'})} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-lg transition-colors ${lineItem.action === 'ADD' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>Sobrante (+)</button>
+                        <button onClick={() => setLineItem({...lineItem, action: 'SUBTRACT', sku: '', location_id: ''})} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-lg transition-colors ${lineItem.action === 'SUBTRACT' ? 'bg-red-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>Merma (-)</button>
                       </div>
 
                       <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Producto (SKU) *</label>
@@ -5021,16 +5029,17 @@ export default function App() {
                           ) : (
                             <>
                               <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex justify-between items-center">
-                                <div><p className="text-[10px] font-black text-red-800 uppercase tracking-widest">Stock Total Disponible (Mermas no distinguen estado)</p><p className="text-xl font-black text-red-600">{totalAvailDisp} <span className="text-sm">{selSku.uom || 'UN'}</span></p></div>
+                                <div><p className="text-[10px] font-black text-red-800 uppercase tracking-widest">{lineItem.location_id ? `Stock disponible en ${lineItem.location_id}` : 'Stock total disponible'} (mermas no distinguen estado)</p><p className="text-xl font-black text-red-600">{availMerma} <span className="text-sm">{selSku.uom || 'UN'}</span></p></div>
                               </div>
                               <div className="space-y-1 mt-4">
-                                <label className="text-[10px] font-black text-slate-500 uppercase">Ubicación / Origen de la Merma *</label>
+                                <label className="text-[10px] font-black text-slate-500 uppercase">Ubicación / Origen de la Merma</label>
                                 <select value={lineItem.location_id} onChange={e=>setLineItem({...lineItem, location_id: e.target.value})} className="w-full border-2 border-red-100 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-red-500 bg-white">
+                                  <option value="">Cualquier ubicación (FIFO)</option>
                                   <option value="PISO-RECEPCION">PISO-RECEPCION</option>
                                   {safeLocs.map(l => <option key={l.location_id} value={l.location_id}>{l.location_id}</option>)}
                                 </select>
                               </div>
-                              {totalAvailDisp > 0 ? (
+                              {availMerma > 0 ? (
                                 selSku.requires_serial ? (
                                   <div className="space-y-1 mt-4">
                                     <label className="text-[10px] font-black text-red-600 uppercase flex items-center"><Tag className="w-3 h-3 mr-1"/>Escanear Serie Única a Mermar</label>
@@ -5039,7 +5048,7 @@ export default function App() {
                                 ) : (
                                   <div className="space-y-1 mt-4">
                                     <label className="text-[10px] font-black text-slate-500 uppercase flex justify-between">¿Cuántas unidades desea RESTAR?</label>
-                                    <input type="number" min="0.01" step="0.01" max={totalAvailDisp} value={lineItem.qty} onChange={e=>setLineItem({...lineItem, qty: e.target.value})} className="w-full border-2 border-red-200 rounded-xl px-4 py-4 text-2xl font-black text-center outline-none focus:border-red-500 text-red-600" placeholder="0" />
+                                    <input type="number" min="0.01" step="0.01" max={availMerma} value={lineItem.qty} onChange={e=>setLineItem({...lineItem, qty: e.target.value})} className="w-full border-2 border-red-200 rounded-xl px-4 py-4 text-2xl font-black text-center outline-none focus:border-red-500 text-red-600" placeholder="0" />
                                   </div>
                                 )
                               ) : (
@@ -5047,7 +5056,7 @@ export default function App() {
                               )}
                             </>
                           )}
-                          <button onClick={addAdjustLine} disabled={!lineItem.sku || (lineItem.action === 'ADD' && selSku.requires_lot && !lineItem.batch) || (lineItem.action === 'ADD' && selSku.requires_serial && !lineItem.serial) || (lineItem.action === 'SUBTRACT' && totalAvailDisp <= 0) || (lineItem.action === 'SUBTRACT' && selSku.requires_serial && !lineItem.serial) || (!lineItem.qty && !(lineItem.action === 'SUBTRACT' && selSku.requires_serial))} className="w-full bg-amber-100 text-amber-800 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest hover:bg-amber-200 transition-colors flex justify-center items-center disabled:opacity-50"><Plus size={14} className="mr-1"/> Agregar Ajuste a la Hoja</button>
+                          <button onClick={addAdjustLine} disabled={!lineItem.sku || (lineItem.action === 'ADD' && selSku.requires_lot && !lineItem.batch) || (lineItem.action === 'ADD' && selSku.requires_serial && !lineItem.serial) || (lineItem.action === 'SUBTRACT' && (availMerma <= 0 || parseFloat(lineItem.qty) > availMerma)) || (lineItem.action === 'SUBTRACT' && selSku.requires_serial && !lineItem.serial) || (!lineItem.qty && !(lineItem.action === 'SUBTRACT' && selSku.requires_serial))} className="w-full bg-amber-100 text-amber-800 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest hover:bg-amber-200 transition-colors flex justify-center items-center disabled:opacity-50"><Plus size={14} className="mr-1"/> Agregar Ajuste a la Hoja</button>
                         </div>
                       )}
                     </div>
@@ -8423,6 +8432,15 @@ export default function App() {
                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fecha Esperada *</label>
                       <input type="date" value={asnForm.expected_date} onChange={e=>setAsnForm({...asnForm,expected_date:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 mt-1"/>
                     </div>
+                    {is3PLMode && (
+                      <div className="col-span-2">
+                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cliente dueño de la mercancía *</label>
+                        <select value={asnForm.client_id} onChange={e=>setAsnForm({...asnForm,client_id:e.target.value,lines:[]})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 bg-white mt-1">
+                          <option value="">-- Seleccionar --</option>
+                          {clients.map(c=><option key={c.id} value={c.id}>{c.name || c.id}</option>)}
+                        </select>
+                      </div>
+                    )}
                     <div className="col-span-2">
                       <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Referencia / Orden Compra</label>
                       <input value={asnForm.reference} onChange={e=>setAsnForm({...asnForm,reference:e.target.value})} placeholder="Ej: OC-2026-001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 mt-1"/>
@@ -8434,7 +8452,7 @@ export default function App() {
                     <div className="flex gap-3">
                       <select value={asnLineForm.sku} onChange={e=>setAsnLineForm({...asnLineForm,sku:e.target.value})} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-cyan-400 bg-white">
                         <option value="">-- SKU --</option>
-                        {skus.map(s=><option key={s.sku} value={s.sku}>{s.sku} - {s.description}</option>)}
+                        {skus.filter(s=>!is3PLMode || !asnForm.client_id || s.client_id===asnForm.client_id).map(s=><option key={`${s.sku}|${s.client_id}`} value={s.sku}>{s.sku} - {s.desc || s.description}</option>)}
                       </select>
                       <input type="number" min="1" value={asnLineForm.qty_expected} onChange={e=>setAsnLineForm({...asnLineForm,qty_expected:e.target.value})} placeholder="Cant." className="w-24 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-cyan-400 text-center"/>
                       <button onClick={()=>{if(!asnLineForm.sku||!asnLineForm.qty_expected)return;setAsnForm(prev=>({...prev,lines:[...prev.lines,{sku:asnLineForm.sku,qty_expected:parseFloat(asnLineForm.qty_expected)}]}));setAsnLineForm({sku:'',qty_expected:''}); }} className="bg-cyan-600 text-white px-4 py-2 rounded-xl font-black text-xs transition-colors hover:bg-cyan-700 flex items-center gap-1"><Plus size={13}/>Agregar</button>
@@ -8449,8 +8467,10 @@ export default function App() {
                   </div>
                   <button onClick={async()=>{
                     if(!asnForm.supplier_id||!asnForm.expected_date||asnForm.lines.length===0){showMsg('⛔ Completa proveedor, fecha y al menos una línea.',true);return;}
-                    const r=await apiFetch(`${host}/api/asns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(asnForm)});
-                    if(r.ok){showMsg('✅ ASN creada');setAsnForm({supplier_id:'',expected_date:'',reference:'',notes:'',lines:[]});setAsnView('list');fetchData();}
+                    if(is3PLMode&&!asnForm.client_id){showMsg('⛔ Selecciona el cliente dueño de la mercancía.',true);return;}
+                    const asnBody={...asnForm,client_id:asnForm.client_id||(is3PLMode?'':(systemConfig.own_client_id||'PROPIO'))};
+                    const r=await apiFetch(`${host}/api/asns`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(asnBody)});
+                    if(r.ok){showMsg('✅ ASN creada');setAsnForm({supplier_id:'',client_id:'',expected_date:'',reference:'',notes:'',lines:[]});setAsnView('list');fetchData();}
                     else{const e2=await r.json();showMsg(`⛔ ${e2.error}`,true);}
                   }} className="w-full bg-cyan-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-cyan-700 transition-colors">Crear ASN</button>
                 </div>
@@ -8492,6 +8512,15 @@ export default function App() {
                     <button onClick={()=>setAsnView('list')} className="text-slate-400 hover:text-slate-600"><X size={18}/></button>
                   </div>
                   <p className="text-sm text-slate-500">Proveedor: <strong>{activeAsn.supplier_name}</strong></p>
+                  {!activeAsn.client_id && is3PLMode && (
+                    <div>
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cliente dueño de la mercancía *</label>
+                      <select value={asnReceiveClient} onChange={e=>setAsnReceiveClient(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-400 bg-white mt-1">
+                        <option value="">-- Seleccionar --</option>
+                        {clients.map(c=><option key={c.id} value={c.id}>{c.name || c.id}</option>)}
+                      </select>
+                    </div>
+                  )}
                   {(activeAsn.lines||[]).map(ln=>(
                     <div key={ln.id} className="bg-slate-50 rounded-xl p-4 flex items-center gap-4">
                       <div className="flex-1">
@@ -8504,8 +8533,9 @@ export default function App() {
                   <button onClick={async()=>{
                     const lines=(activeAsn.lines||[]).filter(ln=>asnReceiveQtys[ln.id]>0).map(ln=>({line_id:ln.id,qty_received:parseFloat(asnReceiveQtys[ln.id])}));
                     if(lines.length===0){showMsg('⛔ Ingresa al menos una cantidad',true);return;}
-                    const r=await apiFetch(`${host}/api/asns/${activeAsn.id}/receive`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines})});
-                    if(r.ok){showMsg('✅ Recepción registrada');setAsnView('list');setActiveAsn(null);fetchData();}
+                    if(!activeAsn.client_id&&is3PLMode&&!asnReceiveClient){showMsg('⛔ Selecciona el cliente dueño de la mercancía.',true);return;}
+                    const r=await apiFetch(`${host}/api/asns/${activeAsn.id}/receive`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines,...(asnReceiveClient?{client_id:asnReceiveClient}:{})})});
+                    if(r.ok){showMsg('✅ Recepción registrada');setAsnView('list');setActiveAsn(null);setAsnReceiveClient('');fetchData();}
                     else{const e2=await r.json();showMsg(`⛔ ${e2.error}`,true);}
                   }} className="w-full bg-emerald-600 text-white py-3 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-colors">Confirmar Recepción</button>
                 </div>

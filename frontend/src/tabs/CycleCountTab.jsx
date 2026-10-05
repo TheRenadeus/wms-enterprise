@@ -116,7 +116,7 @@ export default function CycleCountTab({
                   {isBlind && <span className="text-[9px] bg-violet-100 text-violet-700 border border-violet-200 px-2 py-0.5 rounded font-black uppercase">A ciegas</span>}
                   <span className={`text-[9px] font-black px-2 py-0.5 rounded uppercase ${STATUS_BADGE[activeCycleCount.status]||'bg-slate-100 text-slate-600'}`}>{activeCycleCount.status}</span>
                 </div>
-                <p className="text-[10px] text-cyan-700 font-bold">{activeCycleCount.scope_label||activeCycleCount.zone_code} · {activeCycleCount.counted_lines}/{activeCycleCount.total_lines} contadas · {activeCycleCount.diff_lines||0} con diferencia</p>
+                <p className="text-[10px] text-cyan-700 font-bold">{activeCycleCount.scope_label||activeCycleCount.zone_code} · {activeCycleCount.counted_lines}/{activeCycleCount.total_lines} contadas · {activeCycleCount.diff_lines == null ? 'conteo ciego' : `${activeCycleCount.diff_lines} con diferencia`}</p>
               </div>
               <div className="flex gap-2 flex-wrap">
                 {!isPendApproval && !isCompleted && <button onClick={()=>setCcAddLineForm({location_id:'',sku:'',qty:'',note:''})} className="bg-white border border-amber-200 text-amber-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Plus size={11}/> Reportar hallazgo</button>}
@@ -135,7 +135,14 @@ export default function CycleCountTab({
                     if(!(await confirm({message:'¿Aprobar y aplicar ajustes al inventario?',danger:true})))return;
                     const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username})});
                     if(r.ok){showMsg('✅ Conteo aprobado y stock ajustado');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());setActiveCycleCount(null);setCycleLines([]);fetchData();}
-                    else{const e=await r.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);}
+                    else{
+                      const e=await r.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);
+                      if(e.recontar){
+                        const r2=await apiFetch(`${host}/api/cycle-count`);const lista=await r2.json();setCycleCountData(lista);
+                        setActiveCycleCount((Array.isArray(lista)?lista:[]).find(c=>c.id===activeCycleCount.id)||{...activeCycleCount,status:'EN_PROCESO'});
+                        const r3=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/lines`);const d3=await r3.json();setCycleLines(d3.lines||[]);
+                      }
+                    }
                   }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-md">Aprobar</button>
                   <button onClick={()=>{setCcRejectModal(activeCycleCount.id);setCcRejectReason('');}} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase">Rechazar</button>
                 </>)}
@@ -153,11 +160,20 @@ export default function CycleCountTab({
                       placeholder={f.ph} className={`border border-amber-300 rounded-lg px-3 py-2 text-xs font-black outline-none focus:border-amber-500 bg-white ${f.w}`}/>
                   </div>
                 ))}
+                {clients.length > 1 && (
+                  <div>
+                    <p className="text-[9px] font-black text-amber-700 uppercase mb-1">Cliente</p>
+                    <select value={ccAddLineForm.client_id||''} onChange={e=>setCcAddLineForm(p=>({...p,client_id:e.target.value}))} className="border border-amber-300 rounded-lg px-3 py-2 text-xs font-black outline-none focus:border-amber-500 bg-white w-44">
+                      <option value="">(según el SKU)</option>
+                      {clients.map(c=><option key={c.id} value={c.id}>{c.name||c.id}</option>)}
+                    </select>
+                  </div>
+                )}
                 <button onClick={async()=>{
                   if(!ccAddLineForm.location_id||!ccAddLineForm.sku){showMsg('⛔ Ubicación y SKU requeridos',true);return;}
-                  const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/add-line`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location_id:ccAddLineForm.location_id,sku:ccAddLineForm.sku,counted_qty:parseFloat(ccAddLineForm.qty)||0,note:ccAddLineForm.note,username:currentUser.username})});
+                  const r=await apiFetch(`${host}/api/cycle-count/${activeCycleCount.id}/add-line`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location_id:ccAddLineForm.location_id,sku:ccAddLineForm.sku,counted_qty:parseFloat(ccAddLineForm.qty)||0,note:ccAddLineForm.note,...(ccAddLineForm.client_id?{client_id:ccAddLineForm.client_id}:{})})});
                   if(r.ok){const d=await r.json();setCycleLines(d.lines);setCcAddLineForm(null);showMsg('✅ Hallazgo registrado');}
-                  else showMsg('⛔ Error',true);
+                  else{const e=await r.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error al registrar el hallazgo'}`,true);}
                 }} className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase">Guardar</button>
                 <button onClick={()=>setCcAddLineForm(null)} className="text-slate-500 text-[9px] font-black uppercase px-3 py-2">Cancelar</button>
               </div>
@@ -185,7 +201,7 @@ export default function CycleCountTab({
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {cycleLines.map(line=>(
-                      <tr key={line.id} className={`hover:bg-slate-50 ${line.status==='COUNTED'?(parseFloat(line.difference)!==0?'bg-red-50':'bg-emerald-50/50'):''} ${line.line_type==='ENCONTRADO'?'bg-amber-50/60':''}`}>
+                      <tr key={line.id} className={`hover:bg-slate-50 ${line.status==='COUNTED'&&line.difference!=null?(parseFloat(line.difference)!==0?'bg-red-50':'bg-emerald-50/50'):''} ${line.line_type==='ENCONTRADO'?'bg-amber-50/60':''}`}>
                         <td className="p-3 font-mono text-[10px] font-bold text-slate-600">{line.location_id}</td>
                         <td className="p-3 text-xs font-black text-slate-800 uppercase">
                           {line.sku}
@@ -199,7 +215,7 @@ export default function CycleCountTab({
                             : <input type="number" min="0" step="0.01" value={cycleCountedQtys[line.id]||''} onChange={e=>setCycleCountedQtys(p=>({...p,[line.id]:e.target.value}))} className="w-20 border border-slate-200 rounded-lg px-2 py-1 text-center text-xs font-black outline-none focus:border-cyan-500" placeholder="0"/>}
                         </td>
                         <td className="p-3 text-center">
-                          {(line.status==='COUNTED'||isPendApproval) && <span className={`font-black text-sm ${parseFloat(line.difference)>0?'text-emerald-600':parseFloat(line.difference)<0?'text-red-600':'text-slate-400'}`}>{parseFloat(line.difference)>0?'+':''}{line.difference}</span>}
+                          {(line.status==='COUNTED'||isPendApproval) && line.difference!=null && <span className={`font-black text-sm ${parseFloat(line.difference)>0?'text-emerald-600':parseFloat(line.difference)<0?'text-red-600':'text-slate-400'}`}>{parseFloat(line.difference)>0?'+':''}{line.difference}</span>}
                         </td>
                         <td className="p-3 text-center">
                           {line.status!=='COUNTED'&&!isPendApproval && <button onClick={async()=>{
@@ -235,7 +251,7 @@ export default function CycleCountTab({
                       if(!(await confirm({message:'¿Aprobar y aplicar ajustes al inventario?',danger:true})))return;
                       const r=await apiFetch(`${host}/api/cycle-count/${cc.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:currentUser.username})});
                       if(r.ok){showMsg('✅ Aprobado y stock ajustado');const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());fetchData();}
-                      else{const e=await r.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);}
+                      else{const e=await r.json().catch(()=>({}));showMsg(`⛔ ${e.error||'Error'}`,true);if(e.recontar){const r2=await apiFetch(`${host}/api/cycle-count`);setCycleCountData(await r2.json());}}
                     }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase">Aprobar</button>
                     <button onClick={()=>{setCcRejectModal(cc.id);setCcRejectReason('');}} className="bg-white border border-red-200 text-red-600 px-3 py-2 rounded-xl text-[9px] font-black uppercase hover:bg-red-50">Rechazar</button>
                   </div>

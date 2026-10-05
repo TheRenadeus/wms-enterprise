@@ -1719,7 +1719,7 @@ const normBackendErrors = (d) => {
 // llamada de inserción · parseResult: traduce la respuesta a { ok, info[], errors[] }.
 const IMPORT_SCHEMAS = {
   receive: {
-    title: 'Recepción masiva', template: 'receive',
+    title: 'Recepción masiva', template: 'receive', needsClient: true,
     columns: ['sku','qty','location_id','batch_number','expiry_date','serial_number','glosa'],
     required: ['sku','qty'], duplicateCheck: true, docLabel: 'N° documento de recepción (opcional)',
     hint: 'Ubicación: bodega-pasillo-columna-fila (ej. 1-a-01-1) o vacío (PISO-RECEPCION)',
@@ -1734,18 +1734,23 @@ const IMPORT_SCHEMAS = {
       })),
       docNum: ctx.docNum || `REC-IMP-${Date.now()}`, docType: 'REC',
       glosa: 'Ingreso masivo por Excel', username: ctx.username,
+      ...(ctx.client_id ? { client_id: ctx.client_id } : {}),
     }}),
     parseResult: (d, n) => ({ ok: Number(d.imported) || n, info: [], errors: normBackendErrors(d) }),
   },
   dispatch: {
-    title: 'Despacho masivo', template: 'dispatch',
-    columns: ['sku','qty_to_pick','lpn_id'],
+    title: 'Despacho masivo', template: 'dispatch', needsClient: true,
+    columns: ['sku','qty_to_pick','lpn_id','client_id'],
     required: ['sku','qty_to_pick'], duplicateCheck: true, docLabel: 'N° documento de despacho (opcional)',
     hint: 'LPN opcional: vacío = selección automática FEFO',
     validators: (ctx) => ({ sku: vSkuExists(ctx.skuSet), qty_to_pick: vPosNum('Cantidad') }),
     toBody: (rows, ctx) => ({ endpoint: 'import/dispatch', body: {
-      rows: rows.map(r => ({ sku: String(r.sku).trim(), qty_to_pick: r.qty_to_pick, lpn_id: String(r.lpn_id ?? '').trim() })),
+      rows: rows.map(r => ({
+        sku: String(r.sku).trim(), qty_to_pick: r.qty_to_pick, lpn_id: String(r.lpn_id ?? '').trim(),
+        ...(String(r.client_id ?? '').trim() ? { client_id: String(r.client_id).trim() } : {}),
+      })),
       doc_num: ctx.docNum || `DESP-IMP-${Date.now()}`, username: ctx.username,
+      ...(ctx.client_id ? { client_id: ctx.client_id } : {}),
     }}),
     parseResult: (d, n) => ({ ok: Number(d.success) || 0, info: [], errors: normBackendErrors(d) }),
   },
@@ -1791,8 +1796,11 @@ const IMPORT_SCHEMAS = {
 // archivo + dry-run contra BD para recepción/despacho) y confirmación que envía
 // SOLO las filas válidas. Las filas con error nunca se insertan.
 // ─────────────────────────────────────────────────────────────────────────────
-const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {}, onClose, onSuccess }) => {
+const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], extraParams = {}, onClose, onSuccess }) => {
   const schema = IMPORT_SCHEMAS[type] || IMPORT_SCHEMAS.receive;
+  // Cliente del documento (recepción y despacho). Con un solo cliente posible se fija solo.
+  const [docClient, setDocClient] = useState(clients.length === 1 ? clients[0].id : '');
+  const pideCliente = Boolean(schema.needsClient) && clients.length > 1;
   const [status, setStatus] = useState('idle'); // idle | preview | importing | results
   const [error, setError] = useState('');
   const [rows, setRows] = useState([]);          // [{ data, localErrors[], dupErrors[], dupWarnings[] }]
@@ -1860,10 +1868,11 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {},
 
   const handleConfirm = async () => {
     if (errorRows.length > 0) return;
+    if (pideCliente && !docClient) { setError('Selecciona el cliente del documento.'); return; }
     const valids = rows.filter(isRowValid).map(r => r.data);
     if (!valids.length) return;
     setStatus('importing');
-    const { endpoint, body } = schema.toBody(valids, { docNum, username: currentUser?.username, ...extraParams });
+    const { endpoint, body } = schema.toBody(valids, { docNum, username: currentUser?.username, client_id: docClient || undefined, ...extraParams });
     try {
       const res = await apiFetch(`${host}/api/${endpoint}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1956,6 +1965,15 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {},
                 </div>
               )}
               {docDuplicate && <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">⚠️ El documento '{docNum}' ya fue procesado anteriormente.</p>}
+              {pideCliente && (
+                <div>
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Cliente del documento</label>
+                  <select value={docClient} onChange={e => setDocClient(e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-emerald-500 bg-white">
+                    <option value="">— Selecciona el cliente —</option>
+                    {clients.map(c => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
+                  </select>
+                </div>
+              )}
 
               {/* Resumen */}
               <div className="grid grid-cols-3 gap-3">
@@ -2025,13 +2043,13 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], extraParams = {},
               <div className="flex gap-3">
                 <button onClick={handleCancel} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">Cancelar</button>
                 {errorRows.length > 0 && (
-                  <button onClick={() => setRows(prev => prev.filter(isRowValid))} className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">
+                  <button disabled={checking} onClick={() => { const quedan = rows.filter(isRowValid); setRows(quedan); runDupCheck(quedan, docNum); }} className="disabled:opacity-40 flex-1 bg-red-50 hover:bg-red-100 text-red-700 font-black py-4 rounded-2xl uppercase text-xs tracking-widest transition-colors">
                     Quitar {errorRows.length} {errorRows.length === 1 ? 'fila con error' : 'filas con error'}
                   </button>
                 )}
                 <button
                   onClick={handleConfirm}
-                  disabled={validRows.length === 0 || errorRows.length > 0}
+                  disabled={validRows.length === 0 || errorRows.length > 0 || checking || (pideCliente && !docClient)}
                   className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex justify-center items-center"
                 >
                   <Database size={16} className="mr-2"/> Confirmar ({validRows.length} {validRows.length === 1 ? 'fila válida' : 'filas válidas'})

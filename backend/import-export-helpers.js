@@ -168,9 +168,9 @@ const TEMPLATES = {
     example: ['PROD-001','50','PISO-RECEPCION','LOTE-2024-01','2025-12-31','','OC-12345'],
   },
   dispatch: {
-    headers: ['sku','qty_to_pick','lpn_id'],
-    desc:    ['Código del producto a despachar','Cantidad a despachar (número positivo)','ID del LPN específico (dejar vacío para selección automática FEFO)'],
-    example: ['PROD-001','20',''],
+    headers: ['sku','qty_to_pick','lpn_id','client_id'],
+    desc:    ['Código del producto a despachar','Cantidad a despachar (número positivo)','ID del LPN específico (dejar vacío para selección automática FEFO)','Cliente dueño del stock (opcional si se elige al importar o si el SKU es de un solo cliente)'],
+    example: ['PROD-001','20','',''],
   },
 };
 
