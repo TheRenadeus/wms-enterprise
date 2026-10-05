@@ -4,8 +4,36 @@
 // código de SKU, porque el mismo código puede existir en varios clientes.
 const { validateStockRows } = require('./import-export-helpers');
 const { genLpnId, logStorageEvent } = require('./helpers');
+const { OWN_CLIENTS } = require('./scope');
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status }, extra);
+const up = (v) => String(v ?? '').trim().toUpperCase();
+
+// Las cantidades se guardan como NUMERIC(12,2): se comparan redondeadas a 2 decimales.
+const r2 = (n) => Math.round(Number(n) * 100) / 100;
+
+// Stock propio de la bodega: según cómo se cargó, sus SKU quedan como GENERAL, PROPIO
+// o el own_client_id configurado. Para un documento propio todos valen igual; para
+// un cliente externo, solo él mismo.
+async function clientesEquivalentes(db, clientId) {
+  const c = up(clientId);
+  const propios = new Set(OWN_CLIENTS);
+  const cfg = await db.query(`SELECT value FROM system_config WHERE key='own_client_id'`);
+  if (cfg.rows[0]?.value) propios.add(up(cfg.rows[0].value));
+  return propios.has(c) ? [c, ...[...propios].filter((p) => p !== c)] : [c];
+}
+
+// Dueño real de cada SKU entre los clientes equivalentes (prefiere el del documento).
+async function duenosDeSkus(db, skus, equivalentes) {
+  const lista = [...new Set(skus.map(up).filter(Boolean))];
+  const map = new Map();
+  if (!lista.length) return map;
+  const r = await db.query('SELECT sku, client_id FROM master_skus WHERE sku = ANY($1) AND client_id = ANY($2) AND deleted_at IS NULL', [lista, equivalentes]);
+  for (const c of equivalentes) {
+    for (const row of r.rows) if (up(row.client_id) === c && !map.has(up(row.sku))) map.set(up(row.sku), up(row.client_id));
+  }
+  return map;
+}
 
 // Series ya usadas (en stock o repetidas en la entrada): el índice único (sku, serie)
 // haría fallar el insert completo con un error genérico.
@@ -35,6 +63,9 @@ async function clienteDelDocumento(db, indicado, skus) {
   if (lista.length) {
     const r = await db.query('SELECT DISTINCT client_id FROM master_skus WHERE sku = ANY($1) AND deleted_at IS NULL', [lista]);
     if (r.rows.length === 1) return String(r.rows[0].client_id).toUpperCase();
+    // Si todos los dueños son la propia bodega, el documento es propio.
+    const propios = await clientesEquivalentes(db, OWN_CLIENTS[0]);
+    if (r.rows.length && r.rows.every((x) => propios.includes(up(x.client_id)))) return up(r.rows[0].client_id);
   }
   throw httpError(400, 'Indique el cliente del documento: no se puede deducir de los productos.');
 }
@@ -42,7 +73,15 @@ async function clienteDelDocumento(db, indicado, skus) {
 // rows: [{ sku, qty, location_id, batch_number, expiry_date, serial_number, glosa }]
 // Devuelve { valid, errors } (errors vacío = todo se puede ingresar).
 async function validarEntrada(db, rows, clientId) {
-  const { valid, errors } = await validateStockRows(db, rows, { forceClient: clientId, defaultLocation: 'PISO-RECEPCION' });
+  const equivalentes = await clientesEquivalentes(db, clientId);
+  let opciones = { forceClient: clientId, defaultLocation: 'PISO-RECEPCION' };
+  if (equivalentes.length > 1) {
+    // Documento propio: cada fila va al cliente propio que realmente tiene el SKU.
+    const duenos = await duenosDeSkus(db, rows.map((r) => r?.sku), equivalentes);
+    rows = rows.map((r) => ({ ...r, client_id: duenos.get(up(r?.sku)) || up(clientId) }));
+    opciones = { defaultClient: clientId, defaultLocation: 'PISO-RECEPCION' };
+  }
+  const { valid, errors } = await validateStockRows(db, rows, opciones);
   errors.push(...await erroresDeSerie(db, valid));
   const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
   for (const v of valid) {
@@ -75,4 +114,4 @@ async function crearLpnsEntrada(db, valid, { prefijo, glosaLpn, glosaKardex, use
   return creados;
 }
 
-module.exports = { httpError, erroresDeSerie, clienteDelDocumento, validarEntrada, rechazoEntrada, crearLpnsEntrada };
+module.exports = { httpError, r2, clientesEquivalentes, duenosDeSkus, erroresDeSerie, clienteDelDocumento, validarEntrada, rechazoEntrada, crearLpnsEntrada };

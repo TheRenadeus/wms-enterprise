@@ -32,6 +32,7 @@ const DEMO_USERS = [
 // maestros y masivos, y portal de clientes (contraseñas).
 const BLOQUEOS = [
   { metodos: null, re: /^\/system\/backups?(\/|$)/ },
+  { metodos: null, re: /^\/login-history$/ }, // IP de los visitantes
   { metodos: 'escritura', re: /^\/system\/(?!maintenance\/check$)/ },
   { metodos: 'escritura', re: /^\/users(\/|$)/ },
   { metodos: 'escritura', re: /^\/keys(\/|$)/ },
@@ -44,7 +45,8 @@ const esEscritura = (m) => !['GET', 'HEAD', 'OPTIONS'].includes(m);
 
 function demoInstanceGuard(req, res, next) {
   if (!DEMO_INSTANCE) return next();
-  const ruta = req.path.replace(/\/+$/, '');
+  // Express enruta sin distinguir mayúsculas ni barras repetidas: se normaliza igual.
+  const ruta = req.path.toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '');
   const bloqueado = BLOQUEOS.some(({ metodos, re }) => re.test(ruta) && (
     metodos === null || (metodos === 'escritura' ? esEscritura(req.method) : metodos.includes(req.method))
   ));
@@ -199,11 +201,16 @@ async function iniciarDemo(pool) {
   const marca = await pool.query('SELECT 1 FROM system_config WHERE key=$1', [MARKER_KEY]);
   if (!marca.rows.length) {
     // Base virgen: solo lo que siembran las migraciones (cliente PROPIO de ejemplo,
-    // usuario inicial), sin documentos ni otros clientes.
+    // usuario inicial). Cualquier operación real deja kardex o documentos, y una
+    // instalación en uso tiene más usuarios o clientes: en ese caso no se toca nada.
     const datos = await pool.query(`
       SELECT (SELECT COUNT(*) FROM clients WHERE id <> 'PROPIO')
            + (SELECT COUNT(*) FROM document_history)
            + (SELECT COUNT(*) FROM processed_docs)
+           + (SELECT COUNT(*) FROM audit_log WHERE COALESCE(glosa,'') NOT LIKE '[DEMO]%') -- la migración 001 siembra kardex de ejemplo
+           + (SELECT COUNT(*) FROM purchase_orders)
+           + (SELECT COUNT(*) FROM asns)
+           + (SELECT COUNT(*) FROM returns)
            + GREATEST((SELECT COUNT(*) FROM users) - 2, 0) AS n`);
     if (Number(datos.rows[0].n) > 0) {
       console.error('[DEMO] DEMO_INSTANCE=true sobre una base con datos y sin marca de demo: no se carga ni se reinicia nada.');

@@ -88,7 +88,9 @@ router.put('/shipments/:id/status', requireStockWrite, async (req, res) => {
 });
 router.get('/shipments/doc/:docId', requireAuth, async (req, res) => {
   try {
-    const r = await pool.query('SELECT s.*,c.name as carrier_name FROM shipments s LEFT JOIN carriers c ON s.carrier_id=c.id WHERE s.dispatch_doc_id=$1', [req.params.docId]);
+    const params = [req.params.docId];
+    const r = await pool.query(`SELECT s.*,c.name as carrier_name FROM shipments s LEFT JOIN carriers c ON s.carrier_id=c.id
+      WHERE s.dispatch_doc_id=$1 AND ${scopeCondition(req.clientScope, 's.client_id', params)}`, params);
     res.json(r.rows);
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });

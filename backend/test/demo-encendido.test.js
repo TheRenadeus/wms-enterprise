@@ -37,3 +37,8 @@ test('el feedback del sandbox rechaza mensajes enormes', async () => {
   const r = await h.request('POST', '/api/demo/feedback', { token: demoToken, body: { message: 'x'.repeat(5000) } });
   assert.equal(r.status, 400);
 });
+
+test('una sesión de sandbox con HEAD tampoco llega a los handlers reales', async () => {
+  const res = await fetch(h.baseUrl + '/api/export/clients', { method: 'HEAD', headers: { Authorization: `Bearer ${demoToken}` } });
+  assert.equal(res.status, 403);
+});

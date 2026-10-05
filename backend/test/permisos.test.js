@@ -95,7 +95,7 @@ test('el portal solo se configura para clientes propios y queda registrado', asy
     token: tokens.jefe_a, body: { portal_enabled: true, portal_password: 'clave-portal-123' },
   });
   assert.equal(propio.status, 200, propio.text);
-  const log = await h.pool.query(`SELECT username FROM audit_log WHERE client_id='CLI-A' AND glosa LIKE 'Portal del cliente%'`);
+  const log = await h.pool.query(`SELECT username FROM audit_log WHERE glosa LIKE 'Portal del cliente CLI-A%'`);
   assert.equal(log.rows[0]?.username, 'jefe_a');
 });
 
@@ -118,4 +118,14 @@ test('peticiones malformadas no tumban el servidor', async () => {
   }
   const salud = await fetch(h.baseUrl + '/health', { signal: AbortSignal.timeout(5000) });
   assert.equal(salud.status, 200);
+});
+
+test('cambiar la contraseña del portal invalida las sesiones abiertas', async () => {
+  const login = await h.request('POST', '/api/portal/login', { body: { client_id: 'CLI-A', password: 'clave-portal-123' } });
+  assert.equal(login.status, 200, login.text);
+  const consultar = () => fetch(h.baseUrl + '/api/portal/inventory/CLI-A', { headers: { 'x-portal-token': login.body.token } });
+  assert.equal((await consultar()).status, 200);
+  const cambio = await h.request('PUT', '/api/clients/CLI-A/portal', { token: tokens.jefe_a, body: { portal_enabled: true, portal_password: 'otra-clave-portal-9' } });
+  assert.equal(cambio.status, 200, cambio.text);
+  assert.equal((await consultar()).status, 401);
 });

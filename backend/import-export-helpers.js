@@ -21,15 +21,16 @@ function checkFileType(buffer, filename) {
   const looksText = !buffer.subarray(0, 4096).includes(0);
   const ok = ext === '.xlsx' ? isZip : ext === '.xls' ? (isOle || looksText) : (looksText && !isZip && !isOle);
   if (!ok) throw badFile(`El contenido del archivo no corresponde a un ${ext}.`);
+  return { binario: isZip || isOle };
 }
 
 // Lee la planilla en un worker con tiempo límite (ver parse-worker.js).
 function parseFile(data, filename) {
   const buffer = Buffer.from(String(data), 'base64');
-  checkFileType(buffer, filename);
+  const { binario } = checkFileType(buffer, filename);
   return new Promise((resolve, reject) => {
     const worker = new Worker(path.join(__dirname, 'parse-worker.js'), {
-      workerData: { data: String(data), maxRows: MAX_IMPORT_ROWS },
+      workerData: { data: String(data), maxRows: MAX_IMPORT_ROWS, binario },
       resourceLimits: { maxOldGenerationSizeMb: 256 },
     });
     let settled = false;
@@ -41,9 +42,11 @@ function parseFile(data, filename) {
       fn(value);
     };
     const timer = setTimeout(() => finish(reject, badFile('No se pudo leer el archivo: tiempo agotado. Verifique que no esté dañado.')), PARSE_TIMEOUT_MS);
-    worker.once('message', (m) => (m.error
-      ? finish(reject, badFile('No se pudo leer el archivo: formato no válido o archivo dañado.'))
-      : finish(resolve, m.rows)));
+    worker.once('message', (m) => {
+      if (m.truncated) return finish(reject, badFile(`Máximo ${MAX_IMPORT_ROWS.toLocaleString('es-CL')} filas por importación.`));
+      if (m.error) return finish(reject, badFile('No se pudo leer el archivo: formato no válido o archivo dañado.'));
+      return finish(resolve, m.rows);
+    });
     worker.once('error', () => finish(reject, badFile('No se pudo leer el archivo: formato no válido o archivo dañado.')));
     worker.once('exit', () => finish(reject, badFile('No se pudo leer el archivo.')));
   });

@@ -74,3 +74,17 @@ test('el reinicio vuelve a los datos ficticios y respeta bases sin marca', async
   await assert.rejects(() => demo.resetDemo(h.pool), /marca de demo/);
   assert.ok((await h.pool.query(`SELECT COUNT(*)::int AS n FROM clients`)).rows[0].n > 0, 'sin marca no se borró nada');
 });
+
+test('el bloqueo de la demo no se elude con mayúsculas ni barras extra', async () => {
+  const admin = tokens['demo.admin'];
+  for (const [method, url, body] of [
+    ['POST', '/api/USERS', { username: 'x', password: 'clave-larga-1', role: 'PICKER' }],
+    ['DELETE', '/api/Clients/VERDE'],
+    ['GET', '/api/System/Backups'],
+    ['GET', '/api/login-history'],
+  ]) {
+    const r = await h.request(method, url, { token: admin, body });
+    assert.equal(r.status, 403, `${method} ${url} respondió ${r.status}`);
+  }
+  assert.equal((await h.pool.query(`SELECT COUNT(*)::int AS n FROM users WHERE username='x'`)).rows[0].n, 0);
+});

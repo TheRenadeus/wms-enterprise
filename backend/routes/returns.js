@@ -10,7 +10,7 @@ const { requireAuth, requireJefeOrAbove, requireStockWrite, checkClientAccess } 
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId } = require('../helpers');
 const { scopeCondition, clientAllowed } = require('../scope');
-const { httpError } = require('../stock-entrante');
+const { httpError, clientesEquivalentes, duenosDeSkus } = require('../stock-entrante');
 
 const router = express.Router();
 
@@ -33,6 +33,8 @@ router.post('/returns', requireStockWrite, checkClientAccess('write', { required
   try {
     await client.query('BEGIN');
     const returnId = genLpnId('RET');
+    const equivalentes = await clientesEquivalentes(client, clientId);
+    const duenos = await duenosDeSkus(client, items.map((it) => it?.sku), equivalentes);
     await client.query(`INSERT INTO returns (id,doc_num,doc_type,client_id,reason,status,created_by,glosa) VALUES ($1,$2,$3,$4,$5,'COMPLETED',$6,$7)`,
       [returnId, txt(doc_num), doc_type || 'DEVOLUCION', clientId, reason, username, glosa || '']);
 
@@ -41,8 +43,8 @@ router.post('/returns', requireStockWrite, checkClientAccess('write', { required
       const itemQty = Number(item?.qty);
       if (!sku || !Number.isFinite(itemQty) || itemQty <= 0) throw httpError(400, `La cantidad de devolución para SKU ${sku || '(vacío)'} debe ser mayor a 0.`);
       // El producto tiene que ser del cliente de la devolución.
-      const existe = await client.query('SELECT 1 FROM master_skus WHERE sku=$1 AND client_id=$2 AND deleted_at IS NULL', [sku, clientId]);
-      if (!existe.rows.length) throw httpError(400, `El SKU ${sku} no existe para el cliente ${clientId}.`);
+      const dueno = duenos.get(sku);
+      if (!dueno) throw httpError(400, `El SKU ${sku} no existe para el cliente ${clientId}.`);
       const location = await ubicacionValida(client, txt(item.location_id));
       const originalLpn = txt(item.original_lpn);
 
@@ -62,13 +64,13 @@ router.post('/returns', requireStockWrite, checkClientAccess('write', { required
       await client.query(
         `INSERT INTO inventory_lpns (id,sku,sku_version,qty,client_id,status,location_id,glosa)
          VALUES ($1,$2,COALESCE((SELECT current_version FROM master_skus WHERE sku=$8 AND client_id=$9),1),$3,$4,$5,$6,$7)`,
-        [newLpnId, sku, itemQty, clientId, item.condition === 'MALO' ? 'RETENIDO' : 'DISPONIBLE', location, `Devolución ${returnId}: ${reason || ''}`, sku, clientId]);
+        [newLpnId, sku, itemQty, dueno, item.condition === 'MALO' ? 'RETENIDO' : 'DISPONIBLE', location, `Devolución ${returnId}: ${reason || ''}`, sku, dueno]);
 
       await client.query(`INSERT INTO return_lines (return_id,sku,qty,original_lpn,new_lpn,condition,location_id,notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
         [returnId, sku, itemQty, originalLpn, newLpnId, item.condition || 'BUENO', location, item.notes || '']);
 
       await client.query(`INSERT INTO audit_log (type,sku,qty,glosa,username,client_id) VALUES ('INBOUND',$1,$2,$3,$4,$5)`,
-        [sku, itemQty, `Devolución [${doc_type || 'DEV'}] ${txt(doc_num)}. LPN: ${newLpnId}. Motivo: ${reason || ''}`, username, clientId]);
+        [sku, itemQty, `Devolución [${doc_type || 'DEV'}] ${txt(doc_num)}. LPN: ${newLpnId}. Motivo: ${reason || ''}`, username, dueno]);
     }
 
     await client.query('COMMIT');

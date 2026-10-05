@@ -39,6 +39,17 @@ async function logStorageEvent(dbClient, { client_id, event_type, sku, lpn_id, q
 // lo que el servidor aplicó realmente (la anulación y la facturación dependen de él).
 async function registrarHistorial(db, { module, docNum, docType, glosa, username, items, clientId, docDate, docRef, enteredAt }) {
   const id = `${String(module).toUpperCase()}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  // Descripción de cada producto (la pantalla de documentos la muestra).
+  const up = (v) => String(v ?? '').trim().toUpperCase();
+  const sinDesc = [...new Set(items.filter((i) => i && i.sku && !i.desc).map((i) => up(i.sku)))];
+  if (sinDesc.length) {
+    const r = await db.query('SELECT sku, client_id, "desc" FROM master_skus WHERE sku = ANY($1)', [sinDesc]);
+    const porClave = new Map(r.rows.map((x) => [`${up(x.sku)}||${up(x.client_id)}`, x.desc]));
+    const porSku = new Map(r.rows.map((x) => [up(x.sku), x.desc]));
+    items = items.map((i) => (i && i.sku && !i.desc
+      ? { ...i, desc: porClave.get(`${up(i.sku)}||${up(i.client_id || clientId)}`) ?? porSku.get(up(i.sku)) ?? null }
+      : i));
+  }
   const total = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
   const fecha = (v) => (v && !Number.isNaN(new Date(v).getTime()) ? v : null);
   await db.query(

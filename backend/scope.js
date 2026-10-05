@@ -18,12 +18,28 @@ const OWN_CLIENTS = ['GENERAL', 'PROPIO'];
 
 const norm = (c) => String(c ?? '').trim().toUpperCase();
 
+// users.allowed_clients: 'ALL', un arreglo JSON (lo que guarda la pantalla de
+// Usuarios: '["CLI-A","CLI-B"]') o una lista separada por comas (datos antiguos).
+// null = sin restricción. Un JSON inválido no da acceso (falla cerrado).
+function parseAllowedClients(raw) {
+  if (raw === undefined || raw === null) return null;
+  const s = String(raw).trim();
+  if (!s || s.toUpperCase() === 'ALL') return null;
+  if (s.startsWith('[')) {
+    try {
+      const arr = JSON.parse(s);
+      return Array.isArray(arr) ? arr.map(norm).filter(Boolean) : [];
+    } catch { return []; }
+  }
+  return s.split(',').map(norm).filter(Boolean);
+}
+
 function computeScope(row, assigned) {
   if (FULL_ACCESS_ROLES.includes(row.role)) return { all: true, clients: [] };
-  const v2 = row.client_scope === 'none' ? [] : row.client_scope === 'assigned' ? assigned.map(norm) : null;
-  const csv = row.allowed_clients && norm(row.allowed_clients) !== 'ALL'
-    ? row.allowed_clients.split(',').map(norm).filter(Boolean)
-    : null;
+  // 'none' (Sin acceso): ningún cliente, tampoco el stock propio de la bodega.
+  if (row.client_scope === 'none') return { all: false, clients: [] };
+  const v2 = row.client_scope === 'assigned' ? assigned.map(norm) : null;
+  const csv = parseAllowedClients(row.allowed_clients);
   let eff;
   if (v2 === null && csv === null) eff = null;
   else if (v2 === null) eff = csv;
@@ -36,6 +52,8 @@ function computeScope(row, assigned) {
     return { all: true, clients: [] };
   }
   const clients = [...new Set(eff)];
+  // Una restricción explícita sin clientes no da acceso a nada.
+  if (!clients.length) return { all: false, clients: [] };
   // El personal interno con alcance acotado opera también el stock propio de la bodega.
   if (row.role !== 'CLIENTE') for (const own of OWN_CLIENTS) if (!clients.includes(own)) clients.push(own);
   return { all: false, clients };
@@ -104,4 +122,4 @@ function auditScopeCondition(scope, alias, params) {
             SELECT sku FROM master_skus WHERE NOT (client_id = ANY(${p})))))`;
 }
 
-module.exports = { loadUserAuthz, invalidateUser, clientAllowed, scopeCondition, auditScopeCondition, computeScope, OWN_CLIENTS };
+module.exports = { parseAllowedClients, loadUserAuthz, invalidateUser, clientAllowed, scopeCondition, auditScopeCondition, computeScope, OWN_CLIENTS };

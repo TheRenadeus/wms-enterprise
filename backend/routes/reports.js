@@ -278,6 +278,9 @@ router.get('/reports/sku-rotation', requireAuth, async (req, res) => {
                    ELSE 'MEDIA' END as velocity
              FROM master_skus ms
              LEFT JOIN audit_log al ON al.sku=ms.sku
+                  AND (al.client_id = ms.client_id
+                       OR (al.client_id IS NULL AND NOT EXISTS (
+                             SELECT 1 FROM master_skus o WHERE o.sku = ms.sku AND o.client_id <> ms.client_id)))
              WHERE 1=1`;
     const params = [];
     if (client_id) { q += ` AND ms.client_id=$${params.length+1}`; params.push(client_id); }
@@ -366,15 +369,22 @@ router.get('/reports/sku-movement', requireAuth, async (req, res) => {
     const halfIdx    = params.length;
 
     const result = await pool.query(`
-      WITH last_in AS (
-        SELECT sku, MAX(created_at) AS last_inbound
-        FROM audit_log WHERE type = 'INBOUND'
-        GROUP BY sku
+      WITH mov AS (
+        SELECT al.sku, al.type, al.created_at, COALESCE(al.client_id, u.cid) AS cid
+          FROM audit_log al
+          LEFT JOIN (SELECT sku, MIN(client_id) AS cid FROM master_skus
+                      GROUP BY sku HAVING COUNT(DISTINCT client_id) = 1) u ON u.sku = al.sku
+         WHERE al.type IN ('INBOUND', 'OUTBOUND')
+      ),
+      last_in AS (
+        SELECT sku, cid, MAX(created_at) AS last_inbound
+        FROM mov WHERE type = 'INBOUND'
+        GROUP BY sku, cid
       ),
       last_out AS (
-        SELECT sku, MAX(created_at) AS last_outbound
-        FROM audit_log WHERE type = 'OUTBOUND'
-        GROUP BY sku
+        SELECT sku, cid, MAX(created_at) AS last_outbound
+        FROM mov WHERE type = 'OUTBOUND'
+        GROUP BY sku, cid
       ),
       stock AS (
         SELECT client_id, sku, SUM(qty)::float AS stock_actual
@@ -418,8 +428,8 @@ router.get('/reports/sku-movement', requireAuth, async (req, res) => {
       FROM stock s
       LEFT JOIN master_skus ms  ON ms.sku = s.sku AND ms.client_id = s.client_id
       LEFT JOIN clients     c   ON c.id   = s.client_id
-      LEFT JOIN last_in     li  ON li.sku = s.sku
-      LEFT JOIN last_out    lo  ON lo.sku = s.sku
+      LEFT JOIN last_in     li  ON li.sku = s.sku AND li.cid = s.client_id
+      LEFT JOIN last_out    lo  ON lo.sku = s.sku AND lo.cid = s.client_id
       WHERE 1=1 ${clientFilter}
       ORDER BY dias_sin_movimiento DESC NULLS LAST
       LIMIT 1000

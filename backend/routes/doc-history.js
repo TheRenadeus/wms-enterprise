@@ -4,7 +4,7 @@ const express = require('express');
 const { pool, mapDbError, userError } = require('../db');
 const { requireAuth, requireJefe, requireStockWrite } = require('../middleware');
 const { scopeCondition, clientAllowed } = require('../scope');
-const { httpError } = require('../stock-entrante');
+const { httpError, r2 } = require('../stock-entrante');
 const { genLpnId } = require('../helpers');
 
 const router = express.Router();
@@ -67,7 +67,7 @@ async function executeVoid(client, docHistoryId, reason, executedBy, scope) {
       const lpn = (await client.query('SELECT id, qty, sku, client_id FROM inventory_lpns WHERE id=$1 FOR UPDATE', [c.lpnId])).rows[0];
       if (!lpn) throw httpError(409, `El LPN ${c.lpnId} ya no está en stock: no se puede anular la recepción.`);
       if (docClient && String(lpn.client_id || '').toUpperCase() !== docClient) throw httpError(409, `El LPN ${c.lpnId} no pertenece al cliente del documento.`);
-      if (Number.isFinite(c.qty) && Number(lpn.qty) !== c.qty) {
+      if (Number.isFinite(c.qty) && r2(lpn.qty) !== r2(c.qty)) {
         throw httpError(409, `El LPN ${c.lpnId} ya tuvo movimientos (tiene ${Number(lpn.qty)} de ${c.qty}): no se puede anular la recepción.`);
       }
       c.sku = lpn.sku; c.clientId = lpn.client_id; c.qty = Number(lpn.qty);
@@ -162,13 +162,15 @@ router.post('/document-history/:id/void-request', requireStockWrite, async (req,
 router.get('/anulation-requests', requireJefe, async (req, res) => {
   try {
     const { status } = req.query;
-    const where = status ? `WHERE ar.status=$1` : '';
-    const params = status ? [status] : [];
+    const params = [];
+    const conds = [];
+    if (status) { params.push(status); conds.push(`ar.status=$${params.length}`); }
+    conds.push(scopeCondition(req.clientScope, 'dh.client_id', params));
     const rows = await pool.query(
-      `SELECT ar.*, dh.doc_type, dh.glosa, dh.total_qty, dh.created_at AS doc_created_at
+      `SELECT ar.*, dh.doc_type, dh.glosa, dh.total_qty, dh.client_id, dh.created_at AS doc_created_at
        FROM anulation_requests ar
        LEFT JOIN document_history dh ON dh.id = ar.doc_history_id
-       ${where} ORDER BY ar.created_at DESC LIMIT 200`, params
+       WHERE ${conds.join(' AND ')} ORDER BY ar.created_at DESC LIMIT 200`, params
     );
     res.json(rows.rows);
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
@@ -200,10 +202,13 @@ router.post('/anulation-requests/:id/approve', requireJefe, async (req, res) => 
 router.post('/anulation-requests/:id/reject', requireJefe, async (req, res) => {
   const { reject_reason } = req.body;
   try {
+    const params = [req.user.username, reject_reason||'', req.params.id];
     const r = await pool.query(
-      `UPDATE anulation_requests SET status='RECHAZADA', authorized_by=$1, reject_reason=$2, resolved_at=NOW()
-       WHERE id=$3 AND status='PENDIENTE' RETURNING id`,
-      [req.user.username, reject_reason||'', req.params.id]
+      `UPDATE anulation_requests ar SET status='RECHAZADA', authorized_by=$1, reject_reason=$2, resolved_at=NOW()
+       WHERE ar.id=$3 AND ar.status='PENDIENTE'
+         AND EXISTS (SELECT 1 FROM document_history dh WHERE dh.id = ar.doc_history_id AND ${scopeCondition(req.clientScope, 'dh.client_id', params)})
+       RETURNING ar.id`,
+      params
     );
     if (!r.rowCount) return res.status(404).json({ error: 'Solicitud no encontrada o ya procesada.' });
     res.json({ success: true });

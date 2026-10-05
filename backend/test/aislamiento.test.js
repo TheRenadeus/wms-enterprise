@@ -54,9 +54,11 @@ before(async () => {
   await crearUsuario('jefe_a', 'JEFE_BODEGA', { scope: 'assigned', clientes: ['CLI-A'] });
   await crearUsuario('jefe_csv', 'JEFE_BODEGA', { csv: 'CLI-A' });
   await crearUsuario('temporal', 'EJECUTIVO_CUENTA');
+  await crearUsuario('ejec_json', 'EJECUTIVO_CUENTA', { csv: '["CLI-A"]' });
+  await crearUsuario('jefe_none', 'JEFE_BODEGA', { scope: 'none' });
 
   admin = await h.login('admin', h.ADMIN_PASSWORD);
-  for (const u of ['cli_a', 'cli_sin', 'ejec_a', 'jefe_a', 'jefe_csv', 'temporal']) tokens[u] = await h.login(u, PASS);
+  for (const u of ['cli_a', 'cli_sin', 'ejec_a', 'jefe_a', 'jefe_csv', 'temporal', 'ejec_json', 'jefe_none']) tokens[u] = await h.login(u, PASS);
 });
 after(async () => {
   await h?.stop();
@@ -305,4 +307,18 @@ test('la sesión se corta al suspender, eliminar o cambiar de rol', async () => 
 
   await h.request('DELETE', '/api/users/temporal', { token: admin });
   assert.equal((await h.request('GET', '/api/inventory', { token: nuevo })).status, 401);
+});
+
+test('los clientes permitidos guardados por la pantalla de Usuarios (JSON) se respetan', async () => {
+  const inv = await h.request('GET', '/api/inventory', { token: tokens.ejec_json });
+  assert.equal(inv.status, 200);
+  const clientes = clientesDe(inv.body);
+  assert.ok(clientes.includes('CLI-A'), 've su cliente');
+  assert.ok(!clientes.includes('CLI-B'), 'no ve otros');
+});
+
+test("el alcance 'Sin acceso' no ve stock de nadie, tampoco el propio", async () => {
+  const inv = await h.request('GET', '/api/inventory', { token: tokens.jefe_none });
+  assert.equal(inv.status, 200);
+  assert.equal(inv.body.length, 0);
 });

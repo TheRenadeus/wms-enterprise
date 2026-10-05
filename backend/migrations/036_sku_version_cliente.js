@@ -10,21 +10,26 @@
 module.exports = {
   id: '036_sku_version_cliente',
   async run(pool) {
-    await pool.query(`ALTER TABLE sku_version_history ADD COLUMN IF NOT EXISTS client_id VARCHAR(50)`);
-    await pool.query(`ALTER TABLE sku_version_history DROP CONSTRAINT IF EXISTS sku_version_history_sku_version_key`);
-    await pool.query(`
+    // Todo en una transacción: si algo falla no queda el historial a medio migrar.
+    const db = await pool.connect();
+    try {
+    await db.query('BEGIN');
+    await db.query(`ALTER TABLE sku_version_history ADD COLUMN IF NOT EXISTS client_id VARCHAR(50)`);
+    await db.query(`ALTER TABLE sku_version_history DROP CONSTRAINT IF EXISTS sku_version_history_sku_version_key`);
+    await db.query(`
       INSERT INTO sku_version_history (sku, client_id, version, requires_lot, requires_serial, changed_at, changed_by, reason)
       SELECT h.sku, ms.client_id, h.version, h.requires_lot, h.requires_serial, h.changed_at, h.changed_by, h.reason
         FROM sku_version_history h
         JOIN master_skus ms ON ms.sku = h.sku
-       WHERE h.client_id IS NULL`);
-    await pool.query(`DELETE FROM sku_version_history h WHERE h.client_id IS NULL AND EXISTS (SELECT 1 FROM master_skus ms WHERE ms.sku = h.sku)`);
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_sku_version_history_cliente ON sku_version_history (sku, client_id, version)`);
-    await pool.query(`DROP INDEX IF EXISTS idx_sku_version_history`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS idx_sku_version_history_cliente ON sku_version_history (sku, client_id, version DESC)`);
+       WHERE h.client_id IS NULL
+         AND h.version <= ms.current_version`); // solo versiones que ese cliente alcanzó
+    await db.query(`DELETE FROM sku_version_history h WHERE h.client_id IS NULL AND EXISTS (SELECT 1 FROM master_skus ms WHERE ms.sku = h.sku)`);
+    await db.query(`CREATE UNIQUE INDEX IF NOT EXISTS uq_sku_version_history_cliente ON sku_version_history (sku, client_id, version)`);
+    await db.query(`DROP INDEX IF EXISTS idx_sku_version_history`);
+    await db.query(`CREATE INDEX IF NOT EXISTS idx_sku_version_history_cliente ON sku_version_history (sku, client_id, version DESC)`);
 
-    await pool.query(`DROP FUNCTION IF EXISTS create_sku_version(TEXT, JSONB, TEXT, TEXT)`);
-    await pool.query(`
+    await db.query(`DROP FUNCTION IF EXISTS create_sku_version(TEXT, JSONB, TEXT, TEXT)`);
+    await db.query(`
       CREATE OR REPLACE FUNCTION create_sku_version(
         p_sku       TEXT,
         p_client_id TEXT,
@@ -70,6 +75,11 @@ module.exports = {
       END;
       $$ LANGUAGE plpgsql
     `);
+    await db.query('COMMIT');
+    } catch (e) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally { db.release(); }
     console.log('[migr-036] versionado de SKU por cliente OK');
   },
 };

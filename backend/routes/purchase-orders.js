@@ -5,7 +5,7 @@
 const express = require('express');
 const { pool, mapDbError, isUniqueViolation, userError } = require('../db');
 const { requireAuth, requireAdmin, requireStockWrite, checkClientAccess } = require('../middleware');
-const { validarEntrada, rechazoEntrada, crearLpnsEntrada, httpError } = require('../stock-entrante');
+const { validarEntrada, rechazoEntrada, crearLpnsEntrada, httpError, r2, clientesEquivalentes } = require('../stock-entrante');
 const { genLpnId } = require('../helpers');
 const { scopeCondition, clientAllowed } = require('../scope');
 
@@ -43,7 +43,8 @@ router.post('/purchase-orders', requireStockWrite, checkClientAccess('write'), a
     if (dupCheck.rows.length > 0) { await client.query('ROLLBACK'); return res.status(409).json({ error: `Ya existe una Orden de Compra con el número '${doc_num}' para el cliente '${effectiveClient}'.` }); }
     // Los SKU tienen que ser del cliente de la OC.
     const skus = [...new Set(items.map(it => String(it.sku).trim().toUpperCase()))];
-    const existentes = new Set((await client.query('SELECT sku FROM master_skus WHERE sku = ANY($1) AND client_id=$2 AND deleted_at IS NULL', [skus, effectiveClient])).rows.map(r => r.sku));
+    const equivalentes = await clientesEquivalentes(client, effectiveClient);
+    const existentes = new Set((await client.query('SELECT sku FROM master_skus WHERE sku = ANY($1) AND client_id = ANY($2) AND deleted_at IS NULL', [skus, equivalentes])).rows.map(r => r.sku));
     const faltan = skus.filter(s => !existentes.has(s));
     if (faltan.length) { await client.query('ROLLBACK'); return res.status(400).json({ error: `SKU que no existen para el cliente ${effectiveClient}: ${faltan.join(', ')}` }); }
     const poId = `OC-${Date.now()}`;
@@ -107,7 +108,7 @@ router.post('/purchase-orders/:id/receive', requireStockWrite, async (req, res) 
       const line = lr.rows[0];
       if (!line) throw httpError(400, `La línea ${it.lineId} no pertenece a esta orden de compra.`);
       if (line.status === 'RECEIVED') throw httpError(409, `La línea del SKU ${line.sku} ya fue recibida completa.`);
-      lineas.push({ id: line.id, total: Number(line.received_qty || 0) + qty });
+      lineas.push({ id: line.id, total: r2(Number(line.received_qty || 0) + qty) });
       filas.push({ sku: line.sku, qty, location_id: it.location_id, batch_number: it.batch_number, expiry_date: it.expiry_date, serial_number: it.serial_number });
     }
     if (!filas.length) throw httpError(400, 'Ingrese al menos una cantidad mayor a 0.');

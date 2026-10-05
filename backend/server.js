@@ -147,7 +147,8 @@ app.use('/api', apiDemoBlock);
 // de la base, ni siquiera por una variante de la URL (mayúsculas, barra final).
 app.use('/api', (req, res, next) => {
   if (!req.user || !req.user.is_demo) return next();
-  if (req.method !== 'GET') return next(); // escrituras: ya resueltas por apiDemoBlock
+  // HEAD se enruta al mismo handler que GET: se intercepta igual.
+  if (!['GET', 'HEAD'].includes(req.method)) return next(); // escrituras: ya resueltas por apiDemoBlock
   if (req.path.startsWith('/demo/')) return next();
   const fullPath = '/api' + req.path;
   const data = getSandboxResponse(fullPath, req.user.sandbox_scenario, req.user);

@@ -6,11 +6,21 @@ const XLSX = require('xlsx');
 
 try {
   const buffer = Buffer.from(workerData.data, 'base64');
-  // sheetRows acota lo que se lee: no tiene sentido procesar más del máximo permitido.
-  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true, sheetRows: workerData.maxRows + 3 });
+  // En planillas binarias (xlsx/xls), sheetRows acota lo que se lee: un archivo
+  // pequeño puede declarar millones de filas. Un texto (CSV) se lee completo: ya
+  // está acotado por tamaño y ahí no se puede detectar el corte de forma fiable.
+  const opciones = { type: 'buffer', cellDates: true };
+  if (workerData.binario) opciones.sheetRows = workerData.maxRows + 3;
+  const wb = XLSX.read(buffer, opciones);
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = ws ? XLSX.utils.sheet_to_json(ws, { defval: '', raw: false }) : [];
-  parentPort.postMessage({ rows });
+  // Si la hoja tenía más filas de las leídas, se avisa: importar solo una parte
+  // rompería el todo-o-nada.
+  if (ws && ws['!fullref'] && ws['!fullref'] !== ws['!ref']) {
+    parentPort.postMessage({ truncated: true });
+  } else {
+    const rows = ws ? XLSX.utils.sheet_to_json(ws, { defval: '', raw: false }) : [];
+    parentPort.postMessage({ rows });
+  }
 } catch (e) {
   parentPort.postMessage({ error: e.message });
 }

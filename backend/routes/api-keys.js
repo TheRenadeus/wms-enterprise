@@ -116,7 +116,7 @@ router.get('/v1/movements', requireApiKey, async (req, res) => {
     let r;
     if (keyClientId) {
       r = await pool.query(
-        'SELECT * FROM audit_log WHERE client_id=$1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+        `SELECT * FROM audit_log WHERE client_id=$1 AND type <> 'SYSTEM' ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
         [keyClientId, limit, offset]
       );
     } else {

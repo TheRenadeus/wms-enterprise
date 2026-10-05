@@ -165,14 +165,14 @@ const apiSessionCheck = async (req, res, next) => {
 // clientes. Una ruta nueva queda cerrada para CLIENTE hasta agregarla aquí.
 const CLIENTE_READS = [
   /^\/inventory$/, /^\/audit$/, /^\/stats$/, /^\/alerts\/stock$/, /^\/skus$/, /^\/bootstrap$/,
-  /^\/clients$/, /^\/statuses$/, /^\/document_types$/, /^\/locations$/, /^\/manufacturers$/,
+  /^\/clients$/, /^\/statuses$/, /^\/document_types$/, /^\/locations$/, /^\/manufacturers$/, /^\/skus\/[^/]+\/versions$/,
   /^\/system\/config$/, /^\/purchase-orders$/, /^\/purchase-orders\/[^/]+\/lines$/, /^\/returns$/,
   /^\/shipments$/, /^\/document-history$/, /^\/export\/(skus|inventory)$/, /^\/templates\/[^/]+$/,
 ];
 const apiClienteReadAllow = (req, res, next) => {
   if (!req.user || req.user.role !== 'CLIENTE' || req.user.is_demo) return next();
   if (!['GET', 'HEAD'].includes(req.method)) return next(); // escrituras: apiClienteReadOnly
-  const path = req.path.replace(/\/+$/, '');
+  const path = req.path.toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '');
   if (CLIENTE_READS.some((re) => re.test(path))) return next();
   return res.status(403).json({ error: 'Esta consulta no está disponible para usuarios de cliente.' });
 };

@@ -256,7 +256,8 @@ router.patch('/billing/invoices/:id/status', requireJefeOrAbove, async (req, res
 router.get('/billing/summary', requireJefeOrAbove, async (req, res) => {
   const { month, year } = req.query;
   try {
-    const clientsQ = await pool.query(`SELECT id, name FROM clients ORDER BY name`);
+    const cp = [];
+    const clientsQ = await pool.query(`SELECT id, name FROM clients WHERE ${scopeCondition(req.clientScope, 'id', cp)} ORDER BY name`, cp);
     const invoicesQ = await pool.query(
       `SELECT client_id, status, total, currency FROM billing_invoices WHERE month=$1 AND year=$2`,
       [parseInt(month)||new Date().getMonth()+1, parseInt(year)||new Date().getFullYear()]

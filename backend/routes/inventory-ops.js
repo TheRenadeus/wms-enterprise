@@ -8,7 +8,7 @@ const {
 } = require('../middleware');
 const { genLpnId, logStorageEvent, registrarHistorial } = require('../helpers');
 const { consumeComponentTracked } = require('../kitConsumo');
-const { clienteDelDocumento, validarEntrada, rechazoEntrada, crearLpnsEntrada } = require('../stock-entrante');
+const { clienteDelDocumento, validarEntrada, rechazoEntrada, crearLpnsEntrada, clientesEquivalentes, duenosDeSkus } = require('../stock-entrante');
 const { clientAllowed, scopeCondition, auditScopeCondition } = require('../scope');
 
 const httpError = (status, message) => Object.assign(new Error(message), { status });
@@ -320,7 +320,7 @@ router.post('/dispatch_batch', stockWriteLimiter, requireStockWrite, checkClient
                `[KIT] Componente de ${qtyKits}x ${kitSku}. Doc: [${docType || 'N/A'}] ${docNum}. LPN origen: ${cc.lpn_id}.${cc.lote ? ` Lote: ${cc.lote}.` : ''}${cc.serie ? ` Serie: ${cc.serie}.` : ''} ${docGlosa}`,
                user, kitClient]);
             await logStorageEvent(client, { client_id: kitClient || null, event_type: 'MOVIMIENTO_OUT', sku: comp.component_sku, lpn_id: cc.lpn_id, qty: cc.cantidad });
-            aplicados.push({ sku: comp.component_sku, lpnId: cc.lpn_id, qtyToPick: cc.cantidad, qty: cc.cantidad, location: cc.ubicacion, serial: cc.serie, batch: cc.lote, kit: kitSku, client_id: kitClient });
+            aplicados.push({ sku: comp.component_sku, lpnId: cc.lpn_id, qtyToPick: cc.cantidad, qty: cc.cantidad, location: cc.ubicacion, serial: cc.serie, batch: cc.lote, expiry: cc.vence, kit: kitSku, client_id: kitClient });
           }
         }
         continue; // el kit no descuenta como SKU normal ni genera stock propio
@@ -457,6 +457,7 @@ router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('
     // Anti-reúso: el número de hoja de ajuste no se puede reutilizar por cliente.
     const adjType = 'ADJ';
     const adjClientId = await clienteDelDocumento(client, req.body.client_id, items.map(it => it?.sku));
+    const equivAdj = await clientesEquivalentes(client, adjClientId);
     if (docNum) {
       const alreadyAdj = await client.query('SELECT 1 FROM processed_docs WHERE doc_num=$1 AND doc_type=$2 AND client_id=$3', [String(docNum).toUpperCase(), adjType, adjClientId]);
       if (alreadyAdj.rows.length > 0) {
@@ -467,8 +468,8 @@ router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('
     for (let it of items) {
       const sku = String(it?.sku ?? '').trim().toUpperCase();
       const qty = parseFloat(it?.qty);
-      const existe = await client.query('SELECT 1 FROM master_skus WHERE sku=$1 AND client_id=$2 AND deleted_at IS NULL', [sku, adjClientId]);
-      if (!existe.rows.length) throw httpError(400, `El SKU ${sku} no existe para el cliente ${adjClientId}.`);
+      const dueno = (await duenosDeSkus(client, [sku], equivAdj)).get(sku);
+      if (!dueno) throw httpError(400, `El SKU ${sku} no existe para el cliente ${adjClientId}.`);
       const batch = it.batch && String(it.batch).trim() !== '' ? String(it.batch).trim() : null;
       const expDate = it.expDate && String(it.expDate).trim() !== '' ? String(it.expDate).trim() : null;
       const serial = it.serial && String(it.serial).trim() !== '' ? String(it.serial).trim() : null;
@@ -479,7 +480,7 @@ router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('
       if (it.action === 'ADD') {
         if (isNaN(qty) || qty <= 0) throw new Error(`La cantidad de ajuste debe ser mayor a 0 para SKU ${sku}.`);
         const lpnId = genLpnId('ADJ');
-        const clientId = adjClientId;
+        const clientId = dueno;
 
         await client.query(
           `INSERT INTO inventory_lpns (id, sku, qty, client_id, status, batch_number, expiry_date, serial_number, location_id, glosa)
@@ -494,23 +495,23 @@ router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('
       } else {
         if (serial) {
           const resUpd = await client.query(
-            'UPDATE inventory_lpns SET qty = 0 WHERE id = (SELECT id FROM inventory_lpns WHERE sku = $1 AND serial_number = $2 AND client_id = $3 AND qty > 0 LIMIT 1 FOR UPDATE) RETURNING id',
-            [sku, serial, adjClientId]
+            'UPDATE inventory_lpns SET qty = 0 WHERE id = (SELECT id FROM inventory_lpns WHERE sku = $1 AND serial_number = $2 AND client_id = ANY($3) AND qty > 0 LIMIT 1 FOR UPDATE) RETURNING id',
+            [sku, serial, equivAdj]
           );
           if(resUpd.rowCount === 0) throw new Error(`Serie ${serial} no disponible para mermar.`);
           aplicados.push({ action: 'REMOVE', sku, qty: 1, lpnId: resUpd.rows[0].id, serial });
           await client.query(
             `INSERT INTO audit_log (type, sku, qty, glosa, username, client_id) VALUES ('ADJUST_OUT', $1, $2, $3, $4, $5)`,
-            [sku, 1, `Ref: ${docNum || 'S/N'}. Merma Serie ${serial}`, user, adjClientId]
+            [sku, 1, `Ref: ${docNum || 'S/N'}. Merma Serie ${serial}`, user, dueno]
           );
         } else {
           if (isNaN(qty) || qty <= 0) throw httpError(400, `La cantidad de merma debe ser mayor a 0 para SKU ${sku}.`);
           let remaining = qty;
           // Solo stock de este cliente y, si se indicó, de esa ubicación.
-          const mermaParams = [sku, adjClientId];
+          const mermaParams = [sku, equivAdj];
           if (it.location_id) mermaParams.push(String(it.location_id));
           const check = await client.query(
-            `SELECT id, qty FROM inventory_lpns WHERE sku = $1 AND client_id = $2 AND qty > 0${it.location_id ? ' AND location_id = $3' : ''} ORDER BY id ASC FOR UPDATE`,
+            `SELECT id, qty FROM inventory_lpns WHERE sku = $1 AND client_id = ANY($2) AND qty > 0${it.location_id ? ' AND location_id = $3' : ''} ORDER BY id ASC FOR UPDATE`,
             mermaParams
           );
 
@@ -529,7 +530,7 @@ router.post('/adjust_batch', stockWriteLimiter, requireJefe, checkClientAccess('
           }
           await client.query(
             `INSERT INTO audit_log (type, sku, qty, glosa, username, client_id) VALUES ('ADJUST_OUT', $1, $2, $3, $4, $5)`,
-            [sku, qty, `Ref: ${docNum || 'S/N'}. Merma FIFO`, user, adjClientId]
+            [sku, qty, `Ref: ${docNum || 'S/N'}. Merma FIFO`, user, dueno]
           );
           aplicados.push({ action: 'REMOVE', sku, qty });
         }

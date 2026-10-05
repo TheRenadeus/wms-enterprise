@@ -329,11 +329,18 @@ router.post('/import/inventory', stockWriteLimiter, requireStockWrite, attachRow
     errors.push(...await erroresDeSerie(client, valid));
     if (errors.length) { await client.query('ROLLBACK'); return rechazarFilas(res, errors); }
     if (!valid.length) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'El archivo no tiene filas para importar.' }); }
-    // La carga inicial no se repite: el mismo contenido importado dos veces duplicaría el stock.
+    // Freno al reenvío accidental (doble clic, reintento): el mismo contenido no se
+    // acepta dos veces en 10 minutos. Pasado ese plazo se puede volver a cargar.
     const firma = huella(valid.map(({ row, qtyRaw, ...v }) => v));
-    if (!await registrarDocumento(client, `IMP-${firma}`, 'IMPORT_INVENTARIO', '', username)) {
+    const reciente = await client.query(
+      `INSERT INTO processed_docs (doc_num, doc_type, client_id, processed_by) VALUES ($1,'IMPORT_INVENTARIO','',$2)
+       ON CONFLICT (doc_num, doc_type, client_id) DO UPDATE SET processed_at = NOW(), processed_by = EXCLUDED.processed_by
+         WHERE processed_docs.processed_at < NOW() - INTERVAL '10 minutes'
+       RETURNING doc_num`,
+      [`IMP-${firma}`, username]);
+    if (!reciente.rowCount) {
       await client.query('ROLLBACK');
-      return res.status(409).json({ error: 'Este mismo contenido ya se importó antes; no se volvió a cargar.' });
+      return res.status(409).json({ error: 'Este mismo contenido se importó hace menos de 10 minutos; no se volvió a cargar.' });
     }
     const validRows = valid.map(v => ({ ...v, lpnId: genLpnId('IMP') }));
     await insertarStock(client, validRows, { glosaLpn: 'Carga masiva', glosaKardex: (r) => `Importación masiva. LPN: ${r.lpnId}`, username });

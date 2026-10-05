@@ -264,11 +264,15 @@ async function aplicarRestore(client, payload) {
     // Resiliencia ante drift de schema: insertar SOLO las columnas que existen hoy
     // en la tabla. Columnas eliminadas en el backup se ignoran; columnas nuevas
     // del schema actual toman su DEFAULT.
+    // Las columnas generadas (GENERATED ALWAYS AS ... STORED) se recalculan solas y
+    // no admiten valores; las identity ALWAYS requieren OVERRIDING SYSTEM VALUE.
     const colRes = await client.query(
-      `SELECT column_name, data_type FROM information_schema.columns WHERE table_schema='public' AND table_name=$1`,
+      `SELECT column_name, data_type, is_generated, identity_generation
+         FROM information_schema.columns WHERE table_schema='public' AND table_name=$1`,
       [tbl]
     );
-    const liveCols = new Set(colRes.rows.map(r => r.column_name));
+    const liveCols = new Set(colRes.rows.filter(r => r.is_generated !== 'ALWAYS').map(r => r.column_name));
+    const overriding = colRes.rows.some(r => r.identity_generation === 'ALWAYS') ? ' OVERRIDING SYSTEM VALUE' : '';
     // Las columnas json/jsonb se envían como texto JSON: un arreglo de JS pasado tal
     // cual se convertiría en un arreglo de PostgreSQL y el INSERT fallaría.
     const jsonCols = new Set(colRes.rows.filter(r => r.data_type === 'json' || r.data_type === 'jsonb').map(r => r.column_name));
@@ -281,7 +285,7 @@ async function aplicarRestore(client, payload) {
     for (let i = 0; i < rows.length; i += porTramo) {
       const tramo = rows.slice(i, i + porTramo);
       const values = tramo.map((_, r) => `(${cols.map((__, c) => `$${r * cols.length + c + 1}`).join(',')})`).join(',');
-      await client.query(`INSERT INTO "${tbl}" (${colList}) VALUES ${values}`, tramo.flatMap(row => cols.map(c => valor(row, c))));
+      await client.query(`INSERT INTO "${tbl}" (${colList})${overriding} VALUES ${values}`, tramo.flatMap(row => cols.map(c => valor(row, c))));
       rowsInserted += tramo.length;
     }
   }

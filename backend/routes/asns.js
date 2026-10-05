@@ -9,7 +9,7 @@ const { requireAuth, requireJefe, requireJefeOrAbove, requireStockWrite, checkCl
 const { validateBody, schemas } = require('../schemas');
 const { genLpnId, logStorageEvent } = require('../helpers');
 const { scopeCondition, clientAllowed } = require('../scope');
-const { clienteDelDocumento, validarEntrada, rechazoEntrada, crearLpnsEntrada, httpError } = require('../stock-entrante');
+const { clienteDelDocumento, validarEntrada, rechazoEntrada, crearLpnsEntrada, httpError, r2, clientesEquivalentes } = require('../stock-entrante');
 
 const router = express.Router();
 
@@ -84,7 +84,8 @@ router.post('/asns', requireJefeOrAbove, checkClientAccess('write'), async (req,
     const asnClientId = await clienteDelDocumento(client, req.body.client_id, lineas.map(l => l.sku));
     if (!clientAllowed(req.clientScope, asnClientId)) throw httpError(403, `Acceso denegado al cliente '${asnClientId}'.`);
     const skus = [...new Set(lineas.map(l => String(l.sku).trim().toUpperCase()))];
-    const existentes = new Set((await client.query('SELECT sku FROM master_skus WHERE sku = ANY($1) AND client_id=$2 AND deleted_at IS NULL', [skus, asnClientId])).rows.map(r => r.sku));
+    const equivalentes = await clientesEquivalentes(client, asnClientId);
+    const existentes = new Set((await client.query('SELECT sku FROM master_skus WHERE sku = ANY($1) AND client_id = ANY($2) AND deleted_at IS NULL', [skus, equivalentes])).rows.map(r => r.sku));
     const faltan = skus.filter(s => !existentes.has(s));
     if (faltan.length) throw httpError(400, `SKU que no existen para el cliente ${asnClientId}: ${faltan.join(', ')}`);
     await client.query(`INSERT INTO asns (id,supplier_id,supplier_name,expected_date,reference,notes,created_by,client_id) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
@@ -127,8 +128,8 @@ router.post('/asns/:id/receive', requireStockWrite, validateBody(schemas.asnRece
     for (const r of received) {
       const line = porId.get(String(r.asn_line_id));
       if (!line) throw httpError(400, `La línea ${r.asn_line_id} no pertenece a este ASN.`);
-      const pendiente = Number(line.qty_expected) - Number(line.qty_received || 0);
-      if (r.qty_received > pendiente) throw httpError(400, `${line.sku}: se intenta recibir ${r.qty_received} y solo quedan ${pendiente} por recibir.`);
+      const pendiente = r2(Number(line.qty_expected) - Number(line.qty_received || 0));
+      if (r2(r.qty_received) > pendiente) throw httpError(400, `${line.sku}: se intenta recibir ${r.qty_received} y solo quedan ${pendiente} por recibir.`);
       filas.push({ sku: line.sku, qty: r.qty_received, location_id: r.location_id, batch_number: r.batch_number || line.lot,
         expiry_date: r.expiry_date, serial_number: r.serial_number, lineId: line.id });
     }
@@ -156,7 +157,14 @@ router.post('/asns/:id/receive', requireStockWrite, validateBody(schemas.asnRece
 });
 
 router.delete('/asns/:id', requireJefeOrAbove, async (req, res) => {
-  try { await pool.query(`DELETE FROM asns WHERE id=$1 AND status='ESPERANDO'`, [req.params.id]); res.json({ success: true }); }
+  try {
+    const asn = (await pool.query(`SELECT client_id FROM asns WHERE id=$1`, [req.params.id])).rows[0];
+    if (!asn || (asn.client_id && !clientAllowed(req.clientScope, asn.client_id)) || (!asn.client_id && req.clientScope && !req.clientScope.all)) {
+      return res.status(404).json({ error: 'ASN no encontrado.' });
+    }
+    await pool.query(`DELETE FROM asns WHERE id=$1 AND status='ESPERANDO'`, [req.params.id]);
+    res.json({ success: true });
+  }
   catch(e){ res.status(500).json({ error: mapDbError(e) }); }
 });
 

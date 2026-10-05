@@ -113,10 +113,19 @@ test('el conteo cíclico compara contra el stock real y pide recontar si cambió
   await post('/api/dispatch_batch', { docNum: 'GD-CC2', docType: 'GUIA', client_id: 'CLI-B', items: [{ sku: 'CAJA', lpnId: lpn, qtyToPick: 1 }] });
   const aprobar = await post(`/api/cycle-count/${cc2.body.countId}/approve`, {});
   assert.equal(aprobar.status, 409);
+  assert.equal(aprobar.body.recontar, true);
   assert.equal(await stock(`id=$1`, [lpn]), 14, 'no se aplicó un ajuste obsoleto');
+  // El conteo queda reabierto: se recuenta y se puede cerrar.
+  const estado = await h.pool.query(`SELECT status FROM cycle_counts WHERE id=$1`, [cc2.body.countId]);
+  assert.equal(estado.rows[0].status, 'EN_PROCESO');
+  const recuento = await post(`/api/cycle-count/${cc2.body.countId}/count`, { lineId: l2.id, counted_qty: 14 });
+  assert.equal(recuento.status, 200, recuento.text);
+  assert.equal((await post(`/api/cycle-count/${cc2.body.countId}/submit`, {})).body.status, 'COMPLETED');
 });
 
 test('respaldo y restauración cubren todas las tablas y dejan las secuencias al día', async () => {
+  await h.pool.query(`INSERT INTO transportistas (id, nombre_razon_social, tipo) VALUES ('TR-1','Transportes Prueba','EXTERNO')`);
+  await h.pool.query(`INSERT INTO vehiculos (id, transportista_id, matricula, area_largo, area_ancho, area_alto) VALUES ('V-1','TR-1','AB-1234',2,2,2)`);
   const oc = await post('/api/purchase-orders', { doc_num: 'OC-RESP', client_id: 'CLI-A', items: [{ sku: 'CAJA', expected_qty: 3 }] });
   assert.equal(oc.status, 200, oc.text);
   const respaldo = await post('/api/system/backup', {}, tokens.super);
@@ -130,6 +139,8 @@ test('respaldo y restauración cubren todas las tablas y dejan las secuencias al
   assert.equal(lineas.rows[0].n, 1, 'las líneas de OC vuelven con el respaldo');
   const asignaciones = await h.pool.query(`SELECT COUNT(*)::int AS n FROM user_clients WHERE username='jefe_b'`);
   assert.equal(asignaciones.rows[0].n, 1);
+  const vehiculo = await h.pool.query(`SELECT volumen_util FROM vehiculos WHERE id='V-1'`);
+  assert.equal(Number(vehiculo.rows[0].volumen_util), 8, 'la columna generada se recalcula');
 
   // Las secuencias quedaron por encima de los ids restaurados.
   const r = await post('/api/receive_batch', { docNum: 'FAC-POST', docType: 'FACTURA', client_id: 'CLI-A', items: [{ sku: 'CAJA', qty: 1 }] });

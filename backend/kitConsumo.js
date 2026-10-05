@@ -11,7 +11,7 @@
 async function consumeComponentTracked(client, { compSku, needed, clientId, picks, requiresSerial, requiresLot }) {
   const touched = [];
   const consumed = [];
-  const record = (row, take) => consumed.push({ lpn_id: row.id, cantidad: take, ubicacion: row.location_id || null, lote: row.batch_number || null, serie: row.serial_number || null });
+  const record = (row, take) => consumed.push({ lpn_id: row.id, cantidad: take, ubicacion: row.location_id || null, lote: row.batch_number || null, serie: row.serial_number || null, vence: row.expiry_date || null });
 
   if (Array.isArray(picks) && picks.length) {
     const sumSel = picks.reduce((s, x) => s + (parseFloat(x.qty) || 0), 0);
@@ -20,7 +20,7 @@ async function consumeComponentTracked(client, { compSku, needed, clientId, pick
       const take = parseFloat(p.qty);
       if (!(take > 0)) continue;
       const lock = await client.query(
-        `SELECT i.id, i.qty, i.sku, i.client_id, i.location_id, i.batch_number, i.serial_number,
+        `SELECT i.id, i.qty, i.sku, i.client_id, i.location_id, i.batch_number, i.serial_number, i.expiry_date,
                 COALESCE(st.blocks_outbound, FALSE) AS blocked
            FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
           WHERE i.id=$1 FOR UPDATE OF i`, [p.lpn_id]);
@@ -41,7 +41,7 @@ async function consumeComponentTracked(client, { compSku, needed, clientId, pick
   // FEFO automático
   let remaining = needed;
   const lpns = (await client.query(
-    `SELECT i.id, i.qty, i.location_id, i.batch_number, i.serial_number
+    `SELECT i.id, i.qty, i.location_id, i.batch_number, i.serial_number, i.expiry_date
        FROM inventory_lpns i LEFT JOIN statuses st ON i.status = st.id
       WHERE i.sku=$1 AND i.client_id=$2 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
       ORDER BY i.expiry_date ASC NULLS LAST, i.created_at ASC
