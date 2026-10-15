@@ -6,6 +6,7 @@
 const express = require('express');
 const { pool, mapDbError, sendDbError } = require('../db');
 const { requireAuth, requireJefeOrAbove } = require('../middleware');
+const { scopeCondition, auditScopeCondition } = require('../scope');
 
 const router = express.Router();
 
@@ -187,8 +188,9 @@ router.get('/report/resources', requireAuth, async (req, res) => {
   if (!date_from || !date_to) return res.status(400).json({ error: 'Se requieren date_from y date_to.' });
   try {
     const params = [date_from, date_to];
-    const clientFilter = client_id ? ` AND dh.client_id = $3` : '';
+    let clientFilter = client_id ? ` AND dh.client_id = $3` : '';
     if (client_id) params.push(client_id);
+    clientFilter += ` AND ${scopeCondition(req.clientScope, 'dh.client_id', params)}`;
     const result = await pool.query(`
       SELECT
         dh.id                                     AS doc_id,
@@ -252,11 +254,12 @@ router.get('/reports/inventory-aging', requireAuth, async (req, res) => {
                    WHEN EXTRACT(DAY FROM NOW()-il.created_at) < 180 THEN 'ANTIGUO'
                    ELSE 'CRITICO' END as age_category
              FROM inventory_lpns il
-             LEFT JOIN master_skus ms ON ms.sku=il.sku
+             LEFT JOIN master_skus ms ON ms.sku=il.sku AND ms.client_id=il.client_id
              LEFT JOIN clients c ON c.id=il.client_id
              WHERE il.qty > 0`;
     const params = [];
     if (client_id) { q += ` AND il.client_id=$${params.length+1}`; params.push(client_id); }
+    q += ` AND ${scopeCondition(req.clientScope, 'il.client_id', params)}`;
     q += ' ORDER BY days_in_wh DESC LIMIT 1000';
     res.json((await pool.query(q, params)).rows);
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }
@@ -269,15 +272,19 @@ router.get('/reports/sku-rotation', requireAuth, async (req, res) => {
               COALESCE(SUM(CASE WHEN al.type IN ('OUTBOUND','ADJUST_OUT') AND al.created_at >= NOW()-INTERVAL '30 days' THEN al.qty ELSE 0 END),0) as dispatched_30d,
               COALESCE(SUM(CASE WHEN al.type IN ('OUTBOUND','ADJUST_OUT') AND al.created_at >= NOW()-INTERVAL '90 days' THEN al.qty ELSE 0 END),0) as dispatched_90d,
               COALESCE(SUM(CASE WHEN al.type='INBOUND' AND al.created_at >= NOW()-INTERVAL '30 days' THEN al.qty ELSE 0 END),0) as received_30d,
-              COALESCE((SELECT SUM(qty) FROM inventory_lpns WHERE sku=ms.sku AND qty>0),0) as stock_actual,
+              COALESCE((SELECT SUM(qty) FROM inventory_lpns WHERE sku=ms.sku AND client_id=ms.client_id AND qty>0),0) as stock_actual,
               CASE WHEN COALESCE(SUM(CASE WHEN al.type IN ('OUTBOUND','ADJUST_OUT') AND al.created_at >= NOW()-INTERVAL '90 days' THEN al.qty ELSE 0 END),0) = 0 THEN 'SIN_MOVIMIENTO'
                    WHEN COALESCE(SUM(CASE WHEN al.type IN ('OUTBOUND','ADJUST_OUT') AND al.created_at >= NOW()-INTERVAL '30 days' THEN al.qty ELSE 0 END),0) > 0 THEN 'ALTA'
                    ELSE 'MEDIA' END as velocity
              FROM master_skus ms
              LEFT JOIN audit_log al ON al.sku=ms.sku
+                  AND (al.client_id = ms.client_id
+                       OR (al.client_id IS NULL AND NOT EXISTS (
+                             SELECT 1 FROM master_skus o WHERE o.sku = ms.sku AND o.client_id <> ms.client_id)))
              WHERE 1=1`;
     const params = [];
     if (client_id) { q += ` AND ms.client_id=$${params.length+1}`; params.push(client_id); }
+    q += ` AND ${scopeCondition(req.clientScope, 'ms.client_id', params)}`;
     q += ' GROUP BY ms.sku, ms.desc, ms.client_id, ms.abc_class ORDER BY dispatched_30d DESC LIMIT 500';
     res.json((await pool.query(q, params)).rows);
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }
@@ -307,11 +314,12 @@ router.get('/reports/expiry-alerts', requireAuth, async (req, res) => {
               il.location_id, il.batch_number, il.expiry_date,
               EXTRACT(DAY FROM il.expiry_date - NOW())::int as days_to_expiry
              FROM inventory_lpns il
-             LEFT JOIN master_skus ms ON ms.sku=il.sku
+             LEFT JOIN master_skus ms ON ms.sku=il.sku AND ms.client_id=il.client_id
              LEFT JOIN clients c ON c.id=il.client_id
              WHERE il.qty>0 AND il.expiry_date IS NOT NULL AND il.expiry_date <= NOW() + ($1 || ' days')::interval`;
     const params = [parseInt(days)||90];
     if (client_id) { q += ` AND il.client_id=$${params.length+1}`; params.push(client_id); }
+    q += ` AND ${scopeCondition(req.clientScope, 'il.client_id', params)}`;
     q += ' ORDER BY il.expiry_date ASC LIMIT 500';
     res.json((await pool.query(q, params)).rows);
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }
@@ -353,6 +361,7 @@ router.get('/reports/sku-movement', requireAuth, async (req, res) => {
       params.push(client_id);
       clientFilter = `AND s.client_id = $${params.length}`;
     }
+    clientFilter += ` AND ${scopeCondition(req.clientScope, 's.client_id', params)}`;
     params.push(threshold);       // $N   o $1 si no hay client_id
     params.push(threshold / 2);   // $N+1
 
@@ -360,15 +369,22 @@ router.get('/reports/sku-movement', requireAuth, async (req, res) => {
     const halfIdx    = params.length;
 
     const result = await pool.query(`
-      WITH last_in AS (
-        SELECT sku, MAX(created_at) AS last_inbound
-        FROM audit_log WHERE type = 'INBOUND'
-        GROUP BY sku
+      WITH mov AS (
+        SELECT al.sku, al.type, al.created_at, COALESCE(al.client_id, u.cid) AS cid
+          FROM audit_log al
+          LEFT JOIN (SELECT sku, MIN(client_id) AS cid FROM master_skus
+                      GROUP BY sku HAVING COUNT(DISTINCT client_id) = 1) u ON u.sku = al.sku
+         WHERE al.type IN ('INBOUND', 'OUTBOUND')
+      ),
+      last_in AS (
+        SELECT sku, cid, MAX(created_at) AS last_inbound
+        FROM mov WHERE type = 'INBOUND'
+        GROUP BY sku, cid
       ),
       last_out AS (
-        SELECT sku, MAX(created_at) AS last_outbound
-        FROM audit_log WHERE type = 'OUTBOUND'
-        GROUP BY sku
+        SELECT sku, cid, MAX(created_at) AS last_outbound
+        FROM mov WHERE type = 'OUTBOUND'
+        GROUP BY sku, cid
       ),
       stock AS (
         SELECT client_id, sku, SUM(qty)::float AS stock_actual
@@ -412,8 +428,8 @@ router.get('/reports/sku-movement', requireAuth, async (req, res) => {
       FROM stock s
       LEFT JOIN master_skus ms  ON ms.sku = s.sku AND ms.client_id = s.client_id
       LEFT JOIN clients     c   ON c.id   = s.client_id
-      LEFT JOIN last_in     li  ON li.sku = s.sku
-      LEFT JOIN last_out    lo  ON lo.sku = s.sku
+      LEFT JOIN last_in     li  ON li.sku = s.sku AND li.cid = s.client_id
+      LEFT JOIN last_out    lo  ON lo.sku = s.sku AND lo.cid = s.client_id
       WHERE 1=1 ${clientFilter}
       ORDER BY dias_sin_movimiento DESC NULLS LAST
       LIMIT 1000
@@ -457,6 +473,7 @@ router.get('/reports/kardex', requireAuth, async (req, res) => {
   try {
     // 1. Saldo inicial (suma de movimientos antes del período)
     let saldo_inicial = 0;
+    const siParams = [sku, date_from];
     if (date_from) {
       const siRes = await pool.query(`
         SELECT COALESCE(SUM(
@@ -467,8 +484,8 @@ router.get('/reports/kardex', requireAuth, async (req, res) => {
           END
         ), 0) AS saldo_inicial
         FROM audit_log
-        WHERE sku = $1 AND created_at < $2
-      `, [sku, date_from]);
+        WHERE sku = $1 AND created_at < $2 AND ${auditScopeCondition(req.clientScope, 'audit_log', siParams)}
+      `, siParams);
       saldo_inicial = parseFloat(siRes.rows[0].saldo_inicial) || 0;
     }
 
@@ -477,6 +494,7 @@ router.get('/reports/kardex', requireAuth, async (req, res) => {
     let dateFilters = '';
     if (date_from) { params.push(date_from);           dateFilters += ` AND created_at >= $${params.length}`; }
     if (date_to)   { params.push(date_to + 'T23:59:59'); dateFilters += ` AND created_at <= $${params.length}`; }
+    dateFilters += ` AND ${auditScopeCondition(req.clientScope, 'audit_log', params)}`;
 
     const movRes = await pool.query(`
       SELECT id, type, qty, glosa, username, created_at
@@ -513,6 +531,7 @@ router.get('/reports/kardex', requireAuth, async (req, res) => {
     const stockParams = [sku];
     let stockFilter   = '';
     if (client_id) { stockParams.push(client_id); stockFilter = ` AND client_id = $${stockParams.length}`; }
+    stockFilter += ` AND ${scopeCondition(req.clientScope, 'client_id', stockParams)}`;
     const stockRes = await pool.query(`
       SELECT COALESCE(SUM(qty), 0)::float AS stock_actual
       FROM inventory_lpns
@@ -526,6 +545,7 @@ router.get('/reports/kardex', requireAuth, async (req, res) => {
     const descParams = [sku];
     let descFilter   = '';
     if (client_id) { descParams.push(client_id); descFilter = ` AND client_id = $${descParams.length}`; }
+    descFilter += ` AND ${scopeCondition(req.clientScope, 'client_id', descParams)}`;
     const descRes = await pool.query(
       `SELECT "desc" FROM master_skus WHERE sku = $1 ${descFilter} LIMIT 1`,
       descParams
@@ -549,8 +569,9 @@ router.get('/reports/kardex', requireAuth, async (req, res) => {
 // Contadores rápidos para el dashboard (COD-02)
 router.get('/stats', requireAuth, async (req, res) => {
   try {
-    const stock = await pool.query('SELECT COUNT(id) as total_lpns, COALESCE(SUM(qty), 0) as total_units FROM inventory_lpns WHERE qty > 0');
-    const skus = await pool.query('SELECT COUNT(*) as total_skus FROM master_skus');
+    const sp = []; const kp = [];
+    const stock = await pool.query(`SELECT COUNT(id) as total_lpns, COALESCE(SUM(qty), 0) as total_units FROM inventory_lpns WHERE qty > 0 AND ${scopeCondition(req.clientScope, 'client_id', sp)}`, sp);
+    const skus = await pool.query(`SELECT COUNT(*) as total_skus FROM master_skus WHERE deleted_at IS NULL AND ${scopeCondition(req.clientScope, 'client_id', kp)}`, kp);
     res.json({ lpns: parseInt(stock.rows[0].total_lpns), units: parseFloat(stock.rows[0].total_units), skus: parseInt(skus.rows[0].total_skus) });
   } catch (err) { sendDbError(res, err); }
 });

@@ -7,6 +7,24 @@
 body { margin: 0; background-color: #f8fafc; overflow-x: hidden; }
 .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+/* Foco visible al navegar con teclado o escáner. !important porque muchas clases
+   usan focus:outline-none, que de otro modo lo ocultaría. */
+:focus-visible { outline: 2px solid #6366f1 !important; outline-offset: 2px; }
+html.dark :focus-visible { outline-color: #a5b4fc !important; }
+
+/* Cifras de ancho fijo en tablas, para que las cantidades queden alineadas. */
+table { font-variant-numeric: tabular-nums; }
+
+/* Respeta la preferencia del sistema de reducir el movimiento. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 @media print {
   body * { visibility: hidden; }
   #print-section, #print-section * { visibility: visible; }
@@ -102,6 +120,13 @@ html.dark .bg-cyan-50     { background-color: rgba(6,182,212,0.12) !important; }
 html.dark .bg-pink-50     { background-color: rgba(236,72,153,0.12) !important; }
 html.dark .bg-orange-50   { background-color: rgba(249,115,22,0.12) !important; }
 html.dark .bg-teal-50     { background-color: rgba(20,184,166,0.12) !important; }
+/* Iconos sobre fondo -100 (p. ej. «Tareas en progreso»): sin esto quedan en pastel claro. */
+html.dark .bg-emerald-100.text-emerald-600 { background-color: rgba(16,185,129,0.18) !important; color: #34d399 !important; }
+html.dark .bg-blue-100.text-blue-600       { background-color: rgba(59,130,246,0.18) !important; color: #60a5fa !important; }
+html.dark .bg-indigo-100.text-indigo-600   { background-color: rgba(99,102,241,0.18) !important; color: #818cf8 !important; }
+html.dark .bg-amber-100.text-amber-600     { background-color: rgba(245,158,11,0.18) !important; color: #fbbf24 !important; }
+html.dark .bg-red-100.text-red-600         { background-color: rgba(239,68,68,0.18) !important; color: #f87171 !important; }
+html.dark .bg-purple-100.text-purple-600   { background-color: rgba(168,85,247,0.18) !important; color: #c084fc !important; }
 
 /* ── Header principal ── */
 html.dark header.h-16.bg-white {

@@ -10,21 +10,70 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { pool, mapDbError } = require('../db');
+const { randomUUID } = require('crypto');
+const { pool, mapDbError, userError } = require('../db');
 const { requireSuperAdmin } = require('../middleware');
 
 const router = express.Router();
 
-// Tablas críticas en orden seguro de restauración (sin FKs huérfanas).
-const BACKUP_TABLES = [
-  'clients', 'users', 'master_skus', 'locations_master', 'statuses', 'document_types',
-  'kits', 'kit_components', 'inventory_lpns', 'audit_log',
-  'pick_tasks', 'pick_task_lines',
-  'notifications', 'billing_invoices',
-  'dispatch_schedules', 'purchase_orders', 'carriers', 'shipments',
-];
+// Se respaldan TODAS las tablas del esquema, salvo el registro de migraciones (lo
+// gestiona el arranque) y el propio catálogo de respaldos. Respaldar solo una lista
+// fija dejaba fuera tablas que el restore igual vaciaba o dejaba desalineadas.
+const EXCLUDED_TABLES = new Set(['schema_migrations', 'system_backups']);
+const BACKUP_FORMAT_VERSION = 2;
 
-const BACKUPS_DIR = path.resolve(__dirname, '..', 'backups');
+const badBackup = (message) => Object.assign(new Error(message), { status: 400 });
+
+async function tablasDelEsquema(db) {
+  const r = await db.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename`);
+  return r.rows.map((x) => x.tablename).filter((t) => !EXCLUDED_TABLES.has(t));
+}
+
+// Orden de carga: primero las tablas referenciadas por claves foráneas.
+async function ordenPorDependencias(db, tablas) {
+  const r = await db.query(`
+    SELECT DISTINCT tc.relname AS hija, tp.relname AS madre
+      FROM pg_constraint c
+      JOIN pg_class tc ON tc.oid = c.conrelid
+      JOIN pg_class tp ON tp.oid = c.confrelid
+      JOIN pg_namespace n ON n.oid = tc.relnamespace
+     WHERE c.contype = 'f' AND n.nspname = 'public' AND tc.relname <> tp.relname`);
+  const deps = new Map(tablas.map((t) => [t, new Set()]));
+  for (const { hija, madre } of r.rows) if (deps.has(hija) && deps.has(madre)) deps.get(hija).add(madre);
+  const orden = [];
+  const hecho = new Set();
+  const enCurso = new Set();
+  const visitar = (t) => {
+    if (hecho.has(t) || enCurso.has(t)) return; // un ciclo se deja en el orden en que venga
+    enCurso.add(t);
+    for (const m of deps.get(t)) visitar(m);
+    enCurso.delete(t);
+    hecho.add(t);
+    orden.push(t);
+  };
+  tablas.forEach(visitar);
+  return orden;
+}
+
+// Un respaldo se puede restaurar solo si es del formato completo, trae listas por
+// tabla y deja al menos un administrador activo (si no, el sistema queda sin acceso).
+function validarRespaldo(payload) {
+  if (!payload || typeof payload !== 'object' || !payload.tables || typeof payload.tables !== 'object' || Array.isArray(payload.tables)) {
+    throw badBackup('Formato inválido: falta el campo "tables".');
+  }
+  if (!(Number(payload.version) >= BACKUP_FORMAT_VERSION)) {
+    throw badBackup('Respaldo de formato antiguo (incompleto): restaure uno generado por esta versión o use los respaldos de la base de datos (pg_dump).');
+  }
+  for (const [t, rows] of Object.entries(payload.tables)) {
+    if (!Array.isArray(rows)) throw badBackup(`La tabla "${t}" del respaldo no es una lista.`);
+  }
+  const users = payload.tables.users || [];
+  if (!users.some((u) => ['ADMIN', 'SUPERADMIN'].includes(u?.role) && (u?.status || 'ACTIVE') !== 'SUSPENDED')) {
+    throw badBackup('El respaldo no tiene ningún administrador activo: restaurarlo dejaría el sistema sin acceso.');
+  }
+}
+
+const BACKUPS_DIR = process.env.BACKUPS_DIR ? path.resolve(process.env.BACKUPS_DIR) : path.resolve(__dirname, '..', 'backups');
 if (!fs.existsSync(BACKUPS_DIR)) fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 
 const tableExists = async (db, name) => {
@@ -35,24 +84,36 @@ const tableExists = async (db, name) => {
 const stamp = () => {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}_${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
 };
+// Nombre único por respaldo: dos respaldos en el mismo minuto (p. ej. el de
+// seguridad previo a un restore) no pueden pisar el archivo de otro.
+const uniqueName = (prefix) => `${prefix}_${stamp()}_${randomUUID().slice(0, 8)}.json`;
 
 // Ejecuta un snapshot. Devuelve la fila insertada en system_backups.
 async function ejecutarBackup(trigger, createdBy) {
-  const filename = `wms_backup_${stamp()}.json`;
+  const filename = uniqueName('wms_backup');
   const filepath = path.join(BACKUPS_DIR, filename);
   const dump = {};
   const tableCounts = {};
   const t0 = Date.now();
 
-  for (const tbl of BACKUP_TABLES) {
-    if (!(await tableExists(pool, tbl))) { dump[tbl] = []; tableCounts[tbl] = 0; continue; }
-    const r = await pool.query(`SELECT * FROM ${tbl}`);
-    dump[tbl] = r.rows;
-    tableCounts[tbl] = r.rows.length;
-  }
-  const payload = JSON.stringify({ version: 1, generated_at: new Date().toISOString(), tables: dump });
+  // Todas las tablas leídas en una sola transacción de solo lectura: el respaldo
+  // es una foto consistente aunque el sistema siga operando.
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    for (const tbl of await tablasDelEsquema(db)) {
+      const r = await db.query(`SELECT * FROM "${tbl}"`);
+      dump[tbl] = r.rows;
+      tableCounts[tbl] = r.rows.length;
+    }
+    await db.query('COMMIT');
+  } catch (e) {
+    await db.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally { db.release(); }
+  const payload = JSON.stringify({ version: BACKUP_FORMAT_VERSION, generated_at: new Date().toISOString(), tables: dump });
   fs.writeFileSync(filepath, payload);
   const sizeBytes = fs.statSync(filepath).size;
   const ins = await pool.query(
@@ -135,11 +196,10 @@ router.post(
       try { data = JSON.parse(req.body); }
       catch { return res.status(400).json({ error: 'El archivo no es JSON válido.' }); }
 
-      if (!data.tables || typeof data.tables !== 'object') {
-        return res.status(400).json({ error: 'Formato inválido: falta el campo "tables".' });
-      }
+      try { validarRespaldo(data); }
+      catch (e) { return res.status(400).json({ error: e.message }); }
 
-      const filename = `wms_backup_upload_${stamp()}.json`;
+      const filename = uniqueName('wms_backup_upload');
       const filepath = path.join(BACKUPS_DIR, filename);
       fs.writeFileSync(filepath, req.body);          // guarda el JSON original tal cual
       const sizeBytes = fs.statSync(filepath).size;
@@ -182,43 +242,69 @@ router.get('/system/backups/:id/download', requireSuperAdmin, async (req, res) =
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
-// Aplica un restore (TRUNCATE + reinsert) sobre un cliente de BD ya en transacción.
-// Reutilizado por el endpoint y por el recuperador standalone (recover.js).
-// `tables` es el objeto { tabla: [filas] } del backup JSON.
-async function aplicarRestore(client, tables) {
+// Aplica un restore sobre un cliente de BD ya en transacción. Reutilizado por el
+// endpoint, la recuperación automática del arranque y recover.js.
+// `payload` es el JSON completo del respaldo ({ version, tables }).
+//  - Se vacían todas las tablas del esquema de una vez, sin CASCADE (si una clave
+//    foránea alcanzara una tabla fuera del conjunto, el TRUNCATE falla y no se
+//    pierde nada). Una tabla que no estaba en el respaldo queda vacía, como estaba
+//    entonces.
+//  - Se cargan en orden de dependencias y se reajustan las secuencias al final.
+async function aplicarRestore(client, payload) {
+  validarRespaldo(payload);
+  const tables = payload.tables;
+  const vivas = await tablasDelEsquema(client);
   const restoredTables = [];
   let rowsInserted = 0;
-  // Orden inverso para TRUNCATE (respetar FKs). CASCADE para limpiar dependencias.
-  for (let i = BACKUP_TABLES.length - 1; i >= 0; i--) {
-    const tbl = BACKUP_TABLES[i];
-    if (!(await tableExists(client, tbl))) continue;
-    await client.query(`TRUNCATE TABLE ${tbl} CASCADE`);
-  }
-  // Reinsertar en orden directo.
-  for (const tbl of BACKUP_TABLES) {
-    if (!(await tableExists(client, tbl))) continue;
+  await client.query(`TRUNCATE TABLE ${vivas.map((t) => `"${t}"`).join(', ')} RESTART IDENTITY`);
+  for (const tbl of await ordenPorDependencias(client, vivas)) {
     const rows = tables[tbl] || [];
-    if (!rows.length) { restoredTables.push(tbl); continue; }
+    restoredTables.push(tbl);
+    if (!rows.length) continue;
     // Resiliencia ante drift de schema: insertar SOLO las columnas que existen hoy
     // en la tabla. Columnas eliminadas en el backup se ignoran; columnas nuevas
-    // del schema actual toman su DEFAULT. Sin esto, un backup viejo con una columna
-    // ya eliminada (ej. loc_type) rompería todo el restore.
+    // del schema actual toman su DEFAULT.
+    // Las columnas generadas (GENERATED ALWAYS AS ... STORED) se recalculan solas y
+    // no admiten valores; las identity ALWAYS requieren OVERRIDING SYSTEM VALUE.
     const colRes = await client.query(
-      `SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=$1`,
+      `SELECT column_name, data_type, is_generated, identity_generation
+         FROM information_schema.columns WHERE table_schema='public' AND table_name=$1`,
       [tbl]
     );
-    const liveCols = new Set(colRes.rows.map(r => r.column_name));
+    const liveCols = new Set(colRes.rows.filter(r => r.is_generated !== 'ALWAYS').map(r => r.column_name));
+    const overriding = colRes.rows.some(r => r.identity_generation === 'ALWAYS') ? ' OVERRIDING SYSTEM VALUE' : '';
+    // Las columnas json/jsonb se envían como texto JSON: un arreglo de JS pasado tal
+    // cual se convertiría en un arreglo de PostgreSQL y el INSERT fallaría.
+    const jsonCols = new Set(colRes.rows.filter(r => r.data_type === 'json' || r.data_type === 'jsonb').map(r => r.column_name));
+    const valor = (row, c) => (jsonCols.has(c) && row[c] !== null && row[c] !== undefined ? JSON.stringify(row[c]) : row[c]);
     const cols = Object.keys(rows[0]).filter(c => liveCols.has(c));
-    if (!cols.length) { restoredTables.push(tbl); continue; }
+    if (!cols.length) continue;
     const colList = cols.map(c => `"${c}"`).join(',');
-    for (const row of rows) {
-      const placeholders = cols.map((_, i) => `$${i+1}`).join(',');
-      await client.query(`INSERT INTO ${tbl} (${colList}) VALUES (${placeholders})`, cols.map(c => row[c]));
-      rowsInserted++;
+    // Por tramos: una sola sentencia por bloque, dentro del límite de parámetros.
+    const porTramo = Math.max(1, Math.floor(60000 / cols.length));
+    for (let i = 0; i < rows.length; i += porTramo) {
+      const tramo = rows.slice(i, i + porTramo);
+      const values = tramo.map((_, r) => `(${cols.map((__, c) => `$${r * cols.length + c + 1}`).join(',')})`).join(',');
+      await client.query(`INSERT INTO "${tbl}" (${colList})${overriding} VALUES ${values}`, tramo.flatMap(row => cols.map(c => valor(row, c))));
+      rowsInserted += tramo.length;
     }
-    restoredTables.push(tbl);
   }
+  await reajustarSecuencias(client, vivas);
   return { restoredTables, rowsInserted };
+}
+
+// Tras recargar filas con su id explícito, cada secuencia queda en el máximo
+// usado; si no, el siguiente INSERT chocaría con un id existente.
+async function reajustarSecuencias(client, tablas) {
+  const r = await client.query(`
+    SELECT table_name, column_name, pg_get_serial_sequence(format('%I', table_name), column_name) AS seq
+      FROM information_schema.columns
+     WHERE table_schema = 'public' AND table_name = ANY($1)
+       AND (column_default LIKE 'nextval(%' OR is_identity = 'YES')`, [tablas]);
+  for (const { table_name: t, column_name: c, seq } of r.rows) {
+    if (!seq) continue;
+    await client.query(`SELECT setval($1, COALESCE((SELECT MAX("${c}") FROM "${t}"), 1), (SELECT MAX("${c}") FROM "${t}") IS NOT NULL)`, [seq]);
+  }
 }
 
 router.post('/system/backups/:id/restore', requireSuperAdmin, async (req, res) => {
@@ -230,21 +316,22 @@ router.post('/system/backups/:id/restore', requireSuperAdmin, async (req, res) =
     const filepath = path.join(BACKUPS_DIR, target.filename);
     if (!fs.existsSync(filepath)) return res.status(404).json({ error: 'Archivo físico no existe' });
 
-    // 1. Backup automático de seguridad ANTES de restaurar
+    // 1. Leer y validar el respaldo; luego uno de seguridad ANTES de restaurar.
+    let data;
+    try { data = JSON.parse(fs.readFileSync(filepath, 'utf8')); validarRespaldo(data); }
+    catch (e) { return res.status(400).json({ error: e.status ? e.message : 'El archivo del respaldo no es JSON válido.' }); }
     await ejecutarBackup('PRE_RESTORE', req.user.username);
 
     // 2. Marcar el target como RESTORING
     await pool.query(`UPDATE system_backups SET status='RESTORING' WHERE id=$1`, [req.params.id]);
 
-    // 3. Leer y aplicar en transacción
-    const data = JSON.parse(fs.readFileSync(filepath, 'utf8'));
-    const tables = data.tables || {};
+    // 3. Aplicar en transacción
     let restoredTables = [];
     let rowsInserted = 0;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      ({ restoredTables, rowsInserted } = await aplicarRestore(client, tables));
+      ({ restoredTables, rowsInserted } = await aplicarRestore(client, data));
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
@@ -256,7 +343,7 @@ router.post('/system/backups/:id/restore', requireSuperAdmin, async (req, res) =
     res.json({ restored_tables: restoredTables, rows_inserted: rowsInserted, duration_ms: Date.now() - t0 });
   } catch (e) {
     console.error('[RESTORE] ERROR:', e.message);
-    res.status(500).json({ error: e.message });
+    res.status(e.status || 500).json({ error: userError(e) });
   }
 });
 
@@ -298,5 +385,5 @@ module.exports.ejecutarBackup = ejecutarBackup;
 module.exports.purgarBackupsViejos = purgarBackupsViejos;
 module.exports.aplicarRestore = aplicarRestore;
 module.exports.tableExists = tableExists;
-module.exports.BACKUP_TABLES = BACKUP_TABLES;
+module.exports.validarRespaldo = validarRespaldo;
 module.exports.BACKUPS_DIR = BACKUPS_DIR;

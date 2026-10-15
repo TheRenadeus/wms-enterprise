@@ -1,7 +1,7 @@
 // Helpers compartidos entre routers. Originalmente vivían inline en server.js.
-const { v4: uuidv4 } = require('uuid');
+const { randomUUID } = require('crypto');
 
-const genLpnId = (prefix = 'LPN') => `${prefix}-${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+const genLpnId = (prefix = 'LPN') => `${prefix}-${randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
 
 // Registra un evento de almacenaje para cobro 3PL. No-op si client_id es propio.
 // Use la conexión transaccional del caller (`dbClient`) para que el evento se
@@ -11,7 +11,11 @@ const genLpnId = (prefix = 'LPN') => `${prefix}-${uuidv4().replace(/-/g, '').sli
 async function logStorageEvent(dbClient, { client_id, event_type, sku, lpn_id, qty, location_id, weight_kg = 0 }) {
   if (!client_id || client_id === 'PROPIO' || client_id === 'GENERAL') return;
   if (!event_type || !sku) return;
+  // Dentro de una transacción, un error sin savepoint la dejaría abortada y el
+  // COMMIT del movimiento terminaría en un ROLLBACK silencioso.
+  const sp = dbClient.inTransaction ? 'storage_evt' : null;
   try {
+    if (sp) await dbClient.query(`SAVEPOINT ${sp}`);
     const r = await dbClient.query(
       `SELECT unit_price FROM client_tariffs WHERE client_id=$1 AND tariff_type=$2 AND active=TRUE LIMIT 1`,
       [client_id, event_type]
@@ -23,10 +27,37 @@ async function logStorageEvent(dbClient, { client_id, event_type, sku, lpn_id, q
        VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7, $8::numeric, ($5::numeric * $8::numeric))`,
       [client_id, event_type, sku, lpn_id || null, q, parseFloat(weight_kg) || 0, location_id || null, unitPrice]
     );
+    if (sp) await dbClient.query(`RELEASE SAVEPOINT ${sp}`);
   } catch (e) {
     // No bloquear el movimiento si falla el log. Reportar y seguir.
     console.error('[storage_events]', e.message);
+    if (sp) await dbClient.query(`ROLLBACK TO SAVEPOINT ${sp}`);
   }
+}
+
+// Historial del documento cerrado, en la misma transacción que el movimiento y con
+// lo que el servidor aplicó realmente (la anulación y la facturación dependen de él).
+async function registrarHistorial(db, { module, docNum, docType, glosa, username, items, clientId, docDate, docRef, enteredAt }) {
+  const id = `${String(module).toUpperCase()}-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  // Descripción de cada producto (la pantalla de documentos la muestra).
+  const up = (v) => String(v ?? '').trim().toUpperCase();
+  const sinDesc = [...new Set(items.filter((i) => i && i.sku && !i.desc).map((i) => up(i.sku)))];
+  if (sinDesc.length) {
+    const r = await db.query('SELECT sku, client_id, "desc" FROM master_skus WHERE sku = ANY($1)', [sinDesc]);
+    const porClave = new Map(r.rows.map((x) => [`${up(x.sku)}||${up(x.client_id)}`, x.desc]));
+    const porSku = new Map(r.rows.map((x) => [up(x.sku), x.desc]));
+    items = items.map((i) => (i && i.sku && !i.desc
+      ? { ...i, desc: porClave.get(`${up(i.sku)}||${up(i.client_id || clientId)}`) ?? porSku.get(up(i.sku)) ?? null }
+      : i));
+  }
+  const total = items.reduce((s, i) => s + (Number(i.qty) || 0), 0);
+  const fecha = (v) => (v && !Number.isNaN(new Date(v).getTime()) ? v : null);
+  await db.query(
+    `INSERT INTO document_history (id,module,doc_num,doc_type,glosa,username,items_json,total_qty,doc_date,doc_ref,entered_at,client_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+    [id, module, docNum, docType || '', glosa || '', username, JSON.stringify(items), total,
+     fecha(docDate), docRef ? String(docRef).slice(0, 200) : null, fecha(enteredAt), clientId || '']);
+  return id;
 }
 
 // ── RUT chileno (módulo 11) ──────────────────────────────────────────────────
@@ -66,4 +97,4 @@ function formatRut(rut) {
   return `${withDots}-${dv}`;
 }
 
-module.exports = { genLpnId, logStorageEvent, normalizeRut, computeDv, isValidRut, formatRut };
+module.exports = { genLpnId, logStorageEvent, registrarHistorial, normalizeRut, computeDv, isValidRut, formatRut };

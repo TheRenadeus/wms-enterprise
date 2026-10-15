@@ -1,0 +1,37 @@
+# HTTPS con Caddy delante del WMS. Se usa junto al docker-compose.yml base:
+#
+#   docker compose -f docker-compose.yml -f deploy/docker-compose.https.yml up -d --build
+#
+# Caddy obtiene y renueva el certificado solo (Let's Encrypt) para WMS_DOMAIN.
+# Requiere Docker Compose 2.24 o superior (por las etiquetas !override).
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: wms-caddy
+    restart: always
+    depends_on:
+      - wms-frontend
+    environment:
+      WMS_DOMAIN: ${WMS_DOMAIN:?Define WMS_DOMAIN en el .env de la raíz}
+      ACME_EMAIL: ${ACME_EMAIL:?Define ACME_EMAIL en el .env de la raíz}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # Solo Caddy queda expuesto: el frontend y la API dejan de publicarse en la red.
+  wms-frontend:
+    ports: !override []
+  wms-api:
+    ports: !override
+      - "127.0.0.1:3000:3000"
+    environment:
+      # Caddy + nginx delante de la API: dos saltos de proxy para obtener la IP real.
+      TRUST_PROXY: 2
+
+volumes:
+  caddy-data:
+  caddy-config:

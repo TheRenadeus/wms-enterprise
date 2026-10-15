@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+require('./asyncErrors'); // errores de handlers async → apiErrorHandler (Express 4)
 const cors = require('cors');
 
 const { pool } = require('./db');
@@ -8,6 +9,7 @@ const { runMigrations } = require('./migrations');
 const migrationList = require('./migrations/list');
 const { invalidate: cacheInvalidate } = require('./cache');
 const { apiErrorHandler } = require('./errorHandler');
+const { demoInstanceGuard, iniciarDemo } = require('./demo-instance');
 const authRouter = require('./routes/auth');
 const notificationsRouter = require('./routes/notifications');
 const inventoryRouter = require('./routes/inventory');
@@ -51,12 +53,23 @@ const {
   apiClientScope,
   apiDemoBlock,
   apiClienteReadOnly,
+  SANDBOX_ENABLED,
+  apiSessionCheck, apiClienteReadAllow,
 } = require('./middleware');
 
 const path = require('path');
 const fs = require('fs');
 const app = express();
-app.set('trust proxy', 1); // Necesario para rate-limit detrás de ngrok/nginx
+// Saltos de proxy de confianza para obtener la IP real (rate limit y registro de accesos).
+// 1 = nginx del frontend (instalación base); 2 = Caddy + nginx (deploy/docker-compose.https.yml).
+// Acepta también los valores de Express: 'loopback', una lista de IP o subredes, 'true' o 'false'.
+const parseTrustProxy = (v) => {
+  if (v === undefined || v === '') return 1;
+  if (/^\d+$/.test(v)) return Number(v);
+  if (v === 'true' || v === 'false') return v === 'true';
+  return v;
+};
+app.set('trust proxy', parseTrustProxy(process.env.TRUST_PROXY));
 
 // JWT_SECRET: fatal en producción, advertencia en desarrollo
 if (!process.env.JWT_SECRET) {
@@ -99,6 +112,10 @@ app.use(globalLimiter);
 // apiLimiter (100/min) antes del auth gate: protege también el verificador de JWT.
 app.use('/api', apiLimiter);
 app.use('/api', apiAuthGate);
+app.use('/api', apiSessionCheck);
+app.use('/api', apiClienteReadAllow);
+// Instancia de demostración: bloquea respaldos, gestión de usuarios y borrados masivos.
+app.use('/api', demoInstanceGuard);
 // Bloqueo por licencia vencida (escrituras de no-SUPERADMIN). Va tras el auth gate
 // (necesita req.user). El SUPERADMIN pasa para poder renovar.
 app.use('/api', apiLicenseGate);
@@ -126,13 +143,17 @@ app.use('/api', apiClientScope);
 app.use('/api', apiDemoBlock);
 // Sandbox: interceptar GETs de usuarios demo y devolver datos simulados (con overlay
 // de mutaciones registradas por POST/PUT/DELETE de la misma sesión).
+// Denegar por defecto: una sesión de sandbox nunca llega a un handler real con datos
+// de la base, ni siquiera por una variante de la URL (mayúsculas, barra final).
 app.use('/api', (req, res, next) => {
-  if (req.method !== 'GET') return next();
   if (!req.user || !req.user.is_demo) return next();
+  // HEAD se enruta al mismo handler que GET: se intercepta igual.
+  if (!['GET', 'HEAD'].includes(req.method)) return next(); // escrituras: ya resueltas por apiDemoBlock
+  if (req.path.startsWith('/demo/')) return next();
   const fullPath = '/api' + req.path;
   const data = getSandboxResponse(fullPath, req.user.sandbox_scenario, req.user);
   if (data !== null) return res.json(data);
-  next();
+  return res.status(403).json({ error: 'Esta consulta no está disponible en la demostración.' });
 });
 app.use('/api', apiClienteReadOnly);
 
@@ -162,7 +183,7 @@ const checkDisasterRecovery = async () => {
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        const { rowsInserted } = await aplicarRestore(client, payload.tables || {});
+        const { rowsInserted } = await aplicarRestore(client, payload);
         await client.query('COMMIT');
         console.log(`✅ [RECOVERY] Restauración automática completa desde ${latest} (${rowsInserted} filas).`);
       } catch (e) {
@@ -208,9 +229,8 @@ const bootstrap = async (retries = 6, delay = 3000) => {
     await runMigrations(pool, migrationList);
     await checkDisasterRecovery();
     await ensureSuperadmin();
+    await iniciarDemo(pool);
     console.log('✅ Base de Datos V11.0 iniciada correctamente');
-    setTimeout(generateAlerts, 5000);
-    setInterval(generateAlerts, 60 * 60 * 1000);
   } catch (err) {
     if (retries > 0) {
       console.log(`⏳ DB no disponible, reintentando en ${Math.round(delay/1000)}s... (${retries} intentos restantes): ${err.message}`);
@@ -235,7 +255,8 @@ app.use('/api', clientsRouter);       // /clients (GET/POST/DELETE)
 app.use('/api', returnsRouter);       // /returns (POST/GET), /returns/:id/inspect, /returns/create
 app.use('/api', asnsRouter);          // /suppliers, /asns (+ /asns/:id/receive)
 app.use('/api', pickWavesRouter);     // /pick-waves (+ release/close/available-lines)
-app.use('/api', demoRouter);          // /demo/* (sandbox-config, login, switch-role, switch-scenario, feedback)
+// /demo/* (sandbox-config, login, switch-role, switch-scenario, feedback): solo con DEMO_SANDBOX=true.
+if (SANDBOX_ENABLED) app.use('/api', demoRouter);
 app.use('/api', locationsRouter);     // /locations (POST/PUT/DELETE + bulk)
 app.use('/api', cycleCountRouter);    // /cycle-count/*, /adjust-request, /adjust-requests/*
 app.use('/api', pickTasksRouter);     // /pick-tasks/*, /picker/* (queue, start, confirm, skip)
@@ -440,6 +461,21 @@ app.get('*', (req, res) => {
   });
 });
 
-bootstrap().then(() => {
-  app.listen(3000, '0.0.0.0', () => console.log('🚀 API V10.0 ONLINE'));
-});
+// Arranque: migraciones, tareas periódicas y servidor HTTP. Las pruebas importan
+// `app` y `bootstrap` sin escuchar el puerto ni programar tareas.
+const start = async () => {
+  // Red de seguridad: un rechazo fuera de una petición (tareas programadas, eventos)
+  // queda en el log en vez de terminar el proceso.
+  process.on('unhandledRejection', (reason) => {
+    console.error('[unhandledRejection]', reason?.stack || reason);
+  });
+  await bootstrap();
+  setTimeout(generateAlerts, 5000);
+  setInterval(generateAlerts, 60 * 60 * 1000);
+  const port = Number(process.env.PORT) || 3000;
+  return app.listen(port, '0.0.0.0', () => console.log(`🚀 API V10.0 ONLINE en el puerto ${port}`));
+};
+
+if (require.main === module) start();
+
+module.exports = { app, bootstrap, start };

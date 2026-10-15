@@ -1,4 +1,3 @@
-version: '3.8'
 services:
   wms-db:
     image: postgres:15-alpine
@@ -19,11 +18,16 @@ services:
     container_name: wms-api
     restart: always
     ports:
-      - "3000:3000"
+      # La API se usa a través del frontend (nginx); solo se publica para el propio servidor.
+      - "127.0.0.1:3000:3000"
     depends_on:
       - wms-db
+    volumes:
+      - wms-app-backups:/app/backups
     environment:
       NODE_ENV: production
+      # Saltos de proxy delante de la API: 1 = nginx del frontend. Con Caddy delante, 2.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
       DB_HOST: wms-db
       DB_USER: ${DB_USER:-admin}
       DB_PASS: ${DB_PASS:?Define DB_PASS en el .env de la raíz}
@@ -42,6 +46,10 @@ services:
       SUPERADMIN_USER: ${SUPERADMIN_USER:-}
       SUPERADMIN_HASH: ${SUPERADMIN_HASH:-}
       SUPERADMIN_FULLNAME: ${SUPERADMIN_FULLNAME:-}
+      # Solo para un servidor de demostración con su propia base (docs/demo.md).
+      DEMO_INSTANCE: ${DEMO_INSTANCE:-false}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      DEMO_RESET_HOUR: ${DEMO_RESET_HOUR:-7}
   wms-frontend:
     build: ./frontend
     container_name: wms-frontend
@@ -53,3 +61,4 @@ services:
 
 volumes:
   wms-pgdata:
+  wms-app-backups:

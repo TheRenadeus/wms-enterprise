@@ -6,9 +6,19 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 
 const { pool, mapDbError } = require('../db');
-const { requireAuth, requireAdmin, requireResetPassword } = require('../middleware');
+const { requireAuth, requireAdmin, requireResetPassword, rankOf } = require('../middleware');
+const { invalidateUser } = require('../scope');
 
 const router = express.Router();
+
+// Cualquier cambio sobre usuarios (aquí o en /system/users/*) invalida la caché de
+// permisos para que suspensiones, cambios de rol o de clientes rijan de inmediato.
+router.use((req, res, next) => {
+  if (req.method !== 'GET' && /^\/(system\/)?users(\/|$)/.test(req.path)) {
+    res.on('finish', () => invalidateUser());
+  }
+  next();
+});
 
 // PASO 2: JEFE_BODEGA+ puede resetear SOLO la contraseña de usuarios de rango
 // inferior (no toca rol ni scope). El gate requireResetPassword valida el rango.
@@ -161,8 +171,6 @@ router.post('/users', requireAdmin, async (req, res) => {
   if (role && !VALID_ROLES.includes(role)) return res.status(400).json({ error: `Rol inválido: ${role}` });
   // Solo SUPERADMIN puede crear/editar usuarios SUPERADMIN
   if (role === 'SUPERADMIN' && req.user.role !== 'SUPERADMIN') return res.status(403).json({ error: 'No se puede asignar el rol SUPERADMIN' });
-  const newStatus = status || 'ACTIVE';
-  const willBeActive = newStatus !== 'SUSPENDED';
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -174,13 +182,28 @@ router.post('/users', requireAdmin, async (req, res) => {
     if (check.rows.length > 0 && check.rows[0].role === 'SUPERADMIN' && req.user.role !== 'SUPERADMIN') {
       await client.query('ROLLBACK'); return res.status(403).json({ error: 'No se puede modificar un usuario SUPERADMIN' });
     }
+    const existing = check.rows[0];
+    // Sin status en la petición, un usuario existente conserva el suyo.
+    const newStatus = status || existing?.status || 'ACTIVE';
+    const willBeActive = newStatus !== 'SUSPENDED';
+    // Rango estricto: fuera de SUPERADMIN, solo se crean o editan usuarios de rango
+    // inferior y solo se asignan roles inferiores. Nadie se edita a sí mismo por aquí.
+    if (req.user.role !== 'SUPERADMIN') {
+      const actorRank = rankOf(req.user.role);
+      const newRole = role || existing?.role || 'EJECUTIVO_CUENTA';
+      let denied = null;
+      if (username === req.user.username) denied = 'No puedes modificar tu propia cuenta desde la gestión de usuarios.';
+      else if (existing && rankOf(existing.role) >= actorRank) denied = 'Solo puedes modificar usuarios de rango inferior al tuyo.';
+      else if (rankOf(newRole) >= actorRank) denied = 'Solo puedes asignar roles de rango inferior al tuyo.';
+      if (denied) { await client.query('ROLLBACK'); return res.status(403).json({ error: denied }); }
+    }
 
     // ── Límite de licencia ──────────────────────────────────────────────────
     // Solo aplica cuando la operación deja un usuario ACTIVO que antes no contaba:
     // alta nueva activa, o reactivación de un suspendido. Editar un activo o
     // suspender a alguien NO consume licencia. Los suspendidos no cuentan.
     // SUPERADMIN es cuenta técnica: queda EXCLUIDO del cupo (ni cuenta ni lo consume).
-    const targetRole = role || (check.rows[0] && check.rows[0].role) || 'EJECUTIVO_CUENTA';
+    const targetRole = role || existing?.role || 'EJECUTIVO_CUENTA';
     const wasActive = check.rows.length > 0 && (check.rows[0].status || 'ACTIVE') !== 'SUSPENDED';
     const consumeLicense = willBeActive && targetRole !== 'SUPERADMIN' && (check.rows.length === 0 || !wasActive);
     if (consumeLicense) {
@@ -195,13 +218,18 @@ router.post('/users', requireAdmin, async (req, res) => {
       }
     }
 
-    if (check.rows.length > 0) {
+    if (existing) {
+      // Lo que no viene en la petición se conserva (antes se reseteaba el rol y los
+      // clientes permitidos pasaban a 'ALL').
+      const keep = (v, cur) => (v === undefined || v === null || v === '' ? cur : v);
+      const fields = [keep(full_name, existing.full_name), targetRole, newStatus,
+        keep(allowed_clients, existing.allowed_clients), keep(allowed_modules, existing.allowed_modules)];
       let q = 'UPDATE users SET full_name=$2, role=$3, status=$4, allowed_clients=$5, allowed_modules=$6 WHERE username=$1';
-      let p = [username, full_name, role || 'EJECUTIVO_CUENTA', newStatus, allowed_clients || 'ALL', allowed_modules || 'ALL'];
+      let p = [username, ...fields];
       if (password) {
         const hashedPw = await bcrypt.hash(password, 12);
-        q = 'UPDATE users SET full_name=$2, password=$3, role=$4, status=$5, allowed_clients=$6, allowed_modules=$7 WHERE username=$1';
-        p = [username, full_name, hashedPw, role || 'EJECUTIVO_CUENTA', newStatus, allowed_clients || 'ALL', allowed_modules || 'ALL'];
+        q = 'UPDATE users SET full_name=$2, role=$3, status=$4, allowed_clients=$5, allowed_modules=$6, password=$7 WHERE username=$1';
+        p = [username, ...fields, hashedPw];
       }
       await client.query(q, p);
     } else {
@@ -225,6 +253,10 @@ router.delete('/users/:id', requireAdmin, async (req, res) => {
     const target = await pool.query('SELECT role FROM users WHERE username = $1', [req.params.id]);
     if (!target.rows.length) return res.status(404).json({ error: 'Usuario no encontrado' });
     if (target.rows[0].role === 'SUPERADMIN') return res.status(403).json({ error: 'No se puede eliminar un usuario SUPERADMIN' });
+    if (req.params.id === req.user.username) return res.status(403).json({ error: 'No puedes eliminar tu propia cuenta.' });
+    if (req.user.role !== 'SUPERADMIN' && rankOf(target.rows[0].role) >= rankOf(req.user.role)) {
+      return res.status(403).json({ error: 'Solo puedes eliminar usuarios de rango inferior al tuyo.' });
+    }
     await pool.query('DELETE FROM users WHERE username = $1', [req.params.id]);
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }

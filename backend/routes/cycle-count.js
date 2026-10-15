@@ -3,9 +3,16 @@
 // Stock se ajusta SOLO en /approve, nunca antes.
 
 const express = require('express');
-const { pool, mapDbError } = require('../db');
+const { pool, mapDbError, userError } = require('../db');
 const { requireAuth, requireAdmin, requireStaff, requireJefeOrAbove, checkClientAccess , requireStockWrite, requireJefe } = require('../middleware');
 const { genLpnId } = require('../helpers');
+const { scopeCondition, clientAllowed } = require('../scope');
+const { httpError, clienteDelDocumento, r2 } = require('../stock-entrante');
+
+// En un conteo ciego, mientras se cuenta no se revela lo esperado ni la diferencia.
+// En aprobación y después, quien aprueba sí necesita verlo.
+const ocultarEsperado = (cc) => Boolean(cc.blind) && ['PENDING', 'EN_PROCESO'].includes(cc.status);
+const lineaVisible = (cc) => (l) => (ocultarEsperado(cc) ? { ...l, expected_qty: null, stock_at_count: null, difference: null } : l);
 
 const router = express.Router();
 
@@ -19,24 +26,54 @@ function buildScopeLabel({ zone_code, client_id, sku, location_id }) {
   return parts.length ? parts.join(' · ') : 'Inventario completo';
 }
 
+// Filtro de inventario de un conteo (create y preview), dentro del alcance del usuario.
+function filtroDeConteo(req, { zone_code, client_id, sku, location_id }, params) {
+  const conditions = ['il.qty > 0'];
+  if (zone_code)   { params.push(zone_code); conditions.push(`TRIM(lm.zone_code) = TRIM($${params.length})`); }
+  if (client_id)   { params.push(String(client_id).toUpperCase()); conditions.push(`il.client_id = $${params.length}`); }
+  if (sku)         { params.push(String(sku).toUpperCase()); conditions.push(`il.sku = $${params.length}`); }
+  if (location_id) { params.push(String(location_id).toUpperCase()); conditions.push(`il.location_id = $${params.length}`); }
+  conditions.push(scopeCondition(req.clientScope, 'il.client_id', params));
+  const joinClause = zone_code
+    ? 'JOIN locations_master lm ON lm.location_id = il.location_id'
+    : 'LEFT JOIN locations_master lm ON lm.location_id = il.location_id';
+  return { conditions, params, joinClause };
+}
+
+// Stock del sistema para una línea (SKU + ubicación + cliente). Con lock, bloquea los LPN.
+async function stockActual(db, { sku, location_id, client_id }, lock = false) {
+  const r = await db.query(
+    `SELECT id, qty FROM inventory_lpns WHERE sku=$1 AND location_id=$2 AND client_id=$3 AND qty>0 ORDER BY created_at ASC${lock ? ' FOR UPDATE' : ''}`,
+    [sku, location_id, client_id]);
+  return { lpns: r.rows, total: r2(r.rows.reduce((s, l) => s + Number(l.qty), 0)) };
+}
+
+// Un conteo se puede editar mientras está pendiente o en proceso.
+async function conteoEditable(db, id) {
+  const cc = (await db.query(`SELECT * FROM cycle_counts WHERE id=$1 FOR UPDATE`, [id])).rows[0];
+  if (!cc) throw httpError(404, 'Conteo no encontrado.');
+  if (!['PENDING', 'EN_PROCESO'].includes(cc.status)) throw httpError(409, `El conteo está en estado '${cc.status}' y ya no se puede modificar.`);
+  return cc;
+}
+
 // ── CYCLE COUNT ──────────────────────────────────────────────────────────────
 
 router.post('/cycle-count/create', requireStaff, checkClientAccess('write'), async (req, res) => {
+  const { zone_code, client_id, sku, location_id, notes, blind } = req.body;
+  const username = req.user.username;
+  // Clave única = label para el índice: una combinación activa bloquea otra igual
+  const scopeKey = buildScopeLabel({ zone_code, client_id, sku, location_id });
+  const client = await pool.connect();
   try {
-    const { zone_code, client_id, sku, location_id, username, notes, blind } = req.body;
-
-    // Clave única = label para el índice: una combinación activa bloquea otra igual
-    const scopeKey = buildScopeLabel({ zone_code, client_id, sku, location_id });
-
-    const activeCount = await pool.query(
-      `SELECT id FROM cycle_counts WHERE zone_code=$1 AND status IN ('PENDING','EN_PROCESO','PENDIENTE_APROBACION') LIMIT 1`,
+    await client.query('BEGIN');
+    const activeCount = await client.query(
+      `SELECT id FROM cycle_counts WHERE zone_code=$1 AND status IN ('PENDING','EN_PROCESO','PENDIENTE_APROBACION') LIMIT 1 FOR UPDATE`,
       [scopeKey]
     );
-    if (activeCount.rows.length > 0)
-      return res.status(409).json({ error: `Ya existe un conteo activo para '${scopeKey}' (ID: ${activeCount.rows[0].id}).` });
+    if (activeCount.rows.length > 0) throw httpError(409, `Ya existe un conteo activo para '${scopeKey}' (ID: ${activeCount.rows[0].id}).`);
 
     const countId = genLpnId('CC');
-    await pool.query(
+    await client.query(
       `INSERT INTO cycle_counts (id, zone_code, status, created_by, notes, blind, location_filter, scope_label, client_filter, sku_filter)
        VALUES ($1,$2,'PENDING',$3,$4,$5,$6,$7,$8,$9)`,
       [countId, scopeKey, username, notes || '', Boolean(blind),
@@ -44,61 +81,31 @@ router.post('/cycle-count/create', requireStaff, checkClientAccess('write'), asy
        client_id || null, sku || null]
     );
 
-    // ── Seeding dinámico ─────────────────────────────────────────────────────
-    const conditions = ['il.qty > 0'];
-    const params = [countId];
-    let idx = 2;
-
-    if (zone_code) {
-      conditions.push(`TRIM(lm.zone_code) = TRIM($${idx++})`);
-      params.push(zone_code);
-    }
-    if (client_id) {
-      conditions.push(`il.client_id = $${idx++}`);
-      params.push(client_id);
-    }
-    if (sku) {
-      conditions.push(`il.sku = $${idx++}`);
-      params.push(sku.toUpperCase());
-    }
-    if (location_id) {
-      conditions.push(`il.location_id = $${idx++}`);
-      params.push(location_id.toUpperCase());
-    }
-
-    const joinClause = zone_code
-      ? 'JOIN locations_master lm ON lm.location_id = il.location_id'
-      : 'LEFT JOIN locations_master lm ON lm.location_id = il.location_id';
-
-    const inserted = await pool.query(`
-      INSERT INTO cycle_count_lines (count_id, sku, location_id, expected_qty, status, line_type)
-      SELECT $1, il.sku, il.location_id, SUM(il.qty), 'PENDING', 'NORMAL'
+    // ── Seeding dinámico: una línea por SKU, ubicación y cliente ─────────────
+    const { conditions, params, joinClause } = filtroDeConteo(req, { zone_code, client_id, sku, location_id }, [countId]);
+    const inserted = await client.query(`
+      INSERT INTO cycle_count_lines (count_id, sku, location_id, client_id, expected_qty, status, line_type)
+      SELECT $1, il.sku, il.location_id, il.client_id, SUM(il.qty), 'PENDING', 'NORMAL'
       FROM inventory_lpns il
       ${joinClause}
       WHERE ${conditions.join(' AND ')}
-      GROUP BY il.sku, il.location_id
+      GROUP BY il.sku, il.location_id, il.client_id
     `, params);
-
+    await client.query('COMMIT');
     res.json({ success: true, countId, lines: inserted.rowCount, scopeLabel: scopeKey });
-  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(e.status || 500).json({ error: userError(e) });
+  } finally { client.release(); }
 });
 
 // Vista previa de cuántas líneas se generarían (sin crear el conteo)
 router.post('/cycle-count/preview', requireStaff, async (req, res) => {
   try {
     const { zone_code, client_id, sku, location_id } = req.body;
-    const conditions = ['il.qty > 0'];
-    const params = [];
-    let idx = 1;
-    if (zone_code)   { conditions.push(`TRIM(lm.zone_code) = TRIM($${idx++})`); params.push(zone_code); }
-    if (client_id)   { conditions.push(`il.client_id = $${idx++}`); params.push(client_id); }
-    if (sku)         { conditions.push(`il.sku = $${idx++}`); params.push(sku.toUpperCase()); }
-    if (location_id) { conditions.push(`il.location_id = $${idx++}`); params.push(location_id.toUpperCase()); }
-    const joinClause = zone_code
-      ? 'JOIN locations_master lm ON lm.location_id = il.location_id'
-      : 'LEFT JOIN locations_master lm ON lm.location_id = il.location_id';
+    const { conditions, params, joinClause } = filtroDeConteo(req, { zone_code, client_id, sku, location_id }, []);
     const r = await pool.query(`
-      SELECT COUNT(DISTINCT il.sku || '|' || il.location_id)::int AS lines,
+      SELECT COUNT(DISTINCT il.sku || '|' || il.location_id || '|' || COALESCE(il.client_id,''))::int AS lines,
              COALESCE(SUM(il.qty),0)::float AS total_units
       FROM inventory_lpns il ${joinClause}
       WHERE ${conditions.join(' AND ')}
@@ -117,7 +124,7 @@ router.get('/cycle-count', requireStaff, async (req, res) => {
       FROM cycle_counts cc
       ORDER BY cc.created_at DESC LIMIT 50
     `);
-    res.json(counts.rows);
+    res.json(counts.rows.map(cc => (ocultarEsperado(cc) ? { ...cc, diff_lines: null } : cc)));
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
@@ -126,146 +133,197 @@ router.get('/cycle-count/:id/lines', requireStaff, async (req, res) => {
     const ccRow = await pool.query(`SELECT * FROM cycle_counts WHERE id=$1`, [req.params.id]);
     if (!ccRow.rows.length) return res.status(404).json({ error: 'Conteo no encontrado.' });
     const cc = ccRow.rows[0];
+    const params = [req.params.id];
     const lines = await pool.query(
-      `SELECT * FROM cycle_count_lines WHERE count_id=$1 ORDER BY location_id, sku`,
-      [req.params.id]
+      `SELECT * FROM cycle_count_lines WHERE count_id=$1 AND (client_id IS NULL OR ${scopeCondition(req.clientScope, 'client_id', params)}) ORDER BY location_id, sku`,
+      params
     );
-    const rows = lines.rows.map(l => ({
-      ...l,
-      expected_qty: (cc.blind && cc.status !== 'COMPLETED') ? null : l.expected_qty,
-    }));
+    const rows = lines.rows.map(lineaVisible(cc));
     res.json({ blind: cc.blind, status: cc.status, scopeLabel: cc.scope_label, lines: rows });
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
+// Registra lo contado en una línea del conteo. La diferencia se calcula contra el
+// stock del sistema en ese momento (no contra el esperado al crear el conteo).
 router.post('/cycle-count/:id/count', requireStaff, async (req, res) => {
-  const { lineId, counted_qty, username } = req.body;
+  const { lineId } = req.body;
+  const counted = Number(req.body.counted_qty);
+  if (!Number.isFinite(counted) || counted < 0) return res.status(400).json({ error: 'counted_qty debe ser un número mayor o igual a 0.' });
+  const client = await pool.connect();
   try {
-    const line = await pool.query(`SELECT * FROM cycle_count_lines WHERE id=$1`, [lineId]);
-    if (!line.rows.length) return res.status(404).json({ error: 'Línea no encontrada.' });
-    const diff = parseFloat(counted_qty) - parseFloat(line.rows[0].expected_qty || 0);
-    await pool.query(
-      `UPDATE cycle_count_lines SET counted_qty=$1, difference=$2, status='COUNTED', counted_by=$3, counted_at=NOW() WHERE id=$4`,
-      [parseFloat(counted_qty), diff, username, lineId]
+    await client.query('BEGIN');
+    const cc = await conteoEditable(client, req.params.id);
+    const line = (await client.query(`SELECT * FROM cycle_count_lines WHERE id=$1 AND count_id=$2 FOR UPDATE`, [lineId, cc.id])).rows[0];
+    if (!line || (line.client_id && !clientAllowed(req.clientScope, line.client_id))) throw httpError(404, 'Línea no encontrada en este conteo.');
+    const actual = line.client_id ? (await stockActual(client, line)).total : null;
+    const diff = r2(counted - (actual ?? Number(line.expected_qty || 0)));
+    await client.query(
+      `UPDATE cycle_count_lines SET counted_qty=$1, difference=$2, stock_at_count=$3, status='COUNTED', counted_by=$4, counted_at=NOW() WHERE id=$5`,
+      [counted, diff, actual, req.user.username, line.id]
     );
-    // Marcar conteo en proceso
-    await pool.query(`UPDATE cycle_counts SET status='EN_PROCESO' WHERE id=$1 AND status='PENDING'`, [req.params.id]);
-    res.json({ success: true, difference: diff });
-  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+    await client.query(`UPDATE cycle_counts SET status='EN_PROCESO' WHERE id=$1 AND status='PENDING'`, [cc.id]);
+    await client.query('COMMIT');
+    res.json(ocultarEsperado(cc) ? { success: true } : { success: true, difference: diff });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(e.status || 500).json({ error: userError(e) });
+  } finally { client.release(); }
 });
 
 // Agregar hallazgo (stock en ubicación no listada)
 router.post('/cycle-count/:id/add-line', requireStaff, async (req, res) => {
-  const { location_id, sku, counted_qty, username, note } = req.body;
+  const { location_id, sku, note } = req.body;
   if (!location_id || !sku) return res.status(400).json({ error: 'location_id y sku son requeridos.' });
-  const qty = parseFloat(counted_qty);
-  if (isNaN(qty) || qty < 0) return res.status(400).json({ error: 'counted_qty debe ser >= 0.' });
+  const qty = Number(req.body.counted_qty);
+  if (!Number.isFinite(qty) || qty < 0) return res.status(400).json({ error: 'counted_qty debe ser >= 0.' });
+  const loc = String(location_id).trim().toUpperCase();
+  const skuU = String(sku).trim().toUpperCase();
+  const client = await pool.connect();
   try {
-    const existing = await pool.query(
-      `SELECT id FROM cycle_count_lines WHERE count_id=$1 AND location_id=$2 AND sku=$3`,
-      [req.params.id, location_id.toUpperCase(), sku.toUpperCase()]
+    await client.query('BEGIN');
+    const cc = await conteoEditable(client, req.params.id);
+    // Dueño del stock encontrado: el indicado, el del filtro del conteo o el único dueño del SKU.
+    const clientId = await clienteDelDocumento(client, req.body.client_id || cc.client_filter, [skuU]);
+    if (!clientAllowed(req.clientScope, clientId)) throw httpError(403, `Acceso denegado al cliente '${clientId}'.`);
+    if (!(await client.query('SELECT 1 FROM master_skus WHERE sku=$1 AND client_id=$2 AND deleted_at IS NULL', [skuU, clientId])).rows.length) {
+      throw httpError(400, `El SKU ${skuU} no existe para el cliente ${clientId}.`);
+    }
+    if (!(await client.query('SELECT 1 FROM locations_master WHERE location_id=$1', [loc])).rows.length) throw httpError(400, `La ubicación '${loc}' no existe.`);
+    const actual = (await stockActual(client, { sku: skuU, location_id: loc, client_id: clientId })).total;
+    const existing = await client.query(
+      `SELECT id FROM cycle_count_lines WHERE count_id=$1 AND location_id=$2 AND sku=$3 AND client_id=$4 FOR UPDATE`,
+      [cc.id, loc, skuU, clientId]
     );
     if (existing.rows.length > 0) {
-      await pool.query(
-        `UPDATE cycle_count_lines SET counted_qty=$1, difference=$1, status='COUNTED', counted_by=$2, counted_at=NOW(), note=$3 WHERE id=$4`,
-        [qty, username, note || null, existing.rows[0].id]
+      await client.query(
+        `UPDATE cycle_count_lines SET counted_qty=$1, difference=$2, stock_at_count=$3, status='COUNTED', counted_by=$4, counted_at=NOW(), note=$5 WHERE id=$6`,
+        [qty, r2(qty - actual), actual, req.user.username, note || null, existing.rows[0].id]
       );
     } else {
-      await pool.query(
-        `INSERT INTO cycle_count_lines (count_id,sku,location_id,expected_qty,counted_qty,difference,status,counted_by,counted_at,note,line_type)
-         VALUES ($1,$2,$3,0,$4,$4,'COUNTED',$5,NOW(),$6,'ENCONTRADO')`,
-        [req.params.id, sku.toUpperCase(), location_id.toUpperCase(), qty, username, note || null]
+      await client.query(
+        `INSERT INTO cycle_count_lines (count_id,sku,location_id,client_id,expected_qty,counted_qty,difference,stock_at_count,status,counted_by,counted_at,note,line_type)
+         VALUES ($1,$2,$3,$4,0,$5,$6,$7,'COUNTED',$8,NOW(),$9,'ENCONTRADO')`,
+        [cc.id, skuU, loc, clientId, qty, r2(qty - actual), actual, req.user.username, note || null]
       );
     }
-    await pool.query(`UPDATE cycle_counts SET status='EN_PROCESO' WHERE id=$1 AND status='PENDING'`, [req.params.id]);
-    const lines = await pool.query(`SELECT * FROM cycle_count_lines WHERE count_id=$1 ORDER BY location_id, sku`, [req.params.id]);
-    res.json({ success: true, lines: lines.rows });
-  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+    await client.query(`UPDATE cycle_counts SET status='EN_PROCESO' WHERE id=$1 AND status='PENDING'`, [cc.id]);
+    await client.query('COMMIT');
+    const params = [cc.id];
+    const lines = await pool.query(
+      `SELECT * FROM cycle_count_lines WHERE count_id=$1 AND (client_id IS NULL OR ${scopeCondition(req.clientScope, 'client_id', params)}) ORDER BY location_id, sku`,
+      params);
+    res.json({ success: true, lines: lines.rows.map(lineaVisible(cc)) });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(e.status || 500).json({ error: userError(e) });
+  } finally { client.release(); }
 });
 
 // Enviar a aprobación
 router.post('/cycle-count/:id/submit', requireStaff, async (req, res) => {
-  const { username } = req.body;
+  const username = req.user.username;
+  const client = await pool.connect();
   try {
-    const cc = await pool.query(`SELECT * FROM cycle_counts WHERE id=$1`, [req.params.id]);
-    if (!cc.rows.length) return res.status(404).json({ error: 'Conteo no encontrado.' });
-    if (!['PENDING','EN_PROCESO'].includes(cc.rows[0].status))
-      return res.status(409).json({ error: `El conteo está en estado '${cc.rows[0].status}', no se puede enviar.` });
-
-    const diffs = await pool.query(
+    await client.query('BEGIN');
+    const cc = await conteoEditable(client, req.params.id);
+    const diffs = await client.query(
       `SELECT COUNT(*) AS diff_count FROM cycle_count_lines WHERE count_id=$1 AND status='COUNTED' AND difference != 0`,
-      [req.params.id]
+      [cc.id]
     );
     const hasDiffs = parseInt(diffs.rows[0].diff_count) > 0;
-
     if (!hasDiffs) {
       // Sin diferencias: completar directo sin ajustar stock
-      await pool.query(
+      await client.query(
         `UPDATE cycle_counts SET status='COMPLETED', completed_at=NOW(), approved_by=$1, approved_at=NOW() WHERE id=$2`,
-        [username, req.params.id]
+        [username, cc.id]
       );
+      await client.query('COMMIT');
       return res.json({ success: true, status: 'COMPLETED', requires_approval: false });
     }
-
-    await pool.query(`UPDATE cycle_counts SET status='PENDIENTE_APROBACION' WHERE id=$1`, [req.params.id]);
+    await client.query(`UPDATE cycle_counts SET status='PENDIENTE_APROBACION' WHERE id=$1`, [cc.id]);
+    await client.query('COMMIT');
     res.json({ success: true, status: 'PENDIENTE_APROBACION', requires_approval: true, diff_lines: parseInt(diffs.rows[0].diff_count) });
-  } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(e.status || 500).json({ error: userError(e) });
+  } finally { client.release(); }
 });
 
-// Aprobar y aplicar ajustes
+// Aprobar y aplicar ajustes. El ajuste se calcula contra el stock ACTUAL bloqueado
+// (por SKU, ubicación y cliente); si el stock cambió desde que se contó la línea,
+// no se aplica nada y se pide recontar.
 router.post('/cycle-count/:id/approve', requireJefeOrAbove, async (req, res) => {
-  const { username } = req.body;
+  const username = req.user.username;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const cc = await client.query(`SELECT * FROM cycle_counts WHERE id=$1 FOR UPDATE`, [req.params.id]);
-    if (!cc.rows.length) throw new Error('Conteo no encontrado.');
+    if (!cc.rows.length) throw httpError(404, 'Conteo no encontrado.');
     if (cc.rows[0].status !== 'PENDIENTE_APROBACION')
-      throw new Error(`El conteo está en estado '${cc.rows[0].status}', no se puede aprobar.`);
+      throw httpError(409, `El conteo está en estado '${cc.rows[0].status}', no se puede aprobar.`);
 
     const lines = await client.query(
-      `SELECT * FROM cycle_count_lines WHERE count_id=$1 AND status='COUNTED' AND difference != 0`,
+      `SELECT * FROM cycle_count_lines WHERE count_id=$1 AND status='COUNTED' ORDER BY id FOR UPDATE`,
       [req.params.id]
     );
-
+    const recontar = [];
+    const sinCliente = [];
+    const plan = [];
     for (const line of lines.rows) {
-      const diff     = parseFloat(line.difference);
-      const expected = parseFloat(line.expected_qty) || 0;
-      const skuRow   = await client.query('SELECT client_id FROM master_skus WHERE sku=$1 LIMIT 1', [line.sku]);
-      const clientId = skuRow.rows[0]?.client_id || 'GENERAL';
+      // Líneas antiguas sin dueño (código compartido entre clientes): no se ajustan solas.
+      if (!line.client_id) { sinCliente.push(`${line.sku} en ${line.location_id}`); continue; }
+      if (!clientAllowed(req.clientScope, line.client_id)) throw httpError(403, `Acceso denegado al cliente '${line.client_id}'.`);
+      const { lpns, total } = await stockActual(client, line, true);
+      if (line.stock_at_count !== null && r2(line.stock_at_count) !== total) {
+        recontar.push(line);
+        continue;
+      }
+      const delta = r2(Number(line.counted_qty) - total);
+      if (delta !== 0) plan.push({ line, lpns, delta });
+    }
+    if (recontar.length) {
+      await client.query(
+        `UPDATE cycle_count_lines SET status='PENDING', counted_qty=NULL, difference=NULL, stock_at_count=NULL, counted_by=NULL, counted_at=NULL
+          WHERE id = ANY($1::int[])`, [recontar.map(l => l.id)]);
+      await client.query(`UPDATE cycle_counts SET status='EN_PROCESO' WHERE id=$1`, [req.params.id]);
+      await client.query('COMMIT');
+      return res.status(409).json({
+        error: `El stock cambió desde el conteo. Se reabrió el conteo para recontar: ${recontar.map(l => `${l.sku} en ${l.location_id}`).join(', ')}.`,
+        recontar: true,
+      });
+    }
 
-      if (diff > 0) {
-        const lpnId = genLpnId(expected === 0 ? 'CC-NEW' : 'CC-ADJ');
-        const glosa = expected === 0
+    for (const { line, lpns, delta } of plan) {
+      if (delta > 0) {
+        const lpnId = genLpnId(Number(line.expected_qty) === 0 ? 'CC-NEW' : 'CC-ADJ');
+        const glosa = Number(line.expected_qty) === 0
           ? `Hallazgo CC ${req.params.id}: stock encontrado en ${line.location_id}`
           : `Sobrante CC ${req.params.id}: ajuste en ${line.location_id}`;
         await client.query(
-          `INSERT INTO inventory_lpns (id,sku,qty,client_id,status,location_id,glosa) VALUES ($1,$2,$3,$4,'DISPONIBLE',$5,$6)`,
-          [lpnId, line.sku, diff, clientId, line.location_id, glosa]
+          `INSERT INTO inventory_lpns (id,sku,sku_version,qty,client_id,status,location_id,glosa)
+           VALUES ($1,$2,COALESCE((SELECT current_version FROM master_skus WHERE sku=$7 AND client_id=$8),1),$3,$4,'DISPONIBLE',$5,$6)`,
+          [lpnId, line.sku, delta, line.client_id, line.location_id, glosa, line.sku, line.client_id]
         );
         await client.query(
           `INSERT INTO audit_log (type,sku,qty,glosa,username,client_id) VALUES ('ADJUST_IN',$1,$2,$3,$4,$5)`,
-          [line.sku, diff, glosa, username, clientId]
+          [line.sku, delta, glosa, username, line.client_id]
         );
-      } else if (diff < 0) {
-        const absDiff = Math.abs(diff);
-        // Mermar del stock existente en esa ubicación (FIFO)
-        const available = await client.query(
-          `SELECT id, qty FROM inventory_lpns WHERE sku=$1 AND location_id=$2 AND qty>0 ORDER BY created_at ASC`,
-          [line.sku, line.location_id]
-        );
-        let remaining = absDiff;
-        for (const lpn of available.rows) {
+      } else {
+        // Merma FIFO sobre el stock de ese cliente en esa ubicación (ya bloqueado).
+        let remaining = -delta;
+        for (const lpn of lpns) {
           if (remaining <= 0) break;
-          const take = Math.min(parseFloat(lpn.qty), remaining);
+          const take = Math.min(Number(lpn.qty), remaining);
           await client.query(`UPDATE inventory_lpns SET qty=qty-$1 WHERE id=$2`, [take, lpn.id]);
           remaining -= take;
         }
+        await client.query(`DELETE FROM inventory_lpns WHERE id = ANY($1::varchar[]) AND qty <= 0`, [lpns.map(l => l.id)]);
         await client.query(
           `INSERT INTO audit_log (type,sku,qty,glosa,username,client_id) VALUES ('ADJUST_OUT',$1,$2,$3,$4,$5)`,
-          [line.sku, absDiff, `Merma CC ${req.params.id}: ajuste en ${line.location_id}`, username, clientId]
+          [line.sku, -delta, `Merma CC ${req.params.id}: ajuste en ${line.location_id}`, username, line.client_id]
         );
       }
+      await client.query(`UPDATE cycle_count_lines SET difference=$1 WHERE id=$2`, [delta, line.id]);
     }
 
     await client.query(
@@ -273,21 +331,21 @@ router.post('/cycle-count/:id/approve', requireJefeOrAbove, async (req, res) => 
       [username, req.params.id]
     );
     await client.query('COMMIT');
-    res.json({ success: true, adjustments_applied: lines.rows.length });
+    res.json({ success: true, adjustments_applied: plan.length, ...(sinCliente.length ? { lineas_sin_cliente: sinCliente } : {}) });
   } catch (e) {
-    await client.query('ROLLBACK');
-    res.status(500).json({ error: e.message || mapDbError(e) });
+    await client.query('ROLLBACK').catch(() => {});
+    res.status(e.status || 500).json({ error: userError(e) });
   } finally { client.release(); }
 });
 
 // Rechazar
 router.post('/cycle-count/:id/reject', requireJefeOrAbove, async (req, res) => {
-  const { username, reason } = req.body;
+  const { reason } = req.body;
   try {
     const r = await pool.query(
-      `UPDATE cycle_counts SET status='RECHAZADO', rejected_by=$1, rejected_at=NOW(), notes=CONCAT(COALESCE(notes,''), ' | Rechazado: ', $2)
+      `UPDATE cycle_counts SET status='RECHAZADO', rejected_by=$1, rejected_at=NOW(), notes=CONCAT(COALESCE(notes,''), ' | Rechazado: ', $2::text)
        WHERE id=$3 AND status='PENDIENTE_APROBACION' RETURNING id`,
-      [username, reason || '', req.params.id]
+      [req.user.username, reason || '', req.params.id]
     );
     if (!r.rowCount) return res.status(404).json({ error: 'Conteo no encontrado o no está pendiente de aprobación.' });
     res.json({ success: true });
@@ -389,7 +447,7 @@ router.post('/adjust-requests/:id/approve', requireJefe, async (req, res) => {
     await client.query(`UPDATE adjustment_requests SET status='APROBADA', authorized_by=$1, resolved_at=NOW() WHERE id=$2`, [req.user.username, req.params.id]);
     await client.query('COMMIT');
     res.json({ success: true });
-  } catch (err) { await client.query('ROLLBACK'); res.status(400).json({ error: err.message }); }
+  } catch (err) { await client.query('ROLLBACK'); res.status(400).json({ error: userError(err) }); }
   finally { client.release(); }
 });
 

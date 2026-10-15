@@ -9,11 +9,15 @@ const backupsRouter = require('./backups');
 
 const router = express.Router();
 
+// Claves internas que no son configuración: nunca se envían en GET /system/config
+// (cada usuario descarga esta respuesta al iniciar la app).
+const INTERNAL_CONFIG_KEY = /^(demo_feedback|tutorial_progress_)|(secret|token|password|hash)/i;
+
 router.get('/system/config', requireAuth, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT * FROM system_config`);
+    const result = await pool.query(`SELECT key, value FROM system_config`);
     const config = {};
-    result.rows.forEach(r => { config[r.key] = r.value; });
+    result.rows.forEach(r => { if (!INTERNAL_CONFIG_KEY.test(r.key)) config[r.key] = r.value; });
     res.json(config);
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
@@ -184,7 +188,7 @@ router.post('/system/factory-reset', requireSuperAdmin, async (req, res) => {
     try {
       await client.query('BEGIN');
       // 3) Vaciar TODO menos la tabla de migraciones.
-      const tbls = (await client.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> 'schema_migrations'`))
+      const tbls = (await client.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations', 'system_backups')`))
         .rows.map(r => `"${r.tablename}"`);
       await client.query(`TRUNCATE TABLE ${tbls.join(', ')} RESTART IDENTITY CASCADE`);
       // 4) Re-insertar el esqueleto (superadmins + catálogos/config base).

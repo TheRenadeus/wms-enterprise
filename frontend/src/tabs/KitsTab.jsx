@@ -21,7 +21,7 @@ export default function KitsTab({
       {/* Sub-tabs kitting */}
       <div className="flex gap-1 bg-slate-100 p-1 rounded-2xl w-fit flex-wrap">
         {[['definitions','Definiciones'],['ordenes','Órdenes (armado)']].map(([id,label])=>(
-          <button key={id} onClick={()=>setKittingTab(id)} className={`px-5 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-colors ${kittingTab===id?'bg-white text-indigo-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>{label}</button>
+          <button key={id} onClick={()=>setKittingTab(id)} className={`px-5 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest transition-colors ${kittingTab===id?'bg-white text-indigo-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>{label}</button>
         ))}
       </div>
 
@@ -31,16 +31,16 @@ export default function KitsTab({
         {/* Panel izquierdo: formulario */}
         <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
           <div>
-            <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Package className="w-5 h-5 mr-2 text-indigo-500"/> Nuevo Kit</h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Agrupa SKUs en un producto compuesto</p>
+            <h2 className="text-xl font-black text-slate-800 tracking-tighter flex items-center"><Package className="w-5 h-5 mr-2 text-indigo-500"/> Nuevo Kit</h2>
+            <p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest mt-1">Agrupa SKUs en un producto compuesto</p>
           </div>
           <form onSubmit={handleSaveKit} className="space-y-5">
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase">ID del Kit (SKU) *</label>
+              <label className="text-[12px] font-black text-slate-500 uppercase">ID del Kit (SKU) *</label>
               <input type="text" value={kitForm.kit_sku} onChange={e=>setKitForm({...kitForm, kit_sku: e.target.value.toUpperCase()})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: KIT-BASICO-001"/>
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
+              <label className="text-[12px] font-black text-slate-500 uppercase">Cliente *</label>
               {is3PLMode ? (
                 <select value={kitForm.client_id} onChange={e=>{setKitForm({...kitForm, client_id: e.target.value, components: []}); setKitComponentLine({ sku:'', qty:'' });}} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
                   <option value="">-- Seleccionar --</option>
@@ -53,13 +53,13 @@ export default function KitsTab({
               )}
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase">Descripción</label>
+              <label className="text-[12px] font-black text-slate-500 uppercase">Descripción</label>
               <input type="text" value={kitForm.description} onChange={e=>setKitForm({...kitForm, description: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Ej: Kit de bienvenida"/>
             </div>
 
             {/* Agregar componente */}
             <div className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-200">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Agregar Componente</p>
+              <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Agregar Componente</p>
               <div className="flex gap-2">
                 <select value={kitComponentLine.sku} onChange={e=>setKitComponentLine({...kitComponentLine, sku: e.target.value})} disabled={is3PLMode && !kitForm.client_id} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 bg-white disabled:bg-slate-100 disabled:cursor-not-allowed">
                   <option value="">{is3PLMode && !kitForm.client_id ? '-- Elige un cliente primero --' : '-- SKU --'}</option>
@@ -73,14 +73,14 @@ export default function KitsTab({
             {/* Lista de componentes del kit */}
             {kitForm.components.length > 0 && (
               <div className="space-y-2">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Componentes ({kitForm.components.length})</p>
+                <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Componentes ({kitForm.components.length})</p>
                 {kitForm.components.map(c => {
                   const skuInfo = permittedSkus.find(s => s.sku === c.sku);
                   return (
                     <div key={c.sku} className="flex items-center justify-between bg-indigo-50 border border-indigo-100 rounded-xl px-4 py-2">
                       <div>
                         <span className="text-sm font-black text-indigo-800 uppercase">{c.sku}</span>
-                        {skuInfo && <span className="text-[10px] text-indigo-500 ml-2">{skuInfo.desc}</span>}
+                        {skuInfo && <span className="text-[12px] text-indigo-500 ml-2">{skuInfo.desc}</span>}
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-sm font-black text-indigo-700 bg-indigo-100 px-3 py-0.5 rounded-full">× {c.qty}</span>
@@ -99,7 +99,7 @@ export default function KitsTab({
         {/* Panel derecho: lista de kits */}
         <div className="flex-[1.5] overflow-y-auto max-h-[600px] custom-scrollbar pr-2">
           <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 z-10 border-b border-slate-100">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Kits Definidos ({kits.length})</p>
+            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Kits Definidos ({kits.length})</p>
           </div>
           <div className="space-y-4">
             {kits.map(k => (
@@ -107,8 +107,8 @@ export default function KitsTab({
                 <div className="flex justify-between items-start mb-3">
                   <div>
                     <p className="text-sm font-black text-slate-800 uppercase">{k.kit_sku}</p>
-                    {k.description && <p className="text-[10px] text-slate-500 mt-0.5">{k.description}</p>}
-                    <span className="text-[9px] font-black bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full uppercase mt-1 inline-block">{k.client_id}</span>
+                    {k.description && <p className="text-[12px] text-slate-500 mt-0.5">{k.description}</p>}
+                    <span className="text-[12px] font-black bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full uppercase mt-1 inline-block">{k.client_id}</span>
                   </div>
                   <button onClick={() => handleDeleteKit(k.kit_sku, k.client_id)} className="text-slate-300 hover:text-red-500 transition-colors mt-1"><Trash2 size={14}/></button>
                 </div>
@@ -116,9 +116,9 @@ export default function KitsTab({
                   {(k.components || []).map(c => {
                     const skuInfo = safeSkus.find(s => s.sku === c.component_sku);
                     return (
-                      <div key={c.component_sku} className="flex items-center justify-between text-[11px] bg-white border border-slate-100 rounded-lg px-3 py-1.5">
+                      <div key={c.component_sku} className="flex items-center justify-between text-[13px] bg-white border border-slate-100 rounded-lg px-3 py-1.5">
                         <span className="font-black text-slate-700 uppercase">{c.component_sku}</span>
-                        <span className="text-slate-400">{skuInfo?.desc}</span>
+                        <span className="text-slate-500">{skuInfo?.desc}</span>
                         <span className="font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">× {c.qty}</span>
                       </div>
                     );
@@ -126,7 +126,7 @@ export default function KitsTab({
                 </div>
               </div>
             ))}
-            {kits.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[10px] uppercase tracking-widest font-bold">No hay kits definidos</p></div>}
+            {kits.length === 0 && <div className="p-8 text-center text-slate-500"><Package className="w-12 h-12 mx-auto mb-2 opacity-50"/><p className="text-[12px] uppercase tracking-widest font-bold">No hay kits definidos</p></div>}
           </div>
         </div>
       </div>
@@ -137,19 +137,19 @@ export default function KitsTab({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Crear orden */}
         <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8">
-          <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center mb-1"><ClipboardCheck className="w-5 h-5 mr-2 text-indigo-500"/> Nueva orden de armado</h2>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-5">El ejecutivo crea la orden; el picker la arma</p>
+          <h2 className="text-xl font-black text-slate-800 tracking-tighter flex items-center mb-1"><ClipboardCheck className="w-5 h-5 mr-2 text-indigo-500"/> Nueva orden de armado</h2>
+          <p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest mb-5">El ejecutivo crea la orden; el picker la arma</p>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase">Cliente *</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase">Cliente *</label>
                 <select value={ordForm.client_id} onChange={e=>{ setOrdForm({...ordForm, client_id:e.target.value, kit_sku:''}); setOrdSugeridos({}); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white">
                   <option value="">-- Seleccionar --</option>
                   {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase">Kit (receta) *</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase">Kit (receta) *</label>
                 <select value={ordForm.kit_sku} disabled={!ordForm.client_id} onChange={e=>{ setOrdForm({...ordForm, kit_sku:e.target.value}); setOrdSugeridos({}); }} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 bg-white disabled:bg-slate-100">
                   <option value="">{ordForm.client_id ? '-- Seleccionar --' : '-- Elige cliente --'}</option>
                   {(kits||[]).filter(k=>k.client_id===ordForm.client_id && (k.components||[]).length>0).map(k=><option key={k.kit_sku} value={k.kit_sku}>{k.kit_sku}</option>)}
@@ -158,26 +158,26 @@ export default function KitsTab({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad de kits *</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase">Cantidad de kits *</label>
                 <input type="number" min="1" value={ordForm.cantidad_kits} onChange={e=>setOrdForm({...ordForm, cantidad_kits:parseInt(e.target.value)||1})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500"/>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase">Notas</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase">Notas</label>
                 <input type="text" value={ordForm.notas} onChange={e=>setOrdForm({...ordForm, notas:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Opcional"/>
               </div>
             </div>
             {/* Componentes + origen sugerido (opcional) */}
             {ordKit && (
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Componentes · origen sugerido <span className="text-slate-300 normal-case">(opcional, el picker confirma o ajusta)</span></p>
+                <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3">Componentes · origen sugerido <span className="text-slate-300 normal-case">(opcional, el picker confirma o ajusta)</span></p>
                 <div className="space-y-2">
                   {(ordKit.components||[]).map(c=>{
                     const sug = ordSugeridos[c.component_sku] || {};
                     const setSug = (k,v)=>setOrdSugeridos(prev=>({...prev, [c.component_sku]: { ...(prev[c.component_sku]||{}), [k]:v }}));
                     return (
-                      <div key={c.component_sku} className="flex items-center gap-2 flex-wrap text-[11px]">
+                      <div key={c.component_sku} className="flex items-center gap-2 flex-wrap text-[13px]">
                         <span className="font-black text-slate-700 w-32 truncate">{c.component_sku}</span>
-                        <span className="text-slate-400">×{parseFloat(c.qty)} → {parseFloat(c.qty)*(parseInt(ordForm.cantidad_kits)||1)}</span>
+                        <span className="text-slate-500">×{parseFloat(c.qty)} → {parseFloat(c.qty)*(parseInt(ordForm.cantidad_kits)||1)}</span>
                         <input value={sug.ubicacion||''} onChange={e=>setSug('ubicacion',e.target.value.toUpperCase())} placeholder="Ubicación" className="flex-1 min-w-[90px] border border-slate-200 rounded-lg px-2 py-1 font-bold outline-none focus:border-indigo-400 uppercase"/>
                         <input value={sug.lote||''} onChange={e=>setSug('lote',e.target.value)} placeholder="Lote" className="w-20 border border-slate-200 rounded-lg px-2 py-1 font-bold outline-none focus:border-indigo-400"/>
                         <input value={sug.serie||''} onChange={e=>setSug('serie',e.target.value)} placeholder="Serie" className="w-24 border border-slate-200 rounded-lg px-2 py-1 font-bold outline-none focus:border-indigo-400"/>
@@ -193,36 +193,36 @@ export default function KitsTab({
         {/* Lista de órdenes */}
         <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 overflow-hidden">
           <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
-            <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Órdenes ({ordenesV2.length})</h3>
-            <button onClick={loadOrdenesV2} className="text-slate-400 hover:text-indigo-600" title="Refrescar"><RefreshCcw size={14}/></button>
+            <h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Órdenes ({ordenesV2.length})</h3>
+            <button onClick={loadOrdenesV2} className="text-slate-500 hover:text-indigo-600" title="Refrescar"><RefreshCcw size={14}/></button>
           </div>
           <div className="overflow-x-auto max-h-[60vh]">
             <table className="w-full text-left">
               <thead className="bg-slate-100 border-b border-slate-200 sticky top-0"><tr>
-                <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Orden / Kit</th>
-                <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Cliente</th>
-                <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cant.</th>
-                <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Estado</th>
-                <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center pr-5">Acción</th>
+                <th className="p-3 text-[12px] font-black text-slate-500 uppercase pl-5">Orden / Kit</th>
+                <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Cliente</th>
+                <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Cant.</th>
+                <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Estado</th>
+                <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center pr-5">Acción</th>
               </tr></thead>
               <tbody className="divide-y divide-slate-100">
                 {ordenesV2.map(o=>{
                   const est = o.estado==='pendiente' ? 'bg-amber-100 text-amber-700' : o.estado==='armado' ? 'bg-emerald-100 text-emerald-700' : o.estado==='desarmado' ? 'bg-slate-200 text-slate-600' : 'bg-red-100 text-red-700';
                   return (
                     <tr key={o.id} className="hover:bg-slate-50">
-                      <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{o.kit_sku}</p><p className="text-[9px] font-mono text-slate-400">{o.id}</p></td>
-                      <td className="p-3 text-[10px] font-bold text-slate-500">{o.client_name||o.client_id}</td>
+                      <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{o.kit_sku}</p><p className="text-[12px] font-mono text-slate-500">{o.id}</p></td>
+                      <td className="p-3 text-[12px] font-bold text-slate-500">{o.client_name||o.client_id}</td>
                       <td className="p-3 text-center text-sm font-black text-slate-700">{o.cantidad_kits}</td>
-                      <td className="p-3 text-center"><span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${est}`}>{o.estado}</span></td>
+                      <td className="p-3 text-center"><span className={`text-[12px] font-black uppercase px-2 py-1 rounded-full ${est}`}>{o.estado}</span></td>
                       <td className="p-3 text-center pr-5 whitespace-nowrap">
-                        {o.estado==='pendiente' && <button onClick={()=>openArmar(o.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg mr-1">Armar</button>}
-                        {o.estado==='armado' && <button onClick={()=>openDesarmar(o.id)} className="bg-rose-600 hover:bg-rose-700 text-white text-[9px] font-black uppercase px-3 py-1.5 rounded-lg mr-1">Desarmar</button>}
-                        <button onClick={()=>openTrace(o.id)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[9px] font-black uppercase px-3 py-1.5 rounded-lg">Ver</button>
+                        {o.estado==='pendiente' && <button onClick={()=>openArmar(o.id)} className="bg-indigo-600 hover:bg-indigo-700 text-white text-[12px] font-black uppercase px-3 py-1.5 rounded-lg mr-1">Armar</button>}
+                        {o.estado==='armado' && <button onClick={()=>openDesarmar(o.id)} className="bg-rose-600 hover:bg-rose-700 text-white text-[12px] font-black uppercase px-3 py-1.5 rounded-lg mr-1">Desarmar</button>}
+                        <button onClick={()=>openTrace(o.id)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[12px] font-black uppercase px-3 py-1.5 rounded-lg">Ver</button>
                       </td>
                     </tr>
                   );
                 })}
-                {ordenesV2.length===0 && <tr><td colSpan={5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin órdenes</td></tr>}
+                {ordenesV2.length===0 && <tr><td colSpan={5} className="p-10 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">Sin órdenes</td></tr>}
               </tbody>
             </table>
           </div>
@@ -236,10 +236,10 @@ export default function KitsTab({
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={e=>e.stopPropagation()}>
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Package size={18} className="text-indigo-500"/> Armar {armOrden.orden.cantidad_kits}× {armOrden.orden.kit_sku}</h3>
-                <p className="text-[11px] font-bold text-slate-500">{armOrden.orden.client_name||armOrden.orden.client_id} · orden {armOrden.orden.id}</p>
+                <h3 className="text-base font-black text-slate-800 tracking-tighter flex items-center gap-2"><Package size={18} className="text-indigo-500"/> Armar {armOrden.orden.cantidad_kits}× {armOrden.orden.kit_sku}</h3>
+                <p className="text-[13px] font-bold text-slate-500">{armOrden.orden.client_name||armOrden.orden.client_id} · orden {armOrden.orden.id}</p>
               </div>
-              <button onClick={()=>setArmOrden(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+              <button onClick={()=>setArmOrden(null)} className="text-slate-500 hover:text-slate-700"><X size={18}/></button>
             </div>
             <div className="overflow-auto p-5 space-y-3">
               {(armOrden.receta||[]).map(r => {
@@ -249,19 +249,19 @@ export default function KitsTab({
                 return (
                   <div key={r.component_sku} className="bg-slate-50 rounded-2xl p-3 border border-slate-200">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-xs font-black text-slate-700">{r.component_sku} <span className="text-slate-400 font-bold">{r.desc||''}</span></span>
-                      <span className="text-[11px] font-bold text-slate-500">Necesario: <strong>{parseFloat(r.qty_necesaria)}</strong> · Disp: <strong className={falta?'text-red-600':'text-emerald-600'}>{parseFloat(r.disponible)}</strong></span>
+                      <span className="text-xs font-black text-slate-700">{r.component_sku} <span className="text-slate-500 font-bold">{r.desc||''}</span></span>
+                      <span className="text-[13px] font-bold text-slate-500">Necesario: <strong>{parseFloat(r.qty_necesaria)}</strong> · Disp: <strong className={falta?'text-red-600':'text-emerald-600'}>{parseFloat(r.disponible)}</strong></span>
                     </div>
-                    {(r.requires_serial || r.requires_lot) && <p className="text-[9px] font-black uppercase mt-1 text-violet-600">{r.requires_serial?'requiere serie':''}{r.requires_serial&&r.requires_lot?' · ':''}{r.requires_lot?'requiere lote':''}</p>}
-                    {sug.length>0 && <div className="flex flex-wrap gap-1 mt-1.5">{sug.map((s,i)=><span key={i} className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5">Sugerido: {s.ubicacion||'—'}{s.lote?` · L:${s.lote}`:''}{s.serie?` · S/N:${s.serie}`:''}</span>)}</div>}
+                    {(r.requires_serial || r.requires_lot) && <p className="text-[12px] font-black uppercase mt-1 text-violet-600">{r.requires_serial?'requiere serie':''}{r.requires_serial&&r.requires_lot?' · ':''}{r.requires_lot?'requiere lote':''}</p>}
+                    {sug.length>0 && <div className="flex flex-wrap gap-1 mt-1.5">{sug.map((s,i)=><span key={i} className="text-[12px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5">Sugerido: {s.ubicacion||'—'}{s.lote?` · L:${s.lote}`:''}{s.serie?` · S/N:${s.serie}`:''}</span>)}</div>}
                     {renderKitSourcePicker(c, armSources, setArmSources)}
                   </div>
                 );
               })}
               {/* Destino del kit */}
               <div className="bg-white rounded-2xl border border-slate-200 p-3">
-                <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Destino del kit armado</p>
-                <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2">Destino del kit armado</p>
+                <div className="flex items-center gap-2 flex-wrap text-[13px]">
                   <input value={armDest.ubicacion} onChange={e=>setArmDest({...armDest, ubicacion:e.target.value.toUpperCase()})} placeholder="Ubicación" className="flex-1 min-w-[110px] border border-slate-200 rounded-lg px-2 py-1.5 font-bold outline-none focus:border-indigo-400 uppercase"/>
                   <input value={armDest.lote} onChange={e=>setArmDest({...armDest, lote:e.target.value})} placeholder="Lote (si aplica)" className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 font-bold outline-none focus:border-indigo-400"/>
                   <input value={armDest.serie} onChange={e=>setArmDest({...armDest, serie:e.target.value})} placeholder="Serie (si aplica)" className="w-28 border border-slate-200 rounded-lg px-2 py-1.5 font-bold outline-none focus:border-indigo-400"/>
@@ -269,8 +269,8 @@ export default function KitsTab({
               </div>
             </div>
             <div className="p-4 border-t border-slate-100 flex gap-2">
-              <button onClick={()=>setArmOrden(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
-              <button onClick={handleArmar} disabled={armBusy} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">{armBusy ? <Loader2 size={14} className="animate-spin"/> : <Package size={14}/>} Confirmar armado</button>
+              <button onClick={()=>setArmOrden(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest">Cancelar</button>
+              <button onClick={handleArmar} disabled={armBusy} className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">{armBusy ? <Loader2 size={14} className="animate-spin"/> : <Package size={14}/>} Confirmar armado</button>
             </div>
           </div>
         </div>
@@ -282,13 +282,13 @@ export default function KitsTab({
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col" onClick={e=>e.stopPropagation()}>
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ClipboardCheck size={18} className="text-indigo-500"/> Trazabilidad · {traceOrden.orden.kit_sku}</h3>
-                <p className="text-[11px] font-bold text-slate-500">{traceOrden.orden.client_name||traceOrden.orden.client_id} · {traceOrden.orden.cantidad_kits} kit(s) · estado <strong>{traceOrden.orden.estado}</strong> · orden {traceOrden.orden.id}</p>
+                <h3 className="text-base font-black text-slate-800 tracking-tighter flex items-center gap-2"><ClipboardCheck size={18} className="text-indigo-500"/> Trazabilidad · {traceOrden.orden.kit_sku}</h3>
+                <p className="text-[13px] font-bold text-slate-500">{traceOrden.orden.client_name||traceOrden.orden.client_id} · {traceOrden.orden.cantidad_kits} kit(s) · estado <strong>{traceOrden.orden.estado}</strong> · orden {traceOrden.orden.id}</p>
               </div>
-              <button onClick={()=>setTraceOrden(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+              <button onClick={()=>setTraceOrden(null)} className="text-slate-500 hover:text-slate-700"><X size={18}/></button>
             </div>
             <div className="overflow-auto p-5 space-y-4">
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-[10px] font-bold text-slate-500">
+              <div className="flex flex-wrap gap-x-6 gap-y-1 text-[12px] font-bold text-slate-500">
                 <span>Creó: <strong className="text-slate-700">{traceOrden.orden.usuario_creador||'—'}</strong></span>
                 {traceOrden.orden.armado_por && <span>Armó: <strong className="text-slate-700">{traceOrden.orden.armado_por}</strong></span>}
                 {traceOrden.orden.desarmado_por && <span>Desarmó: <strong className="text-slate-700">{traceOrden.orden.desarmado_por}</strong></span>}
@@ -296,29 +296,29 @@ export default function KitsTab({
               </div>
               {/* Origen FINAL consumido */}
               <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Componentes · origen de cada pieza</p>
-                {(traceOrden.consumidos||[]).length===0 ? <p className="text-[11px] text-slate-400">Aún no armado (sin consumo registrado).</p> : (
+                <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2">Componentes · origen de cada pieza</p>
+                {(traceOrden.consumidos||[]).length===0 ? <p className="text-[13px] text-slate-500">Aún no armado (sin consumo registrado).</p> : (
                   <div className="overflow-x-auto border border-slate-100 rounded-2xl">
                     <table className="w-full text-left">
                       <thead className="bg-slate-100 border-b border-slate-200"><tr>
-                        <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase pl-4">Componente</th>
-                        <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase text-center">Cant.</th>
-                        <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">Ubicación</th>
-                        <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">Lote</th>
-                        <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">Serie</th>
-                        <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase">LPN origen</th>
-                        <th className="p-2.5 text-[9px] font-black text-slate-400 uppercase text-center pr-4">vs sug.</th>
+                        <th className="p-2.5 text-[12px] font-black text-slate-500 uppercase pl-4">Componente</th>
+                        <th className="p-2.5 text-[12px] font-black text-slate-500 uppercase text-center">Cant.</th>
+                        <th className="p-2.5 text-[12px] font-black text-slate-500 uppercase">Ubicación</th>
+                        <th className="p-2.5 text-[12px] font-black text-slate-500 uppercase">Lote</th>
+                        <th className="p-2.5 text-[12px] font-black text-slate-500 uppercase">Serie</th>
+                        <th className="p-2.5 text-[12px] font-black text-slate-500 uppercase">LPN origen</th>
+                        <th className="p-2.5 text-[12px] font-black text-slate-500 uppercase text-center pr-4">vs sug.</th>
                       </tr></thead>
                       <tbody className="divide-y divide-slate-100">
                         {traceOrden.consumidos.map(cc=>(
                           <tr key={cc.id} className="hover:bg-slate-50">
-                            <td className="p-2.5 pl-4 text-[11px] font-black text-slate-700">{cc.componente_sku}</td>
-                            <td className="p-2.5 text-center text-[11px] font-bold text-slate-600">{parseFloat(cc.cantidad)}</td>
-                            <td className="p-2.5 text-[11px] text-slate-600">{cc.ubicacion||'—'}</td>
-                            <td className="p-2.5 text-[11px] text-amber-600 font-bold">{cc.lote||'—'}</td>
-                            <td className="p-2.5 text-[11px] text-violet-600 font-bold">{cc.serie||'—'}</td>
-                            <td className="p-2.5 text-[10px] font-mono text-slate-400">{cc.lpn_origen||'—'}</td>
-                            <td className="p-2.5 text-center pr-4">{cc.difiere_de_sugerido ? <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase">Difiere</span> : <span className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase">OK</span>}</td>
+                            <td className="p-2.5 pl-4 text-[13px] font-black text-slate-700">{cc.componente_sku}</td>
+                            <td className="p-2.5 text-center text-[13px] font-bold text-slate-600">{parseFloat(cc.cantidad)}</td>
+                            <td className="p-2.5 text-[13px] text-slate-600">{cc.ubicacion||'—'}</td>
+                            <td className="p-2.5 text-[13px] text-amber-600 font-bold">{cc.lote||'—'}</td>
+                            <td className="p-2.5 text-[13px] text-violet-600 font-bold">{cc.serie||'—'}</td>
+                            <td className="p-2.5 text-[12px] font-mono text-slate-500">{cc.lpn_origen||'—'}</td>
+                            <td className="p-2.5 text-center pr-4">{cc.difiere_de_sugerido ? <span className="text-[11px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase">Difiere</span> : <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded uppercase">OK</span>}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -329,9 +329,9 @@ export default function KitsTab({
               {/* Origen sugerido (referencia) */}
               {(traceOrden.sugeridos||[]).length>0 && (
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Origen sugerido (referencia del ejecutivo)</p>
+                  <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-1">Origen sugerido (referencia del ejecutivo)</p>
                   <div className="flex flex-wrap gap-1">
-                    {traceOrden.sugeridos.map((s,i)=><span key={i} className="text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5">{s.componente_sku}: {s.ubicacion||'—'}{s.lote?` · L:${s.lote}`:''}{s.serie?` · S/N:${s.serie}`:''}</span>)}
+                    {traceOrden.sugeridos.map((s,i)=><span key={i} className="text-[12px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded px-1.5 py-0.5">{s.componente_sku}: {s.ubicacion||'—'}{s.lote?` · L:${s.lote}`:''}{s.serie?` · S/N:${s.serie}`:''}</span>)}
                   </div>
                 </div>
               )}
@@ -346,27 +346,27 @@ export default function KitsTab({
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col" onClick={e=>e.stopPropagation()}>
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><AlertTriangle size={18} className="text-rose-500"/> Desarmar {desarmOrden.orden.kit_sku}</h3>
-                <p className="text-[11px] font-bold text-slate-500">Se reintegran estos componentes a stock:</p>
+                <h3 className="text-base font-black text-slate-800 tracking-tighter flex items-center gap-2"><AlertTriangle size={18} className="text-rose-500"/> Desarmar {desarmOrden.orden.kit_sku}</h3>
+                <p className="text-[13px] font-bold text-slate-500">Se reintegran estos componentes a stock:</p>
               </div>
-              <button onClick={()=>setDesarmOrden(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+              <button onClick={()=>setDesarmOrden(null)} className="text-slate-500 hover:text-slate-700"><X size={18}/></button>
             </div>
             <div className="overflow-auto p-5 space-y-2">
               {(desarmOrden.consumidos||[]).map(cc => (
-                <div key={cc.id} className="flex items-center justify-between text-[11px] bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
+                <div key={cc.id} className="flex items-center justify-between text-[13px] bg-slate-50 rounded-xl px-3 py-2 border border-slate-100">
                   <span className="font-black text-slate-700">{cc.componente_sku}</span>
                   <span className="text-slate-500">{parseFloat(cc.cantidad)} → <strong>{desarmDest || cc.ubicacion || 'PISO-RECEPCION'}</strong>{cc.lote?` · L:${cc.lote}`:''}{cc.serie?` · S/N:${cc.serie}`:''}</span>
                 </div>
               ))}
-              {(desarmOrden.consumidos||[]).length===0 && <p className="text-center text-slate-400 text-xs font-bold py-4">Sin componentes consumidos.</p>}
+              {(desarmOrden.consumidos||[]).length===0 && <p className="text-center text-slate-500 text-xs font-bold py-4">Sin componentes consumidos.</p>}
               <div className="pt-2">
-                <label className="text-[9px] font-black text-slate-400 uppercase">Ubicación destino (opcional — si se omite, vuelve a su origen)</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase">Ubicación destino (opcional — si se omite, vuelve a su origen)</label>
                 <input value={desarmDest} onChange={e=>setDesarmDest(e.target.value.toUpperCase())} placeholder="Ej: RACK-A (vacío = ubicación de origen)" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-rose-400 uppercase mt-1"/>
               </div>
             </div>
             <div className="p-4 border-t border-slate-100 flex gap-2">
-              <button onClick={()=>setDesarmOrden(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
-              <button onClick={handleDesarmar} disabled={desarmBusy} className="flex-[2] bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">{desarmBusy ? <Loader2 size={14} className="animate-spin"/> : <AlertTriangle size={14}/>} Confirmar desarmado</button>
+              <button onClick={()=>setDesarmOrden(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest">Cancelar</button>
+              <button onClick={handleDesarmar} disabled={desarmBusy} className="flex-[2] bg-rose-600 hover:bg-rose-700 text-white font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2">{desarmBusy ? <Loader2 size={14} className="animate-spin"/> : <AlertTriangle size={14}/>} Confirmar desarmado</button>
             </div>
           </div>
         </div>

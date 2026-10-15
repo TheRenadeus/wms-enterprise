@@ -1,24 +1,68 @@
 // Import masivo (XLSX/CSV) + plantillas descargables. Extraído de server.js (COD-02).
+const crypto = require('crypto');
 const express = require('express');
 const XLSX = require('xlsx');
 const { pool, mapDbError } = require('../db');
 const { requireAuth, requireStockWrite, requireJefe, stockWriteLimiter, checkClientAccess, checkBatchSkuClientAccess } = require('../middleware');
 const { genLpnId, logStorageEvent } = require('../helpers');
+const { erroresDeSerie } = require('../stock-entrante');
+const { clientAllowed, scopeCondition, OWN_CLIENTS } = require('../scope');
 const {
-  parseFile, getImportRows, validateStockRows, TEMPLATES,
+  getImportRows, validateStockRows, TEMPLATES, MAX_IMPORT_ROWS,
   xlsxHeaderStyle, xlsxDescStyle, xlsxExampleStyle, applyRowStyles,
 } = require('../import-export-helpers');
 
 const router = express.Router();
 
+const txt = (v) => (v === undefined || v === null ? '' : String(v).trim());
+
 // checkClientAccess/checkBatchSkuClientAccess validan sobre req.body.items[], pero
-// las rutas de import masivo reciben su payload en `rows` (o `data` base64). Sin
-// este puente, esos middlewares nunca ven una sola fila y no bloquean nada.
-const attachRowsAsItems = (req, res, next) => {
-  req._importRows = getImportRows(req.body);
-  req.body.items = req._importRows || [];
+// las rutas de import masivo reciben su payload en `rows` (o `data` base64). Este
+// paso lee las filas (el archivo, en un hilo aparte y con tiempo límite) y las
+// expone como items para esos middlewares.
+const attachRows = (type) => async (req, res, next) => {
+  try {
+    req._importRows = await getImportRows(req.body, type);
+  } catch (e) {
+    return res.status(e.status || 400).json({ error: e.status ? e.message : 'No se pudo leer el archivo.' });
+  }
+  if (!req._importRows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
+  req.body.items = req._importRows;
   next();
 };
+
+// Importación todo-o-nada: con una sola fila con error no se escribe nada.
+const rechazarFilas = (res, errors) => res.status(422).json({
+  error: `${errors.length} ${errors.length === 1 ? 'fila tiene' : 'filas tienen'} errores: no se importó nada. Corrija el archivo y vuelva a importarlo completo.`,
+  errors,
+  success: 0,
+});
+
+// Registra el documento en processed_docs dentro de la transacción. Devuelve false
+// si ya existía (ese documento ya se importó).
+async function registrarDocumento(db, docNum, docType, clientId, username) {
+  const r = await db.query(
+    `INSERT INTO processed_docs (doc_num, doc_type, client_id, processed_by) VALUES ($1,$2,$3,$4)
+     ON CONFLICT DO NOTHING RETURNING doc_num`,
+    [docNum, docType, clientId || '', username]);
+  return r.rowCount === 1;
+}
+
+const huella = (rows) => crypto.createHash('sha256').update(JSON.stringify(rows)).digest('hex').slice(0, 40);
+
+// LPN + kardex de entrada, de a 1000 filas (límite de parámetros de PostgreSQL).
+async function insertarStock(db, rows, { glosaLpn, glosaKardex, username }) {
+  const CHUNK = 1000;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const chunk = rows.slice(i, i + CHUNK);
+    const invValues = chunk.map((_, idx) => `($${idx*9+1},$${idx*9+2},$${idx*9+3},$${idx*9+4},'DISPONIBLE',$${idx*9+5},$${idx*9+6},$${idx*9+7},$${idx*9+8},$${idx*9+9})`).join(',');
+    const invParams = chunk.flatMap(r => [r.lpnId, r.sku, r.qty, r.client_id, r.batch, r.expiry, r.serial, r.location, r.glosa || glosaLpn]);
+    await db.query(`INSERT INTO inventory_lpns (id,sku,qty,client_id,status,batch_number,expiry_date,serial_number,location_id,glosa) VALUES ${invValues}`, invParams);
+    const audValues = chunk.map((_, idx) => `('INBOUND',$${idx*5+1},$${idx*5+2},$${idx*5+3},$${idx*5+4},$${idx*5+5})`).join(',');
+    const audParams = chunk.flatMap(r => [r.sku, r.qty, glosaKardex(r), username, r.client_id]);
+    await db.query(`INSERT INTO audit_log (type,sku,qty,glosa,username,client_id) VALUES ${audValues}`, audParams);
+  }
+}
 
 router.get('/templates/:type', (req, res) => {
   const tpl = TEMPLATES[req.params.type];
@@ -55,14 +99,14 @@ router.get('/templates/:type', (req, res) => {
 });
 
 // Preview: devuelve primeras 5 filas parseadas
-router.post('/import/:type/preview', requireAuth, (req, res) => {
+router.post('/import/:type/preview', requireAuth, async (req, res) => {
   const { data, filename } = req.body;
-  if (!data) return res.status(400).json({ error: 'Sin datos' });
+  if (typeof data !== 'string' || !data) return res.status(400).json({ error: 'Sin datos' });
   try {
-    const rows = parseFile(data, filename);
-    const headers = rows.length > 0 ? Object.keys(rows[0]) : (TEMPLATES[req.params.type] || []);
+    const rows = await getImportRows({ data, filename }, req.params.type);
+    const headers = rows.length > 0 ? Object.keys(rows[0]) : (TEMPLATES[req.params.type]?.headers || []);
     res.json({ headers, rows: rows.slice(0, 5), total: rows.length });
-  } catch (e) { res.status(400).json({ error: 'No se pudo parsear el archivo: ' + e.message }); }
+  } catch (e) { res.status(e.status || 400).json({ error: e.status ? e.message : 'No se pudo leer el archivo.' }); }
 });
 
 // Dry-run de duplicados contra la BD (no inserta nada). Devuelve, por fila,
@@ -74,6 +118,7 @@ router.post('/import/:type/preview', requireAuth, (req, res) => {
 router.post('/import/:type/validate', requireAuth, async (req, res) => {
   const type = req.params.type;
   const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
+  if (rows.length > MAX_IMPORT_ROWS || rows.some(r => r === null || typeof r !== 'object')) return res.status(400).json({ error: 'Filas no válidas.' });
   const docNum = req.body.doc_num ? String(req.body.doc_num).toUpperCase().trim() : null;
   const out = { doc_duplicate: false, rows: rows.map((_, i) => ({ index: i, warnings: [], errors: [] })) };
   try {
@@ -130,53 +175,69 @@ router.post('/import/:type/validate', requireAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
 });
 
-router.post('/import/skus', requireStockWrite, async (req, res) => {
-  const { username } = req.body;
-  const rows = getImportRows(req.body);
-  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
-  if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
+// Escritura por cliente: si una sola fila apunta a un cliente fuera del alcance del
+// usuario se rechaza el archivo completo (no se importa a medias).
+router.post('/import/skus', stockWriteLimiter, requireStockWrite, attachRows('skus'), checkClientAccess('write'), async (req, res) => {
+  const username = req.user.username;
+  const rows = req._importRows;
   // success = total procesados; inserted = nuevos; updated = existentes modificados;
   // versioned = SKUs cuyo control de lote/serie cambió con stock activo → bump de versión.
   const results = { success: 0, inserted: 0, updated: 0, versioned: [], errors: [] };
   const truthy = (v) => v === true || v === 'true' || v === 'TRUE' || v === '1' || v === 1;
-  const seenKeys = new Set();
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
     // Mapa código de fabricante (mayúsculas) → id, para resolver manufacturer_code de cada fila.
     const mfMap = new Map();
     (await dbClient.query(`SELECT id, code FROM manufacturers`)).rows.forEach(m => mfMap.set(String(m.code).toUpperCase(), m.id));
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (!r.sku || !r.desc) { results.errors.push(`Fila ${i+2}: SKU y descripción son obligatorios`); continue; }
-      const skuNorm = String(r.sku).toUpperCase().trim();
-      const clientNorm = (r.client_id || 'GENERAL').trim();
-      const key = `${skuNorm}||${clientNorm}`;
-      if (seenKeys.has(key)) { results.errors.push(`Fila ${i+2}: SKU '${skuNorm}' duplicado en este archivo — solo se procesará la primera aparición`); continue; }
+    const clientSet = new Set([...OWN_CLIENTS, ...(await dbClient.query('SELECT id FROM clients')).rows.map(c => String(c.id).toUpperCase())]);
+
+    // 1) Validar todo el archivo antes de escribir.
+    const errors = [];
+    const seenKeys = new Set();
+    const prepared = [];
+    rows.forEach((r, i) => {
+      const fila = i + 2;
+      const fail = (m) => errors.push(`Fila ${fila}: ${m}`);
+      const sku = txt(r.sku).toUpperCase();
+      const desc = txt(r.desc);
+      if (!sku || !desc) return fail('SKU y descripción son obligatorios');
+      const client = txt(r.client_id).toUpperCase() || 'GENERAL';
+      if (!clientSet.has(client)) return fail(`el cliente '${client}' no existe`);
+      const key = `${sku}||${client}`;
+      if (seenKeys.has(key)) return fail(`SKU '${sku}' repetido en el archivo`);
       seenKeys.add(key);
-      const newLot = truthy(r.requires_lot);
-      const newSerial = truthy(r.requires_serial);
-      // Fabricante / marca: el código se resuelve a manufacturer_id si existe en el maestro.
-      const mfCode = (r.manufacturer_code != null && String(r.manufacturer_code).trim() !== '') ? String(r.manufacturer_code).trim() : null;
+      const largos = { sku: [sku, 100], descripción: [desc, 255], categoría: [txt(r.category), 100], uom: [txt(r.uom), 20], barcode: [txt(r.barcode), 100] };
+      for (const [campo, [v, max]] of Object.entries(largos)) if (v.length > max) return fail(`${campo} supera ${max} caracteres`);
+      const abc = txt(r.abc_class).toUpperCase();
+      if (abc && !['A', 'B', 'C'].includes(abc)) return fail(`abc_class debe ser A, B o C`);
+      const medidas = {};
+      for (const f of ['weight', 'length', 'width', 'height']) {
+        const raw = txt(r[f]);
+        const n = raw === '' ? 0 : Number(raw.replace(',', '.'));
+        if (!Number.isFinite(n) || n < 0) return fail(`${f} debe ser un número mayor o igual a 0`);
+        medidas[f] = n;
+      }
+      const mfCode = txt(r.manufacturer_code) || null;
       const mfId = mfCode ? (mfMap.get(mfCode.toUpperCase()) ?? null) : null;
-      if (mfCode && mfId === null) results.errors.push(`Fila ${i+2}: fabricante '${mfCode}' no existe en el maestro — se guardó el código sin vincular`);
-      const mfSku = (r.manufacturer_sku != null && String(r.manufacturer_sku).trim() !== '') ? String(r.manufacturer_sku).trim() : null;
-      const brandN = (r.brand != null && String(r.brand).trim() !== '') ? String(r.brand).trim() : null;
-      const baseParams = [
-        r.desc, r.category || 'General', r.uom || 'UN',
-        parseFloat(r.weight) || 0, parseFloat(r.length) || 0,
-        parseFloat(r.width) || 0, parseFloat(r.height) || 0,
-        r.abc_class || null, r.barcode || null,
-      ];
+      if (mfCode && mfId === null) return fail(`el fabricante '${mfCode}' no existe en el maestro`);
+      prepared.push({
+        sku, client, desc, category: txt(r.category) || 'General', uom: txt(r.uom) || 'UN', ...medidas,
+        abc: abc || null, barcode: txt(r.barcode) || null, mfId, mfCode,
+        mfSku: txt(r.manufacturer_sku) || null, brand: txt(r.brand) || null,
+        newLot: truthy(r.requires_lot), newSerial: truthy(r.requires_serial),
+      });
+    });
+    if (errors.length) { await dbClient.query('ROLLBACK'); return rechazarFilas(res, errors); }
 
-      const exists = await dbClient.query(`SELECT requires_lot, requires_serial, current_version FROM master_skus WHERE sku=$1 AND client_id=$2 LIMIT 1`, [skuNorm, clientNorm]);
-
+    // 2) Escribir.
+    for (const p of prepared) {
+      const exists = await dbClient.query(`SELECT requires_lot, requires_serial, current_version FROM master_skus WHERE sku=$1 AND client_id=$2 LIMIT 1 FOR UPDATE`, [p.sku, p.client]);
       if (!exists.rows.length) {
-        // Nuevo SKU
         await dbClient.query(`
           INSERT INTO master_skus (sku, client_id, "desc", category, uom, weight, length, width, height, abc_class, requires_lot, requires_serial, barcode, manufacturer_id, manufacturer_code, manufacturer_sku, brand)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-        `, [skuNorm, clientNorm, ...baseParams.slice(0, 8), newLot, newSerial, baseParams[8], mfId, mfCode, mfSku, brandN]);
+        `, [p.sku, p.client, p.desc, p.category, p.uom, p.weight, p.length, p.width, p.height, p.abc, p.newLot, p.newSerial, p.barcode, p.mfId, p.mfCode, p.mfSku, p.brand]);
         results.inserted++;
       } else {
         const cur = exists.rows[0];
@@ -184,25 +245,26 @@ router.post('/import/skus', requireStockWrite, async (req, res) => {
         await dbClient.query(`
           UPDATE master_skus SET "desc"=$1, category=$2, uom=$3, weight=$4, length=$5, width=$6, height=$7, abc_class=$8, barcode=$9, manufacturer_id=$12, manufacturer_code=$13, manufacturer_sku=$14, brand=$15
           WHERE sku=$10 AND client_id=$11
-        `, [...baseParams, skuNorm, clientNorm, mfId, mfCode, mfSku, brandN]);
+        `, [p.desc, p.category, p.uom, p.weight, p.length, p.width, p.height, p.abc, p.barcode, p.sku, p.client, p.mfId, p.mfCode, p.mfSku, p.brand]);
 
-        const criticalChange = (newLot !== cur.requires_lot) || (newSerial !== cur.requires_serial);
+        const criticalChange = (p.newLot !== cur.requires_lot) || (p.newSerial !== cur.requires_serial);
         if (criticalChange) {
-          const stockRow = await dbClient.query(`SELECT COALESCE(SUM(qty),0)::numeric AS total FROM inventory_lpns WHERE sku=$1 AND qty>0`, [skuNorm]);
+          // Solo cuenta el stock de este cliente: el mismo código en otro cliente es otro producto.
+          const stockRow = await dbClient.query(`SELECT COALESCE(SUM(qty),0)::numeric AS total FROM inventory_lpns WHERE sku=$1 AND client_id=$2 AND qty>0`, [p.sku, p.client]);
           const stock = parseFloat(stockRow.rows[0].total) || 0;
           if (stock > 0) {
             // Cambio crítico con stock → bump de versión de control + snapshot.
-            const vr = await dbClient.query(`SELECT * FROM create_sku_version($1, $2::jsonb, $3, $4)`,
-              [skuNorm, JSON.stringify({ requires_lot: newLot, requires_serial: newSerial }), 'Cambio de control de lote/serie por importación masiva', username || 'IMPORT']);
-            results.versioned.push({ sku: skuNorm, client_id: clientNorm, from: cur.current_version, to: vr.rows[0].new_version });
+            const vr = await dbClient.query(`SELECT * FROM create_sku_version($1, $2, $3::jsonb, $4, $5)`,
+              [p.sku, p.client, JSON.stringify({ requires_lot: p.newLot, requires_serial: p.newSerial }), 'Cambio de control de lote/serie por importación masiva', username]);
+            results.versioned.push({ sku: p.sku, client_id: p.client, from: cur.current_version, to: vr.rows[0].new_version });
           } else {
             // Sin stock → actualizar in-place sin bump.
-            await dbClient.query(`UPDATE master_skus SET requires_lot=$1, requires_serial=$2 WHERE sku=$3 AND client_id=$4`, [newLot, newSerial, skuNorm, clientNorm]);
+            await dbClient.query(`UPDATE master_skus SET requires_lot=$1, requires_serial=$2 WHERE sku=$3 AND client_id=$4`, [p.newLot, p.newSerial, p.sku, p.client]);
             await dbClient.query(`
-              INSERT INTO sku_version_history (sku, version, requires_lot, requires_serial, changed_by, reason)
-              VALUES ($1,$2,$3,$4,$5,'Cambio sin stock — importación masiva')
-              ON CONFLICT (sku, version) DO UPDATE SET requires_lot=EXCLUDED.requires_lot, requires_serial=EXCLUDED.requires_serial, changed_at=NOW(), changed_by=EXCLUDED.changed_by, reason=EXCLUDED.reason
-            `, [skuNorm, cur.current_version, newLot, newSerial, username || 'IMPORT']);
+              INSERT INTO sku_version_history (sku, client_id, version, requires_lot, requires_serial, changed_by, reason)
+              VALUES ($1,$2,$3,$4,$5,$6,'Cambio sin stock — importación masiva')
+              ON CONFLICT (sku, client_id, version) DO UPDATE SET requires_lot=EXCLUDED.requires_lot, requires_serial=EXCLUDED.requires_serial, changed_at=NOW(), changed_by=EXCLUDED.changed_by, reason=EXCLUDED.reason
+            `, [p.sku, p.client, cur.current_version, p.newLot, p.newSerial, username]);
           }
         }
         results.updated++;
@@ -211,151 +273,200 @@ router.post('/import/skus', requireStockWrite, async (req, res) => {
     }
     await dbClient.query('COMMIT');
   } catch(err) {
-    await dbClient.query('ROLLBACK');
+    await dbClient.query('ROLLBACK').catch(() => {});
     return res.status(500).json({ error: mapDbError(err) });
   } finally { dbClient.release(); }
   res.json(results);
 });
 
-router.post('/import/clients', requireJefe, async (req, res) => {
-  const rows = getImportRows(req.body);
-  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
-  if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
-  const results = { success: 0, errors: [] };
+router.post('/import/clients', stockWriteLimiter, requireJefe, attachRows('clients'), async (req, res) => {
+  const rows = req._importRows;
+  // Con alcance acotado solo se actualizan clientes propios; crear clientes nuevos
+  // queda para quien ve todos.
+  const ajenos = [...new Set(rows.map(r => txt(r.id).toUpperCase()).filter(id => id && !clientAllowed(req.clientScope, id)))];
+  if (ajenos.length) return res.status(403).json({ error: `Acceso denegado al cliente '${ajenos[0]}'.` });
+  const errors = [];
+  const seen = new Set();
+  const prepared = [];
+  rows.forEach((r, i) => {
+    const fail = (m) => errors.push(`Fila ${i + 2}: ${m}`);
+    const id = txt(r.id).toUpperCase();
+    const name = txt(r.name);
+    const contact = txt(r.contact);
+    const email = txt(r.email);
+    if (!id || !name) return fail('ID y nombre son obligatorios');
+    if (seen.has(id)) return fail(`el cliente '${id}' está repetido en el archivo`);
+    seen.add(id);
+    if (id.length > 50 || name.length > 150 || contact.length > 150 || email.length > 150) return fail('algún campo supera el largo permitido');
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail(`email '${email}' no válido`);
+    prepared.push({ id, name, contact, email });
+  });
+  if (errors.length) return rechazarFilas(res, errors);
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i];
-      if (!r.id || !r.name) { results.errors.push(`Fila ${i+2}: ID y nombre son obligatorios`); continue; }
+    for (const c of prepared) {
       await dbClient.query(`INSERT INTO clients (id, name, contact, email) VALUES ($1,$2,$3,$4) ON CONFLICT (id) DO UPDATE SET name=EXCLUDED.name, contact=EXCLUDED.contact, email=EXCLUDED.email`,
-        [r.id, r.name, r.contact || '', r.email || '']);
-      results.success++;
+        [c.id, c.name, c.contact, c.email]);
     }
     await dbClient.query('COMMIT');
   } catch(err) {
-    await dbClient.query('ROLLBACK');
+    await dbClient.query('ROLLBACK').catch(() => {});
     return res.status(500).json({ error: mapDbError(err) });
   } finally { dbClient.release(); }
-  res.json(results);
+  res.json({ success: prepared.length, errors: [] });
 });
 
-router.post('/import/inventory', requireStockWrite, async (req, res) => {
-  const { username } = req.body;
-  const rows = getImportRows(req.body);
-  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
-  if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
+router.post('/import/inventory', stockWriteLimiter, requireStockWrite, attachRows('inventory'), checkClientAccess('write'), async (req, res) => {
+  const username = req.user.username;
+  const rows = req._importRows;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     // Integridad: validar cada fila contra el maestro (existe+activo, pertenece al
-    // cliente, lote/serie, ubicación). Solo las válidas se insertan.
+    // cliente, lote/serie, ubicación). Con una sola fila con error no se carga nada.
     const { valid, errors } = await validateStockRows(client, rows, { defaultClient: 'GENERAL', defaultLocation: 'PISO-RECEPCION' });
-    if (valid.length > 0) {
-      const validRows = valid.map(v => ({ ...v, lpnId: genLpnId('IMP') }));
-      const invValues = validRows.map((_, idx) => `($${idx*9+1},$${idx*9+2},$${idx*9+3},$${idx*9+4},'DISPONIBLE',$${idx*9+5},$${idx*9+6},$${idx*9+7},$${idx*9+8},$${idx*9+9})`).join(',');
-      const invParams = validRows.flatMap(r => [r.lpnId, r.sku, r.qty, r.client_id, r.batch, r.expiry, r.serial, r.location, r.glosa || 'Carga masiva']);
-      await client.query(`INSERT INTO inventory_lpns (id,sku,qty,client_id,status,batch_number,expiry_date,serial_number,location_id,glosa) VALUES ${invValues}`, invParams);
-      const audValues = validRows.map((_, idx) => `('INBOUND',$${idx*4+1},$${idx*4+2},$${idx*4+3},$${idx*4+4})`).join(',');
-      const audParams = validRows.flatMap(r => [r.sku, r.qty, `Importación masiva. LPN: ${r.lpnId}`, username || 'IMPORT']);
-      await client.query(`INSERT INTO audit_log (type,sku,qty,glosa,username) VALUES ${audValues}`, audParams);
+    errors.push(...await erroresDeSerie(client, valid));
+    if (errors.length) { await client.query('ROLLBACK'); return rechazarFilas(res, errors); }
+    if (!valid.length) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'El archivo no tiene filas para importar.' }); }
+    // Freno al reenvío accidental (doble clic, reintento): el mismo contenido no se
+    // acepta dos veces en 10 minutos. Pasado ese plazo se puede volver a cargar.
+    const firma = huella(valid.map(({ row, qtyRaw, ...v }) => v));
+    const reciente = await client.query(
+      `INSERT INTO processed_docs (doc_num, doc_type, client_id, processed_by) VALUES ($1,'IMPORT_INVENTARIO','',$2)
+       ON CONFLICT (doc_num, doc_type, client_id) DO UPDATE SET processed_at = NOW(), processed_by = EXCLUDED.processed_by
+         WHERE processed_docs.processed_at < NOW() - INTERVAL '10 minutes'
+       RETURNING doc_num`,
+      [`IMP-${firma}`, username]);
+    if (!reciente.rowCount) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({ error: 'Este mismo contenido se importó hace menos de 10 minutos; no se volvió a cargar.' });
     }
+    const validRows = valid.map(v => ({ ...v, lpnId: genLpnId('IMP') }));
+    await insertarStock(client, validRows, { glosaLpn: 'Carga masiva', glosaKardex: (r) => `Importación masiva. LPN: ${r.lpnId}`, username });
     await client.query('COMMIT');
-    res.json({ imported: valid.length, success: valid.length, errors });
+    res.json({ imported: validRows.length, success: validRows.length, errors: [] });
   } catch(err) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     return res.status(500).json({ error: mapDbError(err) });
   } finally { client.release(); }
 });
 
-router.post('/import/receive', stockWriteLimiter, requireStockWrite, attachRowsAsItems, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
-  const { username, client_id, doc_num } = req.body;
+router.post('/import/receive', stockWriteLimiter, requireStockWrite, attachRows('receive'), checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
+  const { client_id } = req.body;
+  const docNum = txt(req.body.doc_num).toUpperCase() || null;
+  const username = req.user.username;
   const rows = req._importRows;
-  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
-  if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
     // Integridad: si la recepción especifica client_id, todas las filas se validan
-    // contra ese cliente (forceClient). Solo las válidas se insertan.
+    // contra ese cliente (forceClient). Con una sola fila con error no se recibe nada.
     const { valid, errors } = await validateStockRows(dbClient, rows, { forceClient: client_id || null, defaultClient: 'GENERAL', defaultLocation: 'PISO-RECEPCION' });
-    const validRows = valid.map(v => ({ ...v, lpnId: genLpnId('REC') }));
-    // REN-03: INSERT multi-fila por lote en vez de una query por fila. Se trocea
-    // de a 1000 filas para no superar el límite de parámetros de Postgres (65535).
-    const CHUNK = 1000;
-    for (let i = 0; i < validRows.length; i += CHUNK) {
-      const chunk = validRows.slice(i, i + CHUNK);
-      const invValues = chunk.map((_, idx) => `($${idx*9+1},$${idx*9+2},$${idx*9+3},$${idx*9+4},'DISPONIBLE',$${idx*9+5},$${idx*9+6},$${idx*9+7},$${idx*9+8},$${idx*9+9})`).join(',');
-      const invParams = chunk.flatMap(r => [r.lpnId, r.sku, r.qty, r.client_id, r.batch, r.expiry, r.serial, r.location, r.glosa || `Recepción masiva ${doc_num || ''}`]);
-      await dbClient.query(`INSERT INTO inventory_lpns (id,sku,qty,client_id,status,batch_number,expiry_date,serial_number,location_id,glosa) VALUES ${invValues}`, invParams);
-      const audValues = chunk.map((_, idx) => `('INBOUND',$${idx*4+1},$${idx*4+2},$${idx*4+3},$${idx*4+4})`).join(',');
-      const audParams = chunk.flatMap(r => [r.sku, r.qty, `Recepción masiva Doc:${doc_num || 'N/A'} LPN:${r.lpnId}`, username || 'IMPORT']);
-      await dbClient.query(`INSERT INTO audit_log (type,sku,qty,glosa,username) VALUES ${audValues}`, audParams);
+    errors.push(...await erroresDeSerie(dbClient, valid));
+    if (errors.length) { await dbClient.query('ROLLBACK'); return rechazarFilas(res, errors); }
+    if (!valid.length) { await dbClient.query('ROLLBACK'); return res.status(400).json({ error: 'El archivo no tiene filas para importar.' }); }
+    // Un documento se recibe una sola vez.
+    if (docNum && !await registrarDocumento(dbClient, docNum, 'IMPORT_RECEPCION', txt(client_id).toUpperCase(), username)) {
+      await dbClient.query('ROLLBACK');
+      return res.status(409).json({ error: `El documento '${docNum}' ya fue recibido. No se volvió a cargar.` });
     }
+    const validRows = valid.map(v => ({ ...v, lpnId: genLpnId('REC') }));
+    await insertarStock(dbClient, validRows, {
+      glosaLpn: `Recepción masiva ${docNum || ''}`.trim(),
+      glosaKardex: (r) => `Recepción masiva Doc:${docNum || 'N/A'} LPN:${r.lpnId}`,
+      username,
+    });
     // Cobro 3PL: se mantiene fila por fila (lookup de tarifa por cliente; no-op si es cliente propio).
     for (const r of validRows) {
       await logStorageEvent(dbClient, { client_id: r.client_id, event_type: 'MOVIMIENTO_IN', sku: r.sku, lpn_id: r.lpnId, qty: r.qty, location_id: r.location });
     }
     await dbClient.query('COMMIT');
-    res.json({ imported: validRows.length, success: validRows.length, errors });
+    res.json({ imported: validRows.length, success: validRows.length, errors: [] });
   } catch(err) {
-    await dbClient.query('ROLLBACK');
+    await dbClient.query('ROLLBACK').catch(() => {});
     return res.status(500).json({ error: mapDbError(err) });
   } finally { dbClient.release(); }
 });
 
-router.post('/import/dispatch', stockWriteLimiter, requireStockWrite, attachRowsAsItems, checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
-  const { username, doc_num } = req.body;
+router.post('/import/dispatch', stockWriteLimiter, requireStockWrite, attachRows('dispatch'), checkClientAccess('write'), checkBatchSkuClientAccess(), async (req, res) => {
+  const docNum = txt(req.body.doc_num).toUpperCase() || null;
+  const username = req.user.username;
   const rows = req._importRows;
-  if (!rows) return res.status(400).json({ error: 'Se requiere `rows` (filas) o `data` (base64).' });
-  if (rows.length > 10000) return res.status(400).json({ error: 'Máximo 10.000 filas por importación' });
-  const results = { success: 0, errors: [] };
+  const errors = [];
+  let success = 0;
   const dbClient = await pool.connect();
   try {
     await dbClient.query('BEGIN');
+    if (docNum && !await registrarDocumento(dbClient, docNum, 'IMPORT_DESPACHO', txt(req.body.client_id).toUpperCase(), username)) {
+      await dbClient.query('ROLLBACK');
+      return res.status(409).json({ error: `El documento '${docNum}' ya fue despachado. No se volvió a procesar.` });
+    }
     for (let i = 0; i < rows.length; i++) {
       const r = rows[i];
-      if (!r.sku || !r.qty_to_pick || parseFloat(r.qty_to_pick) <= 0) { results.errors.push(`Fila ${i+2}: sku y qty_to_pick > 0 son obligatorios`); continue; }
-      const qty = parseFloat(r.qty_to_pick);
+      const fila = i + 2;
+      const sku = txt(r.sku).toUpperCase();
+      const qty = Number(txt(r.qty_to_pick).replace(',', '.'));
+      if (!sku || !Number.isFinite(qty) || qty <= 0) { errors.push(`Fila ${fila}: sku y qty_to_pick (número mayor a 0) son obligatorios`); continue; }
       let remaining = qty;
       // lpn_id opcional: celda vacía, espacios o "NaN" → null (selección FEFO automática).
-      const lpnRaw = r.lpn_id == null ? '' : String(r.lpn_id).trim();
+      const lpnRaw = txt(r.lpn_id);
       const lpnId = (lpnRaw === '' || lpnRaw.toLowerCase() === 'nan') ? null : lpnRaw;
-      // Obtener IDs elegibles (con JOIN para filtro de estado, sin FOR UPDATE)
-      const eligibleIds = (await dbClient.query(
-        `SELECT i.id FROM inventory_lpns i
+      // Cliente de la fila (columna client_id opcional, o el del documento).
+      const rowClient = txt(r.client_id || req.body.client_id).toUpperCase() || null;
+      // LPN elegibles (con JOIN para filtro de estado, sin FOR UPDATE), solo de
+      // clientes dentro del alcance del usuario.
+      const params = [sku];
+      let extra = '';
+      if (lpnId) { params.push(lpnId); extra += ` AND i.id=$${params.length}`; }
+      if (rowClient) { params.push(rowClient); extra += ` AND i.client_id=$${params.length}`; }
+      extra += ` AND ${scopeCondition(req.clientScope, 'i.client_id', params)}`;
+      const eligible = (await dbClient.query(
+        `SELECT i.id, i.client_id FROM inventory_lpns i
          LEFT JOIN statuses st ON i.status = st.id
-         WHERE i.sku=$1 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE
-         ${lpnId ? 'AND i.id=$2' : ''}
+         WHERE i.sku=$1 AND i.qty>0 AND COALESCE(st.blocks_outbound, FALSE) = FALSE${extra}
          ORDER BY i.created_at ASC`,
-        lpnId ? [r.sku, lpnId] : [r.sku]
-      )).rows.map(row => row.id);
+        params
+      )).rows;
+      // Un mismo código de SKU puede existir en varios clientes: sin cliente explícito
+      // no se adivina de quién descontar.
+      if (!rowClient && new Set(eligible.map(e => e.client_id)).size > 1) {
+        errors.push(`Fila ${fila}: el SKU ${sku} tiene stock de varios clientes; indique client_id`);
+        continue;
+      }
+      const eligibleIds = eligible.map(e => e.id);
       // Bloquear solo inventory_lpns (sin JOIN) para evitar error PG con outer join + FOR UPDATE
       const lpns = eligibleIds.length === 0 ? [] : (await dbClient.query(
-        `SELECT id, qty FROM inventory_lpns WHERE id = ANY($1::varchar[]) FOR UPDATE ORDER BY created_at ASC`,
+        `SELECT id, qty, client_id FROM inventory_lpns WHERE id = ANY($1::varchar[]) AND qty>0 ORDER BY created_at ASC FOR UPDATE`,
         [eligibleIds]
       )).rows;
+      const available = lpns.reduce((s, l) => s + parseFloat(l.qty), 0);
+      if (available < qty) { errors.push(`Fila ${fila}: Stock insuficiente para ${sku} (faltan ${qty - available})`); continue; }
+      const byClient = new Map();
       for (const lpn of lpns) {
         if (remaining <= 0) break;
         const take = Math.min(remaining, parseFloat(lpn.qty));
         await dbClient.query(`UPDATE inventory_lpns SET qty=qty-$1 WHERE id=$2`, [take, lpn.id]);
+        byClient.set(lpn.client_id, (byClient.get(lpn.client_id) || 0) + take);
         remaining -= take;
       }
-      if (remaining > 0) { results.errors.push(`Fila ${i+2}: Stock insuficiente para ${r.sku} (faltan ${remaining})`); continue; }
-      await dbClient.query(`INSERT INTO audit_log (type, sku, qty, glosa, username) VALUES ('OUTBOUND', $1, $2, $3, $4)`,
-        [r.sku, qty, `Despacho masivo Doc:${doc_num || 'N/A'}`, username || 'IMPORT']);
-      // Cobro 3PL: registrar movimiento de salida. Resolver client_id por SKU.
-      const skuClient = (await dbClient.query('SELECT client_id FROM master_skus WHERE sku=$1 LIMIT 1', [r.sku])).rows[0]?.client_id;
-      await logStorageEvent(dbClient, { client_id: skuClient, event_type: 'MOVIMIENTO_OUT', sku: r.sku, qty });
-      results.success++;
+      for (const [cid, q] of byClient) {
+        await dbClient.query(`INSERT INTO audit_log (type, sku, qty, glosa, username, client_id) VALUES ('OUTBOUND', $1, $2, $3, $4, $5)`,
+          [sku, q, `Despacho masivo Doc:${docNum || 'N/A'}`, username, cid]);
+        // Cobro 3PL: movimiento de salida al dueño real del stock descontado.
+        await logStorageEvent(dbClient, { client_id: cid, event_type: 'MOVIMIENTO_OUT', sku, qty: q });
+      }
+      success++;
     }
+    // Todo o nada: con una fila con error se deshace el despacho completo.
+    if (errors.length) { await dbClient.query('ROLLBACK'); return rechazarFilas(res, errors); }
     await dbClient.query('DELETE FROM inventory_lpns WHERE qty <= 0');
     await dbClient.query('COMMIT');
   } catch(err) {
-    await dbClient.query('ROLLBACK');
+    await dbClient.query('ROLLBACK').catch(() => {});
     return res.status(500).json({ error: mapDbError(err) });
   } finally { dbClient.release(); }
-  res.json(results);
+  res.json({ success, errors: [] });
 });
 
 module.exports = router;

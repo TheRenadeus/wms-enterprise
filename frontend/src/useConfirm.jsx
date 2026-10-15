@@ -50,7 +50,7 @@ export function ConfirmProvider({ children }) {
               <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${state.opts.danger ? 'bg-red-100' : 'bg-amber-100'}`}>
                 <ShieldAlert className={`w-7 h-7 ${state.opts.danger ? 'text-red-600' : 'text-amber-600'}`}/>
               </div>
-              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter">{state.opts.title || (state.kind === 'prompt' ? 'Ingresar valor' : 'Confirmar')}</h2>
+              <h2 className="text-lg font-black text-slate-800 tracking-tighter">{state.opts.title || (state.kind === 'prompt' ? 'Ingresar valor' : 'Confirmar')}</h2>
               {state.opts.message && (
                 <p className="text-sm text-slate-500 mt-2 font-medium leading-relaxed">{state.opts.message}</p>
               )}

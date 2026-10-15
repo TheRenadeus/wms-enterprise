@@ -1,22 +1,80 @@
 // Helpers compartidos entre routes/imports.js y routes/exports.js.
 // Extraídos de server.js (COD-02).
+const path = require('path');
+const { Worker } = require('worker_threads');
 const XLSX = require('xlsx');
 
-const parseFile = (data, filename) => {
-  const buffer = Buffer.from(data, 'base64');
-  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  return XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
-};
+const MAX_IMPORT_ROWS = 10000;
+const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const PARSE_TIMEOUT_MS = Number(process.env.IMPORT_PARSE_TIMEOUT_MS) || 15000;
+
+const badFile = (message) => Object.assign(new Error(message), { status: 400 });
+
+// Tipo de archivo: extensión permitida y contenido coherente con ella.
+function checkFileType(buffer, filename) {
+  const ext = path.extname(String(filename || '')).toLowerCase();
+  if (!['.xlsx', '.xls', '.csv'].includes(ext)) throw badFile('Tipo de archivo no permitido: use .xlsx, .xls o .csv.');
+  if (buffer.length === 0) throw badFile('El archivo está vacío.');
+  if (buffer.length > MAX_FILE_BYTES) throw badFile('El archivo supera el tamaño máximo (15 MB).');
+  const isZip = buffer.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+  const isOle = buffer.subarray(0, 4).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0]));
+  const looksText = !buffer.subarray(0, 4096).includes(0);
+  const ok = ext === '.xlsx' ? isZip : ext === '.xls' ? (isOle || looksText) : (looksText && !isZip && !isOle);
+  if (!ok) throw badFile(`El contenido del archivo no corresponde a un ${ext}.`);
+  return { binario: isZip || isOle };
+}
+
+// Lee la planilla en un worker con tiempo límite (ver parse-worker.js).
+function parseFile(data, filename) {
+  const buffer = Buffer.from(String(data), 'base64');
+  const { binario } = checkFileType(buffer, filename);
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(path.join(__dirname, 'parse-worker.js'), {
+      workerData: { data: String(data), maxRows: MAX_IMPORT_ROWS, binario },
+      resourceLimits: { maxOldGenerationSizeMb: 256 },
+    });
+    let settled = false;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.terminate().catch(() => {});
+      fn(value);
+    };
+    const timer = setTimeout(() => finish(reject, badFile('No se pudo leer el archivo: tiempo agotado. Verifique que no esté dañado.')), PARSE_TIMEOUT_MS);
+    worker.once('message', (m) => {
+      if (m.truncated) return finish(reject, badFile(`Máximo ${MAX_IMPORT_ROWS.toLocaleString('es-CL')} filas por importación.`));
+      if (m.error) return finish(reject, badFile('No se pudo leer el archivo: formato no válido o archivo dañado.'));
+      return finish(resolve, m.rows);
+    });
+    worker.once('error', () => finish(reject, badFile('No se pudo leer el archivo: formato no válido o archivo dañado.')));
+    worker.once('exit', () => finish(reject, badFile('No se pudo leer el archivo.')));
+  });
+}
+
+// Las plantillas traen una fila de descripciones y otra de ejemplo bajo la cabecera:
+// no son datos y se descartan si coinciden columna a columna con la plantilla.
+function dropTemplateRows(rows, type) {
+  const tpl = TEMPLATES[type];
+  if (!tpl) return rows;
+  const norm = (v) => String(v ?? '').trim();
+  const same = (row, ref) => tpl.headers.every((h, i) => norm(row?.[h]) === norm(ref[i]));
+  return rows.filter((r) => !same(r, tpl.desc) && !same(r, tpl.example));
+}
 
 // Origen de filas para los imports: el panel editable envía `rows` (array JSON ya
 // corregido a mano); el flujo antiguo envía `data` (base64). Se acepta cualquiera
-// para no romper retrocompatibilidad.
-const getImportRows = (body) => {
-  if (body && Array.isArray(body.rows)) return body.rows;
-  if (body && typeof body.data === 'string') return parseFile(body.data, body.filename);
-  return null;
-};
+// para no romper retrocompatibilidad. Devuelve null si no viene ninguno.
+async function getImportRows(body, type) {
+  let rows = null;
+  if (body && Array.isArray(body.rows)) rows = body.rows;
+  else if (body && typeof body.data === 'string') rows = await parseFile(body.data, body.filename);
+  if (!rows) return null;
+  if (rows.some((r) => r === null || typeof r !== 'object' || Array.isArray(r))) throw badFile('Las filas deben ser objetos.');
+  rows = dropTemplateRows(rows, type);
+  if (rows.length > MAX_IMPORT_ROWS) throw badFile(`Máximo ${MAX_IMPORT_ROWS.toLocaleString('es-CL')} filas por importación.`);
+  return rows;
+}
 
 // Valida filas de carga de stock contra el maestro (integridad referencial en la
 // capa de aplicación). Pre-carga SKUs activos y ubicaciones en UNA sola query cada
@@ -110,9 +168,9 @@ const TEMPLATES = {
     example: ['PROD-001','50','PISO-RECEPCION','LOTE-2024-01','2025-12-31','','OC-12345'],
   },
   dispatch: {
-    headers: ['sku','qty_to_pick','lpn_id'],
-    desc:    ['Código del producto a despachar','Cantidad a despachar (número positivo)','ID del LPN específico (dejar vacío para selección automática FEFO)'],
-    example: ['PROD-001','20',''],
+    headers: ['sku','qty_to_pick','lpn_id','client_id'],
+    desc:    ['Código del producto a despachar','Cantidad a despachar (número positivo)','ID del LPN específico (dejar vacío para selección automática FEFO)','Cliente dueño del stock (opcional si se elige al importar o si el SKU es de un solo cliente)'],
+    example: ['PROD-001','20','',''],
   },
 };
 
@@ -130,6 +188,6 @@ const applyRowStyles = (ws, rowIdx, cols, style) => {
 };
 
 module.exports = {
-  parseFile, getImportRows, validateStockRows, TEMPLATES,
+  parseFile, getImportRows, validateStockRows, TEMPLATES, MAX_IMPORT_ROWS,
   xlsxHeaderStyle, xlsxDescStyle, xlsxExampleStyle, applyRowStyles,
 };

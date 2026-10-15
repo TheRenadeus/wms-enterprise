@@ -4,6 +4,7 @@ const express = require('express');
 const { pool, mapDbError, isUniqueViolation } = require('../db');
 const { requireAuth, requireJefe, requireJefeOrAbove, checkClientAccess } = require('../middleware');
 const { genLpnId } = require('../helpers');
+const { scopeCondition, clientAllowed } = require('../scope');
 
 const router = express.Router();
 
@@ -130,6 +131,7 @@ async function calcBillingCharges(clientId, month, year) {
 }
 
 router.get('/report/billing/:client_id', requireAuth, async (req, res) => {
+  if (!clientAllowed(req.clientScope, req.params.client_id)) return res.status(404).json({ error: 'Cliente no encontrado.' });
   try {
     const data = await calcBillingCharges(req.params.client_id, req.query.month, req.query.year);
     res.json(data);
@@ -146,6 +148,7 @@ router.get('/analytics/sku-entries', requireAuth, async (req, res) => {
   if (date_from) { conditions.push(`il.created_at >= $${idx++}`); params.push(date_from); }
   if (date_to)   { conditions.push(`il.created_at <= $${idx++}`); params.push(date_to + 'T23:59:59'); }
   if (search)    { conditions.push(`(il.sku ILIKE $${idx} OR ms."desc" ILIKE $${idx})`); params.push(`%${search}%`); idx++; }
+  conditions.push(scopeCondition(req.clientScope, 'il.client_id', params));
   try {
     const result = await pool.query(`
       SELECT
@@ -160,7 +163,7 @@ router.get('/analytics/sku-entries', requireAuth, async (req, res) => {
         COUNT(DISTINCT il.batch_number)::int       AS num_lotes,
         COUNT(DISTINCT il.location_id)::int        AS num_ubicaciones
       FROM inventory_lpns il
-      LEFT JOIN master_skus ms ON ms.sku = il.sku
+      LEFT JOIN master_skus ms ON ms.sku = il.sku AND ms.client_id = il.client_id
       WHERE ${conditions.join(' AND ')}
       GROUP BY il.sku, il.client_id, ms."desc", ms.uom
       ORDER BY ultimo_ingreso DESC NULLS LAST
@@ -178,6 +181,7 @@ router.get('/analytics/client-movements', requireAuth, async (req, res) => {
   if (date_from)  { conditions.push(`dh.created_at >= $${idx++}`); params.push(date_from); }
   if (date_to)    { conditions.push(`dh.created_at <= $${idx++}`); params.push(date_to + 'T23:59:59'); }
   if (modFilter)  { conditions.push(`dh.module = $${idx++}`); params.push(modFilter); }
+  conditions.push(scopeCondition(req.clientScope, 'dh.client_id', params));
   try {
     const result = await pool.query(`
       SELECT
@@ -229,6 +233,7 @@ router.get('/billing/invoices', requireAuth, async (req, res) => {
     if (month)     { conds.push(`month=$${idx++}`); params.push(parseInt(month)); }
     if (year)      { conds.push(`year=$${idx++}`); params.push(parseInt(year)); }
     if (status)    { conds.push(`status=$${idx++}`); params.push(status); }
+    conds.push(scopeCondition(req.clientScope, 'client_id', params));
     const result = await pool.query(`SELECT * FROM billing_invoices WHERE ${conds.join(' AND ')} ORDER BY issued_at DESC LIMIT 500`, params);
     res.json(result.rows);
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
@@ -251,7 +256,8 @@ router.patch('/billing/invoices/:id/status', requireJefeOrAbove, async (req, res
 router.get('/billing/summary', requireJefeOrAbove, async (req, res) => {
   const { month, year } = req.query;
   try {
-    const clientsQ = await pool.query(`SELECT id, name FROM clients ORDER BY name`);
+    const cp = [];
+    const clientsQ = await pool.query(`SELECT id, name FROM clients WHERE ${scopeCondition(req.clientScope, 'id', cp)} ORDER BY name`, cp);
     const invoicesQ = await pool.query(
       `SELECT client_id, status, total, currency FROM billing_invoices WHERE month=$1 AND year=$2`,
       [parseInt(month)||new Date().getMonth()+1, parseInt(year)||new Date().getFullYear()]
@@ -301,6 +307,7 @@ router.delete('/client-tariffs/:id', requireJefe, async (req, res) => {
 });
 
 router.get('/client-tariffs/:client_id', requireAuth, async (req, res) => {
+  if (!clientAllowed(req.clientScope, req.params.client_id)) return res.status(404).json({ error: 'Cliente no encontrado.' });
   try {
     const result = await pool.query(`SELECT * FROM client_tariffs WHERE client_id = $1 ORDER BY created_at DESC`, [req.params.client_id]);
     res.json(result.rows);
@@ -316,6 +323,7 @@ router.get('/invoices', requireJefeOrAbove, async (req, res) => {
              WHERE 1=1`;
     const params = [];
     if (client_id) { q += ` AND i.client_id=$${params.length+1}`; params.push(client_id); }
+    q += ` AND ${scopeCondition(req.clientScope, 'i.client_id', params)}`;
     q += ' GROUP BY i.id, c.name ORDER BY i.created_at DESC LIMIT 200';
     res.json((await pool.query(q, params)).rows);
   } catch(e){ res.status(500).json({ error: mapDbError(e) }); }

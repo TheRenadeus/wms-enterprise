@@ -124,7 +124,9 @@ export const apiFetch = (url, options = {}) => {
       clearTimeout(timeoutId);
       // Auto-logout solo en 401 (token expirado/inválido).
       // 403 = Forbidden (autenticado, sin permiso) → no cerrar sesión
-      if (res.status === 401) {
+      // Sin token, o en el propio /api/login (clave incorrecta), no hay sesión que cerrar:
+      // recargar borraría el mensaje de error y dejaría la pantalla en blanco un instante.
+      if (res.status === 401 && token && !/\/api\/login(\?|$)/.test(url)) {
         const currentPath = window.location.hash;
         if (!currentPath.includes('portal')) {
           localStorage.removeItem('wms_token');

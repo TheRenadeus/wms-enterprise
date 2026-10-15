@@ -9,12 +9,23 @@ const crypto = require('crypto');
 // por arranque, nunca uno fijo en el código: las sesiones se cierran al reiniciar el backend.
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
+// Sandbox de demostración con datos simulados (/api/demo/*). Apagado por defecto:
+// solo se enciende con DEMO_SANDBOX=true en una instancia sin datos reales.
+const SANDBOX_ENABLED = process.env.DEMO_SANDBOX === 'true';
+
 // ── AUTENTICACIÓN ────────────────────────────────────────────────────────────
 const requireAuth = (req, res, next) => {
   const auth = req.headers['authorization'];
   if (!auth || !auth.startsWith('Bearer ')) return res.status(401).json({ error: 'No autorizado — token requerido' });
-  try { req.user = jwt.verify(auth.slice(7), JWT_SECRET); next(); }
+  let payload;
+  try { payload = jwt.verify(auth.slice(7), JWT_SECRET); }
   catch (e) { return res.status(401).json({ error: 'Token inválido o expirado. Vuelva a iniciar sesión.' }); }
+  // Un token de sandbox nunca vale si el sandbox está apagado (incluidos los emitidos antes).
+  if (payload.is_demo && !SANDBOX_ENABLED) {
+    return res.status(401).json({ error: 'Sesión de demostración no válida en esta instalación.' });
+  }
+  req.user = payload;
+  next();
 };
 
 // ── MODELO DE ROLES v2 — allowlist por gate (default DENEGAR) ─────────────────
@@ -123,28 +134,65 @@ const apiAuthGate = (req, res, next) => {
   if (req.path === '/portal/login') return next();
   if (req.path.startsWith('/portal/')) return next();
   if (req.path.startsWith('/v1/')) return next();
-  if (req.path === '/demo/login') return next();
-  if (req.method === 'GET' && req.path === '/demo/personas') return next();
-  if (req.method === 'GET' && req.path === '/demo/sandbox-config') return next();
+  if (SANDBOX_ENABLED && req.path === '/demo/login') return next();
+  if (SANDBOX_ENABLED && req.method === 'GET' && req.path === '/demo/sandbox-config') return next();
   // Banner pre-login: el frontend lo consulta antes de autenticarse.
   if (req.path === '/system/maintenance/check') return next();
   requireAuth(req, res, next);
 };
 
-// Validación allowed_clients: evita acceso cross-cliente.
-// allowed_clients se guarda como string CSV: "CLIENTE_A,CLIENTE_B" o "ALL".
-const apiClientScope = (req, res, next) => {
-  if (!req.user) return next();
-  if (['ADMIN', 'SUPERADMIN', 'DEMO'].includes(req.user.role)) return next();
-  const ac = req.user.allowed_clients;
-  if (!ac || ac === 'ALL') return next();
-  const clientId = req.query.client_id || req.body?.client_id;
-  if (clientId) {
-    const allowed = ac.split(',').map(s => s.trim()).filter(Boolean);
-    if (!allowed.includes(clientId)) {
-      return res.status(403).json({ error: `Acceso denegado al cliente '${clientId}'.` });
-    }
+// Vigencia de la sesión contra la base (el JWT no se revoca por sí solo): usuario
+// eliminado, suspendido o con el rol cambiado → 401. Deja en req.clientScope el
+// alcance efectivo de clientes, que usan apiClientScope y los handlers de lectura.
+const { loadUserAuthz, clientAllowed } = require('./scope');
+const apiSessionCheck = async (req, res, next) => {
+  if (!req.user || req.user.is_demo) return next();
+  try {
+    const authz = await loadUserAuthz(req.user.username);
+    if (!authz.exists) return res.status(401).json({ error: 'Tu usuario ya no existe. Vuelve a iniciar sesión.' });
+    if (authz.status === 'SUSPENDED') return res.status(401).json({ error: 'Cuenta inhabilitada. Contacte a un administrador.' });
+    if (authz.role !== req.user.role) return res.status(401).json({ error: 'Tus permisos cambiaron. Vuelve a iniciar sesión.' });
+    req.clientScope = authz.scope;
+    next();
+  } catch (e) {
+    console.error('[apiSessionCheck]', e.message);
+    return res.status(503).json({ error: 'No se pudo verificar la sesión. Intenta de nuevo.' });
   }
+};
+
+// Lecturas permitidas al rol CLIENTE (usuario externo). Deniega por defecto: solo
+// pasan rutas que filtran por el alcance del usuario o que no contienen datos de
+// clientes. Una ruta nueva queda cerrada para CLIENTE hasta agregarla aquí.
+const CLIENTE_READS = [
+  /^\/inventory$/, /^\/audit$/, /^\/stats$/, /^\/alerts\/stock$/, /^\/skus$/, /^\/bootstrap$/,
+  /^\/clients$/, /^\/statuses$/, /^\/document_types$/, /^\/locations$/, /^\/manufacturers$/, /^\/skus\/[^/]+\/versions$/,
+  /^\/system\/config$/, /^\/purchase-orders$/, /^\/purchase-orders\/[^/]+\/lines$/, /^\/returns$/,
+  /^\/shipments$/, /^\/document-history$/, /^\/export\/(skus|inventory)$/, /^\/templates\/[^/]+$/,
+];
+const apiClienteReadAllow = (req, res, next) => {
+  if (!req.user || req.user.role !== 'CLIENTE' || req.user.is_demo) return next();
+  if (!['GET', 'HEAD'].includes(req.method)) return next(); // escrituras: apiClienteReadOnly
+  const path = req.path.toLowerCase().replace(/\/{2,}/g, '/').replace(/\/+$/, '');
+  if (CLIENTE_READS.some((re) => re.test(path))) return next();
+  return res.status(403).json({ error: 'Esta consulta no está disponible para usuarios de cliente.' });
+};
+
+// Todo client_id que venga en la petición (query, cuerpo, ítems o filas de
+// importación) debe estar dentro del alcance del usuario.
+const collectClientIds = (req) => {
+  const ids = [req.query?.client_id, req.body?.client_id];
+  for (const list of [req.body?.items, req.body?.rows]) {
+    if (Array.isArray(list)) for (const it of list) ids.push(it?.client_id, it?.clientId);
+  }
+  return [...new Set(ids.filter((c) => c !== undefined && c !== null && String(c).trim() !== '').map(String))];
+};
+
+const apiClientScope = (req, res, next) => {
+  if (!req.user || req.user.is_demo) return next();
+  const scope = req.clientScope;
+  if (!scope || scope.all) return next();
+  const bad = collectClientIds(req).filter((c) => !clientAllowed(scope, c));
+  if (bad.length) return res.status(403).json({ error: `Acceso denegado al cliente '${bad[0]}'.` });
   next();
 };
 
@@ -192,23 +240,16 @@ const apiClienteReadOnly = (req, res, next) => {
 };
 
 // ── Asignación de clientes por usuario (modo 3PL) ───────────────────────────
-// getClientesPermitidos lee el scope del usuario y devuelve el set de clients
-// permitidos. Cacheado en req.permitidosClientes para no consultar 2 veces.
-const { pool: _pool } = require('./db');
-async function getClientesPermitidos(username, db = _pool) {
+// getClientesPermitidos devuelve el alcance efectivo del usuario (el mismo que usa
+// apiSessionCheck, ver scope.js) con la forma { scope: 'all'|'assigned'|'none', clients }.
+// Cacheado en req.permitidosClientes para no consultar 2 veces.
+async function getClientesPermitidos(username, db = pool) {
   if (!username) return { scope: 'none', clients: [] };
-  const u = await db.query(`SELECT role, client_scope FROM users WHERE username = $1`, [username]);
-  if (!u.rows[0]) return { scope: 'none', clients: [] };
-  const { role, client_scope } = u.rows[0];
-  // ADMIN / SUPERADMIN siempre ven todo
-  if (['ADMIN', 'SUPERADMIN'].includes(role) || client_scope === 'all') {
-    const all = await db.query(`SELECT id FROM clients WHERE active = TRUE OR active IS NULL`);
-    return { scope: 'all', clients: all.rows.map(r => r.id) };
-  }
-  if (client_scope === 'none') return { scope: 'none', clients: [] };
-  // assigned
-  const assigned = await db.query(`SELECT client_id FROM user_clients WHERE username = $1`, [username]);
-  return { scope: 'assigned', clients: assigned.rows.map(r => r.client_id) };
+  const authz = await loadUserAuthz(username, db);
+  if (!authz.exists) return { scope: 'none', clients: [] };
+  if (authz.scope.all) return { scope: 'all', clients: [] };
+  if (!authz.scope.clients.length) return { scope: 'none', clients: [] };
+  return { scope: 'assigned', clients: authz.scope.clients };
 }
 
 // Helper: ¿el set de clientes permitidos incluye este id? (tolera mayúsc/minúsc).
@@ -355,6 +396,7 @@ const apiLicenseGate = async (req, res, next) => {
 
 module.exports = {
   JWT_SECRET,
+  SANDBOX_ENABLED,
   getLicenseStatus,
   apiLicenseGate,
   requireAuth,
@@ -381,10 +423,13 @@ module.exports = {
   stockWriteLimiter,
   apiAuthGate,
   apiClientScope,
+  apiSessionCheck,
+  apiClienteReadAllow,
   apiDemoBlock,
   apiClienteReadOnly,
   getClientesPermitidos,
   permIncludes,
+  rankOf,
   checkClientAccess,
   checkBatchSkuClientAccess,
   checkLpnClientAccess,

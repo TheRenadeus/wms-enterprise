@@ -6,19 +6,16 @@ const { pool, mapDbError } = require('../db');
 const { requireAuth, requireStockWrite, requireJefeOrAbove, checkClientAccess } = require('../middleware');
 const { cached } = require('../cache');
 const { parsePagination, setPaginationHeaders } = require('../pagination');
+const { scopeCondition } = require('../scope');
 
 const router = express.Router();
 
-// Helper: aplica scope por allowed_clients.
+// Helper: aplica el alcance de clientes del usuario (req.clientScope, ver scope.js).
 function scopedSkusWhere(req, startIdx = 1) {
-  const ac = req.user.allowed_clients;
-  const fullAccess = !ac || ac === 'ALL' || ['EJECUTIVO_CUENTA', 'ADMIN', 'SUPERADMIN', 'DEMO'].includes(req.user.role);
-  if (fullAccess) return { conditions: [], params: [], idx: startIdx, emptyAllowed: false };
-  const clientList = ac.split(',').map(s => s.trim()).filter(Boolean);
-  if (clientList.length === 0) return { conditions: [], params: [], idx: startIdx, emptyAllowed: true };
-  let idx = startIdx;
-  const ph = clientList.map(() => `$${idx++}`).join(',');
-  return { conditions: [`client_id IN (${ph})`], params: clientList, idx, emptyAllowed: false };
+  const scope = req.clientScope;
+  if (!scope || scope.all) return { conditions: [], params: [], idx: startIdx, emptyAllowed: false };
+  if (scope.clients.length === 0) return { conditions: [], params: [], idx: startIdx, emptyAllowed: true };
+  return { conditions: [`client_id = ANY($${startIdx}::text[])`], params: [scope.clients], idx: startIdx + 1, emptyAllowed: false };
 }
 
 router.get('/skus', requireAuth, async (req, res) => {
@@ -52,19 +49,15 @@ router.get('/skus', requireAuth, async (req, res) => {
         FROM master_skus s
         LEFT JOIN manufacturers mf ON mf.id = s.manufacturer_id
         LEFT JOIN (
-          SELECT sku, SUM(qty) AS total_qty FROM inventory_lpns
-           WHERE qty > 0 GROUP BY sku
-        ) inv ON inv.sku = s.sku
-        LEFT JOIN (
-          SELECT h.sku, COUNT(*)::int AS version_count
-            FROM sku_version_history h GROUP BY h.sku
-        ) vc ON vc.sku = s.sku
+          SELECT sku, client_id, SUM(qty) AS total_qty FROM inventory_lpns
+           WHERE qty > 0 GROUP BY sku, client_id
+        ) inv ON inv.sku = s.sku AND inv.client_id = s.client_id
         LEFT JOIN LATERAL (
           SELECT
-            (SELECT COUNT(*)::int FROM sku_version_history h2 WHERE h2.sku = s.sku) AS version_count,
+            (SELECT COUNT(*)::int FROM sku_version_history h2 WHERE h2.sku = s.sku AND h2.client_id = s.client_id) AS version_count,
             EXISTS(
               SELECT 1 FROM inventory_lpns i2
-               WHERE i2.sku = s.sku AND i2.qty > 0
+               WHERE i2.sku = s.sku AND i2.client_id = s.client_id AND i2.qty > 0
                  AND i2.sku_version < s.current_version
             ) AS has_old_stock
         ) vh ON TRUE
@@ -178,11 +171,11 @@ router.post('/skus', requireStockWrite, checkClientAccess('write', { required: t
         !!allow_substitutes, scope, threshold]);
     // Línea base v1 en historial (idempotente)
     await pool.query(
-      `INSERT INTO sku_version_history (sku, version, requires_lot, requires_serial, changed_by, reason)
-         SELECT sku, current_version, requires_lot, requires_serial, $1, 'Línea base'
-           FROM master_skus WHERE sku = $2
-         ON CONFLICT (sku, version) DO NOTHING`,
-      [req.user.username, skuNorm]
+      `INSERT INTO sku_version_history (sku, client_id, version, requires_lot, requires_serial, changed_by, reason)
+         SELECT sku, client_id, current_version, requires_lot, requires_serial, $1, 'Línea base'
+           FROM master_skus WHERE sku = $2 AND client_id = $3
+         ON CONFLICT (sku, client_id, version) DO NOTHING`,
+      [req.user.username, skuNorm, effectiveClientId]
     );
     res.json({ success: true });
   } catch (err) { res.status(500).json({ error: mapDbError(err) }); }
@@ -223,8 +216,8 @@ router.put('/skus/:sku', requireStockWrite, checkClientAccess('write'), async (r
 
     if (criticalChange) {
       const stockRow = await client.query(
-        `SELECT COALESCE(SUM(qty), 0)::numeric AS total FROM inventory_lpns WHERE sku = $1 AND qty > 0`,
-        [sku]
+        `SELECT COALESCE(SUM(qty), 0)::numeric AS total FROM inventory_lpns WHERE sku = $1 AND client_id = $2 AND qty > 0`,
+        [sku, client_id]
       );
       const stock = parseFloat(stockRow.rows[0].total) || 0;
 
@@ -232,10 +225,10 @@ router.put('/skus/:sku', requireStockWrite, checkClientAccess('write'), async (r
         // Bump versión + snapshot. El código del SKU no cambia.
         const changes = { requires_lot: newLot, requires_serial: newSerial };
         const versionFn = await client.query(
-          `SELECT * FROM create_sku_version($1, $2::jsonb, $3, $4)`,
-          [sku, JSON.stringify(changes),
+          `SELECT * FROM create_sku_version($1, $2, $3::jsonb, $4, $5)`,
+          [sku, client_id, JSON.stringify(changes),
            version_reason || 'Cambio de control de lote/serie con stock activo',
-           username || req.user.username]
+           req.user.username]
         );
         versionedResult = {
           versioned: true,
@@ -252,15 +245,15 @@ router.put('/skus/:sku', requireStockWrite, checkClientAccess('write'), async (r
         );
         // Refrescar la entrada del historial para la versión actual.
         await client.query(
-          `INSERT INTO sku_version_history (sku, version, requires_lot, requires_serial, changed_by, reason)
-           VALUES ($1, $2, $3, $4, $5, 'Cambio sin stock — versión actual actualizada')
-           ON CONFLICT (sku, version) DO UPDATE SET
+          `INSERT INTO sku_version_history (sku, client_id, version, requires_lot, requires_serial, changed_by, reason)
+           VALUES ($1, $6, $2, $3, $4, $5, 'Cambio sin stock — versión actual actualizada')
+           ON CONFLICT (sku, client_id, version) DO UPDATE SET
              requires_lot = EXCLUDED.requires_lot,
              requires_serial = EXCLUDED.requires_serial,
              changed_at = NOW(),
              changed_by = EXCLUDED.changed_by,
              reason = EXCLUDED.reason`,
-          [sku, current.current_version, newLot, newSerial, username || req.user.username]
+          [sku, current.current_version, newLot, newSerial, req.user.username, client_id]
         );
       }
     }
@@ -311,17 +304,18 @@ router.put('/skus/:sku', requireStockWrite, checkClientAccess('write'), async (r
 router.get('/skus/:sku/versions', requireAuth, async (req, res) => {
   const sku = String(req.params.sku).toUpperCase().trim();
   try {
+    const params = [sku];
     const r = await pool.query(
-      `SELECT h.version, h.requires_lot, h.requires_serial,
+      `SELECT h.client_id, h.version, h.requires_lot, h.requires_serial,
               h.changed_at, h.changed_by, h.reason,
               (SELECT COALESCE(SUM(qty), 0)::float FROM inventory_lpns
-                 WHERE sku = h.sku AND sku_version = h.version AND qty > 0) AS active_stock,
+                 WHERE sku = h.sku AND client_id = h.client_id AND sku_version = h.version AND qty > 0) AS active_stock,
               (h.version = s.current_version) AS is_current
          FROM sku_version_history h
-         JOIN master_skus s ON s.sku = h.sku
-        WHERE h.sku = $1
+         JOIN master_skus s ON s.sku = h.sku AND s.client_id = h.client_id
+        WHERE h.sku = $1 AND ${scopeCondition(req.clientScope, 's.client_id', params)}
         ORDER BY h.version DESC`,
-      [sku]
+      params
     );
     res.json(r.rows);
   } catch (e) { res.status(500).json({ error: mapDbError(e) }); }
@@ -343,7 +337,8 @@ router.delete('/skus/:id', requireStockWrite, checkClientAccess('write'), async 
 
 router.get('/skus/barcode/:barcode', requireAuth, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT * FROM master_skus WHERE barcode = $1 LIMIT 1`, [req.params.barcode]);
+    const params = [req.params.barcode];
+    const result = await pool.query(`SELECT * FROM master_skus WHERE barcode = $1 AND deleted_at IS NULL AND ${scopeCondition(req.clientScope, 'client_id', params)} LIMIT 1`, params);
     if (result.rows.length > 0) res.json({ found: true, sku: result.rows[0] });
     else res.json({ found: false });
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
@@ -413,17 +408,19 @@ router.post('/skus/alerts', requireJefeOrAbove, async (req, res) => {
 
 router.get('/alerts/stock', requireAuth, async (req, res) => {
   try {
+    const params = [];
     const result = await pool.query(`
       SELECT s.sku, s."desc", s.client_id, s.uom, s.stock_min, s.stock_max,
         COALESCE(SUM(i.qty),0) as current_stock
       FROM master_skus s
-      LEFT JOIN inventory_lpns i ON s.sku = i.sku AND i.qty > 0
-      WHERE s.stock_min > 0 OR s.stock_max > 0
+      LEFT JOIN inventory_lpns i ON s.sku = i.sku AND i.client_id = s.client_id AND i.qty > 0
+      WHERE (s.stock_min > 0 OR s.stock_max > 0) AND s.deleted_at IS NULL
+        AND ${scopeCondition(req.clientScope, 's.client_id', params)}
       GROUP BY s.sku, s."desc", s.client_id, s.uom, s.stock_min, s.stock_max
       HAVING (s.stock_min > 0 AND COALESCE(SUM(i.qty),0) < s.stock_min)
           OR (s.stock_max > 0 AND COALESCE(SUM(i.qty),0) > s.stock_max)
       ORDER BY s.sku
-    `);
+    `, params);
     res.json(result.rows);
   } catch(e) { res.status(500).json({ error: mapDbError(e) }); }
 });
