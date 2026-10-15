@@ -22,7 +22,7 @@ const moduleBadge = (mod) => {
     returns: { label: 'Devolución', cls: 'bg-orange-100 text-orange-700' },
   };
   const m = map[mod] || { label: mod || '—', cls: 'bg-slate-100 text-slate-600' };
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${m.cls}`}>{m.label}</span>;
+  return <span className={`inline-block px-2 py-0.5 rounded-full text-[12px] font-black uppercase ${m.cls}`}>{m.label}</span>;
 };
 
 export default function InventoryAnalysisTab({ apiFetch, host, clients = [], currentUser }) {
@@ -77,20 +77,20 @@ export default function InventoryAnalysisTab({ apiFetch, host, clients = [], cur
 
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-3">
+        <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-3">
           <TrendingUp className="w-7 h-7 text-cyan-600"/>
           Análisis de Inventario
         </h1>
         <div className="flex items-center gap-2">
           {currentData?.length > 0 && (
-            <button onClick={exportCsv} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2">
+            <button onClick={exportCsv} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2">
               <Download size={12}/> CSV
             </button>
           )}
           <button
             onClick={load}
             disabled={loading}
-            className="bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-sm"
+            className="bg-cyan-600 hover:bg-cyan-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 shadow-sm"
           >
             <RefreshCcw size={12} className={loading ? 'animate-spin' : ''}/>
             {loading ? 'Cargando…' : 'Generar'}
@@ -116,17 +116,17 @@ export default function InventoryAnalysisTab({ apiFetch, host, clients = [], cur
 
       {/* Filtros */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-        <p className="text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-1"><Filter size={10}/> Filtros</p>
+        <p className="text-[12px] font-black uppercase text-slate-500 mb-3 flex items-center gap-1"><Filter size={10}/> Filtros</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1"><Calendar size={9}/> Desde</label>
+            <label className="block text-[12px] font-black text-slate-500 uppercase mb-1 flex items-center gap-1"><Calendar size={9}/> Desde</label>
             <input type="date" value={filters.date_from}
               onChange={e => setFilters(f => ({ ...f, date_from: e.target.value }))}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400"
             />
           </div>
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1"><Calendar size={9}/> Hasta</label>
+            <label className="block text-[12px] font-black text-slate-500 uppercase mb-1 flex items-center gap-1"><Calendar size={9}/> Hasta</label>
             <input type="date" value={filters.date_to}
               onChange={e => setFilters(f => ({ ...f, date_to: e.target.value }))}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400"
@@ -134,7 +134,7 @@ export default function InventoryAnalysisTab({ apiFetch, host, clients = [], cur
           </div>
           {clients.length > 0 && (
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1"><Users size={9}/> Cliente</label>
+              <label className="block text-[12px] font-black text-slate-500 uppercase mb-1 flex items-center gap-1"><Users size={9}/> Cliente</label>
               <select value={filters.client_id}
                 onChange={e => setFilters(f => ({ ...f, client_id: e.target.value }))}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400"
@@ -146,7 +146,7 @@ export default function InventoryAnalysisTab({ apiFetch, host, clients = [], cur
           )}
           {view === 'sku-entries' ? (
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1"><Search size={9}/> Buscar SKU</label>
+              <label className="block text-[12px] font-black text-slate-500 uppercase mb-1 flex items-center gap-1"><Search size={9}/> Buscar SKU</label>
               <input type="text" placeholder="SKU o descripción…" value={filters.search}
                 onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400"
@@ -154,7 +154,7 @@ export default function InventoryAnalysisTab({ apiFetch, host, clients = [], cur
             </div>
           ) : (
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Tipo</label>
+              <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Tipo</label>
               <select value={filters.module}
                 onChange={e => setFilters(f => ({ ...f, module: e.target.value }))}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400"
@@ -174,10 +174,10 @@ export default function InventoryAnalysisTab({ apiFetch, host, clients = [], cur
       {currentData === null ? (
         <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-14 text-center">
           <TrendingUp className="w-10 h-10 mx-auto mb-3 text-slate-300"/>
-          <p className="font-black uppercase tracking-widest text-xs text-slate-400">Aplica filtros y presiona Generar</p>
+          <p className="font-black uppercase tracking-widest text-xs text-slate-500">Aplica filtros y presiona Generar</p>
         </div>
       ) : currentData.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center text-slate-400 font-bold text-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center text-slate-500 font-bold text-sm">
           Sin datos para el período seleccionado.
         </div>
       ) : view === 'sku-entries' ? (
@@ -193,7 +193,7 @@ function SkuEntriesTable({ data }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-        <span className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-2">
+        <span className="text-[12px] font-black uppercase text-slate-500 flex items-center gap-2">
           <ArrowDownRight size={12} className="text-emerald-500"/> Ingresos por SKU — {data.length} registros
         </span>
       </div>
@@ -206,7 +206,7 @@ function SkuEntriesTable({ data }) {
                 'LPNs', 'Qty Total', 'Lotes', 'Ubicaciones',
                 'Primer Ingreso', 'Último Ingreso',
               ].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">{h}</th>
+                <th key={h} className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -216,12 +216,12 @@ function SkuEntriesTable({ data }) {
                 <td className="px-4 py-3 font-mono text-xs text-slate-800 font-bold whitespace-nowrap">{row.sku}</td>
                 <td className="px-4 py-3 text-xs text-slate-600 max-w-[200px] truncate">{row.descripcion || '—'}</td>
                 <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{row.client_id || '—'}</td>
-                <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{row.uom || '—'}</td>
+                <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{row.uom || '—'}</td>
                 <td className="px-4 py-3 text-xs font-mono text-slate-700 text-right">{row.num_lpns}</td>
                 <td className="px-4 py-3 text-xs font-mono font-bold text-emerald-700 text-right whitespace-nowrap">{fmtQty(row.qty_total)}</td>
                 <td className="px-4 py-3 text-xs font-mono text-slate-500 text-right">{row.num_lotes}</td>
                 <td className="px-4 py-3 text-xs font-mono text-slate-500 text-right">{row.num_ubicaciones}</td>
-                <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{fmtDate(row.primer_ingreso)}</td>
+                <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{fmtDate(row.primer_ingreso)}</td>
                 <td className="px-4 py-3 text-xs text-slate-700 whitespace-nowrap font-medium">{fmtDate(row.ultimo_ingreso)}</td>
               </tr>
             ))}
@@ -236,7 +236,7 @@ function ClientMovementsTable({ data }) {
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-        <span className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-2">
+        <span className="text-[12px] font-black uppercase text-slate-500 flex items-center gap-2">
           <Users size={12} className="text-blue-500"/> Movimientos por Cliente — {data.length} registros
         </span>
       </div>
@@ -245,7 +245,7 @@ function ClientMovementsTable({ data }) {
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               {['Cliente', 'Nombre', 'Tipo', 'Doc Num', 'Doc Tipo', 'Estado', 'Qty', 'Usuario', 'Fecha'].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">{h}</th>
+                <th key={h} className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">{h}</th>
               ))}
             </tr>
           </thead>
@@ -256,14 +256,14 @@ function ClientMovementsTable({ data }) {
                 <td className="px-4 py-3 text-xs text-slate-600 max-w-[160px] truncate">{row.cliente_nombre || '—'}</td>
                 <td className="px-4 py-3">{moduleBadge(row.module)}</td>
                 <td className="px-4 py-3 font-mono text-xs text-slate-700 whitespace-nowrap">{row.doc_num || '—'}</td>
-                <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{row.doc_tipo || row.doc_type || '—'}</td>
+                <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{row.doc_tipo || row.doc_type || '—'}</td>
                 <td className="px-4 py-3">
-                  <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase ${row.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                  <span className={`inline-block px-2 py-0.5 rounded-full text-[12px] font-black uppercase ${row.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
                     {row.status || '—'}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-xs font-mono font-bold text-blue-700 text-right whitespace-nowrap">{fmtQty(row.total_qty)}</td>
-                <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{row.username || '—'}</td>
+                <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{row.username || '—'}</td>
                 <td className="px-4 py-3 text-xs text-slate-700 whitespace-nowrap font-medium">{fmtDate(row.created_at)}</td>
               </tr>
             ))}

@@ -68,7 +68,7 @@ export default function SolicitarTransporteTab({ showMsg = () => {} }) {
 
   return (
     <div className="space-y-6 animate-in fade-in max-w-5xl mx-auto">
-      <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+      <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
         <Truck className="text-cyan-600" /> Solicitar transporte (desde despacho)
       </h1>
       <p className="text-xs text-slate-500">Para un despacho que requiere transporte: elige el despacho, ingresa las líneas y el sistema calcula peso y volumen. El coordinador la verá en su cola.</p>
@@ -76,21 +76,21 @@ export default function SolicitarTransporteTab({ showMsg = () => {} }) {
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <div className="md:col-span-2">
-            <label className="text-[9px] font-black text-slate-400 uppercase">Despacho programado</label>
+            <label className="text-[12px] font-black text-slate-500 uppercase">Despacho programado</label>
             <select value={form.despacho_id} onChange={e => pickDespacho(e.target.value)} className={`${inputCls} w-full bg-white`}>
               <option value="">— Selecciona un despacho —</option>
               {despachos.map(d => <option key={d.id} value={d.id}>{d.doc_num} · {d.client_id || ''} · {d.destination || ''}{d.requiere_transporte ? ' (ya marcado)' : ''}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[9px] font-black text-slate-400 uppercase">Cliente (si no hay despacho)</label>
+            <label className="text-[12px] font-black text-slate-500 uppercase">Cliente (si no hay despacho)</label>
             <input value={form.client_id} onChange={e => setForm({ ...form, client_id: e.target.value })} placeholder="ID cliente" className={`${inputCls} w-full`} />
           </div>
         </div>
 
         {/* Líneas */}
         <div>
-          <div className="text-[10px] font-black text-slate-500 uppercase mb-1">Líneas del despacho (para calcular peso/volumen)</div>
+          <div className="text-[12px] font-black text-slate-500 uppercase mb-1">Líneas del despacho (para calcular peso/volumen)</div>
           <div className="space-y-1.5">
             {lineas.map((l, i) => (
               <div key={i} className="flex gap-2 items-center">
@@ -100,26 +100,26 @@ export default function SolicitarTransporteTab({ showMsg = () => {} }) {
               </div>
             ))}
           </div>
-          <button onClick={addLinea} className="mt-1.5 text-cyan-600 hover:text-cyan-800 text-[10px] font-black uppercase flex items-center gap-1"><Plus size={12} /> Agregar línea</button>
+          <button onClick={addLinea} className="mt-1.5 text-cyan-600 hover:text-cyan-800 text-[12px] font-black uppercase flex items-center gap-1"><Plus size={12} /> Agregar línea</button>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div><label className="text-[9px] font-black text-slate-400 uppercase">Destino</label><input value={form.destino} onChange={e => setForm({ ...form, destino: e.target.value })} className={`${inputCls} w-full`} /></div>
-          <div><label className="text-[9px] font-black text-slate-400 uppercase">Sentido</label><select value={form.sentido} onChange={e => setForm({ ...form, sentido: e.target.value })} className={`${inputCls} w-full bg-white`}><option value="SALIDA">Salida</option><option value="REGRESO">Regreso</option></select></div>
-          <div><label className="text-[9px] font-black text-slate-400 uppercase">Tipo vehículo sugerido</label><select value={form.tipo_vehiculo_sugerido} onChange={e => setForm({ ...form, tipo_vehiculo_sugerido: e.target.value })} className={`${inputCls} w-full bg-white`}><option value="">—</option>{tipos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}</select></div>
-          <div><label className="text-[9px] font-black text-slate-400 uppercase">N° cajas</label><input type="number" value={form.n_cajas} onChange={e => setForm({ ...form, n_cajas: e.target.value })} className={`${inputCls} w-full`} /></div>
-          <div><label className="text-[9px] font-black text-slate-400 uppercase">N° cajones</label><input type="number" value={form.n_cajones} onChange={e => setForm({ ...form, n_cajones: e.target.value })} className={`${inputCls} w-full`} /></div>
-          <div><label className="text-[9px] font-black text-slate-400 uppercase">N° pallets</label><input type="number" value={form.n_pallets} onChange={e => setForm({ ...form, n_pallets: e.target.value })} className={`${inputCls} w-full`} /></div>
-          <div><label className="text-[9px] font-black text-slate-400 uppercase">Hora carga habilitada</label><input type="datetime-local" value={form.hora_carga_habilitada} onChange={e => setForm({ ...form, hora_carga_habilitada: e.target.value })} className={`${inputCls} w-full`} /></div>
-          <div><label className="text-[9px] font-black text-slate-400 uppercase">Recepción en destino</label><input type="datetime-local" value={form.fecha_hora_recepcion_destino} onChange={e => setForm({ ...form, fecha_hora_recepcion_destino: e.target.value })} className={`${inputCls} w-full`} /></div>
+          <div><label className="text-[12px] font-black text-slate-500 uppercase">Destino</label><input value={form.destino} onChange={e => setForm({ ...form, destino: e.target.value })} className={`${inputCls} w-full`} /></div>
+          <div><label className="text-[12px] font-black text-slate-500 uppercase">Sentido</label><select value={form.sentido} onChange={e => setForm({ ...form, sentido: e.target.value })} className={`${inputCls} w-full bg-white`}><option value="SALIDA">Salida</option><option value="REGRESO">Regreso</option></select></div>
+          <div><label className="text-[12px] font-black text-slate-500 uppercase">Tipo vehículo sugerido</label><select value={form.tipo_vehiculo_sugerido} onChange={e => setForm({ ...form, tipo_vehiculo_sugerido: e.target.value })} className={`${inputCls} w-full bg-white`}><option value="">—</option>{tipos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}</select></div>
+          <div><label className="text-[12px] font-black text-slate-500 uppercase">N° cajas</label><input type="number" value={form.n_cajas} onChange={e => setForm({ ...form, n_cajas: e.target.value })} className={`${inputCls} w-full`} /></div>
+          <div><label className="text-[12px] font-black text-slate-500 uppercase">N° cajones</label><input type="number" value={form.n_cajones} onChange={e => setForm({ ...form, n_cajones: e.target.value })} className={`${inputCls} w-full`} /></div>
+          <div><label className="text-[12px] font-black text-slate-500 uppercase">N° pallets</label><input type="number" value={form.n_pallets} onChange={e => setForm({ ...form, n_pallets: e.target.value })} className={`${inputCls} w-full`} /></div>
+          <div><label className="text-[12px] font-black text-slate-500 uppercase">Hora carga habilitada</label><input type="datetime-local" value={form.hora_carga_habilitada} onChange={e => setForm({ ...form, hora_carga_habilitada: e.target.value })} className={`${inputCls} w-full`} /></div>
+          <div><label className="text-[12px] font-black text-slate-500 uppercase">Recepción en destino</label><input type="datetime-local" value={form.fecha_hora_recepcion_destino} onChange={e => setForm({ ...form, fecha_hora_recepcion_destino: e.target.value })} className={`${inputCls} w-full`} /></div>
         </div>
 
-        <button onClick={submit} disabled={busy} className="bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl px-5 py-2.5 text-[11px] font-black uppercase flex items-center gap-2"><Send size={14} /> Solicitar transporte</button>
+        <button onClick={submit} disabled={busy} className="bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl px-5 py-2.5 text-[13px] font-black uppercase flex items-center gap-2"><Send size={14} /> Solicitar transporte</button>
 
         {resultado && (
           <div className={`rounded-xl p-3 ${resultado.dims_incompletas ? 'bg-amber-50 border border-amber-300' : 'bg-emerald-50 border border-emerald-200'}`}>
-            <div className="text-[11px] font-bold text-slate-700">Calculado — Peso: <b>{num(resultado.peso_total).toLocaleString('es-CL')} kg</b> · Volumen: <b>{num(resultado.volumen_total).toLocaleString('es-CL')} m³</b></div>
-            {resultado.aviso && <div className="flex items-center gap-1.5 text-amber-700 text-[11px] font-bold mt-1"><AlertTriangle size={13} /> {resultado.aviso}</div>}
+            <div className="text-[13px] font-bold text-slate-700">Calculado — Peso: <b>{num(resultado.peso_total).toLocaleString('es-CL')} kg</b> · Volumen: <b>{num(resultado.volumen_total).toLocaleString('es-CL')} m³</b></div>
+            {resultado.aviso && <div className="flex items-center gap-1.5 text-amber-700 text-[13px] font-bold mt-1"><AlertTriangle size={13} /> {resultado.aviso}</div>}
           </div>
         )}
       </div>
@@ -132,28 +132,28 @@ export default function SolicitarTransporteTab({ showMsg = () => {} }) {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="bg-slate-50 text-[9px] text-slate-400 uppercase"><tr>
+            <thead className="bg-slate-50 text-[12px] text-slate-500 uppercase"><tr>
               <th className="text-left px-4 py-2">Despacho</th><th className="text-left px-3 py-2">Cliente</th>
               <th className="text-right px-3 py-2">Peso / Vol.</th><th className="text-left px-3 py-2">Destino</th><th className="text-left px-3 py-2">Estado</th>
               <th className="text-left px-3 py-2">Asignación</th>
             </tr></thead>
             <tbody className="divide-y divide-slate-100">
-              {recientes.length === 0 && <tr><td colSpan={6} className="text-center text-slate-400 py-6 font-bold">Sin solicitudes desde despacho.</td></tr>}
+              {recientes.length === 0 && <tr><td colSpan={6} className="text-center text-slate-500 py-6 font-bold">Sin solicitudes desde despacho.</td></tr>}
               {recientes.map(s => (
                 <tr key={s.id} className="hover:bg-slate-50">
                   <td className="px-4 py-2 font-mono text-slate-600">{s.despacho_doc_num || '—'}</td>
                   <td className="px-3 py-2 text-slate-700">{s.cliente_nombre || s.client_id || '—'}</td>
                   <td className="px-3 py-2 text-right font-mono">{num(s.peso_total).toLocaleString('es-CL')}kg / <span className={s.dims_incompletas ? 'text-rose-600 font-black' : ''}>{num(s.volumen_total).toLocaleString('es-CL')}m³{s.dims_incompletas ? ' ⚠' : ''}</span></td>
                   <td className="px-3 py-2 text-slate-600">{s.destino || '—'}</td>
-                  <td className="px-3 py-2"><span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full ${s.estado === 'pendiente' ? 'bg-amber-100 text-amber-700' : s.estado === 'asignada' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>{s.estado}</span></td>
+                  <td className="px-3 py-2"><span className={`text-[12px] font-black uppercase px-2 py-0.5 rounded-full ${s.estado === 'pendiente' ? 'bg-amber-100 text-amber-700' : s.estado === 'asignada' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>{s.estado}</span></td>
                   <td className="px-3 py-2 text-slate-600">
                     {s.envio_id ? (
                       <div className="leading-tight">
                         <div className="font-bold text-slate-700">{s.transportista_nombre || '—'}</div>
-                        <div className="text-[10px] text-slate-500">{[s.vehiculo_matricula, s.vehiculo_tipo].filter(Boolean).join(' · ') || '—'}{s.chofer_nombre ? ` · ${s.chofer_nombre}` : ''}</div>
-                        {s.fecha_hora_confirmada && <div className="text-[9px] text-slate-400">{new Date(s.fecha_hora_confirmada).toLocaleString('es-CL')}</div>}
+                        <div className="text-[12px] text-slate-500">{[s.vehiculo_matricula, s.vehiculo_tipo].filter(Boolean).join(' · ') || '—'}{s.chofer_nombre ? ` · ${s.chofer_nombre}` : ''}</div>
+                        {s.fecha_hora_confirmada && <div className="text-[12px] text-slate-500">{new Date(s.fecha_hora_confirmada).toLocaleString('es-CL')}</div>}
                       </div>
-                    ) : <span className="text-[10px] text-slate-300">sin asignar</span>}
+                    ) : <span className="text-[12px] text-slate-300">sin asignar</span>}
                   </td>
                 </tr>
               ))}

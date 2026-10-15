@@ -24,16 +24,16 @@ export default function DocHistoryTab({
   return (
     <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><History className="text-slate-500"/> Historial de Documentos</h1>
+        <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2"><History className="text-slate-500"/> Historial de Documentos</h1>
         <div className="flex gap-2">
           {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-            <button onClick={async()=>{ const r=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`); if(r.ok){const d=await r.json();setAnulationRequests(d);} setAnulHistoryTab('requests'); }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-colors ${anulHistoryTab==='requests'?'bg-red-600 text-white shadow-md':'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200'}`}>
+            <button onClick={async()=>{ const r=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`); if(r.ok){const d=await r.json();setAnulationRequests(d);} setAnulHistoryTab('requests'); }} className={`px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 transition-colors ${anulHistoryTab==='requests'?'bg-red-600 text-white shadow-md':'bg-red-50 hover:bg-red-100 text-red-700 border border-red-200'}`}>
               <XCircle size={12}/> Solicitudes Anulación
-              {anulationRequests.filter(r=>r.status==='PENDIENTE').length > 0 && <span className="bg-white text-red-600 px-1.5 rounded-full text-[8px] font-black">{anulationRequests.filter(r=>r.status==='PENDIENTE').length}</span>}
+              {anulationRequests.filter(r=>r.status==='PENDIENTE').length > 0 && <span className="bg-white text-red-600 px-1.5 rounded-full text-[11px] font-black">{anulationRequests.filter(r=>r.status==='PENDIENTE').length}</span>}
             </button>
           )}
-          <button onClick={async()=>{ setAnulHistoryTab('docs'); setDocHistoryPage(0); const params=new URLSearchParams(); if(docHistoryModule) params.append('module',docHistoryModule); if(docHistorySearch) params.append('search',docHistorySearch); if(docHistoryDateFrom) params.append('date_from',docHistoryDateFrom); if(docHistoryDateTo) params.append('date_to',docHistoryDateTo); const res=await apiFetch(`${host}/api/document-history?${params}`); const d=await res.json(); setDocHistory(Array.isArray(d)?d:[]); }} className="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-sm"><Search size={12}/> Buscar</button>
-          {docHistory.length > 0 && <button onClick={()=> exportToExcel(docHistory,[{key:'created_at',header:'Fecha',format:'date'},{key:'module',header:'Módulo',format:'text'},{key:'doc_type',header:'Tipo Doc',format:'text'},{key:'doc_num',header:'N° Documento',format:'text'},{key:'glosa',header:'Glosa',format:'text'},{key:'username',header:'Usuario',format:'text'},{key:'total_qty',header:'Cantidad Total',format:'number'},{key:'status',header:'Estado',format:'text'},{key:'client_id',header:'Cliente ID',format:'text'}],`historial-docs${docHistoryModule?'_'+docHistoryModule:''}_${new Date().toISOString().slice(0,10)}`,'Historial')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
+          <button onClick={async()=>{ setAnulHistoryTab('docs'); setDocHistoryPage(0); const params=new URLSearchParams(); if(docHistoryModule) params.append('module',docHistoryModule); if(docHistorySearch) params.append('search',docHistorySearch); if(docHistoryDateFrom) params.append('date_from',docHistoryDateFrom); if(docHistoryDateTo) params.append('date_to',docHistoryDateTo); const res=await apiFetch(`${host}/api/document-history?${params}`); const d=await res.json(); setDocHistory(Array.isArray(d)?d:[]); }} className="bg-slate-700 hover:bg-slate-800 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 shadow-sm"><Search size={12}/> Buscar</button>
+          {docHistory.length > 0 && <button onClick={()=> exportToExcel(docHistory,[{key:'created_at',header:'Fecha',format:'date'},{key:'module',header:'Módulo',format:'text'},{key:'doc_type',header:'Tipo Doc',format:'text'},{key:'doc_num',header:'N° Documento',format:'text'},{key:'glosa',header:'Glosa',format:'text'},{key:'username',header:'Usuario',format:'text'},{key:'total_qty',header:'Cantidad Total',format:'number'},{key:'status',header:'Estado',format:'text'},{key:'client_id',header:'Cliente ID',format:'text'}],`historial-docs${docHistoryModule?'_'+docHistoryModule:''}_${new Date().toISOString().slice(0,10)}`,'Historial')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
         </div>
       </div>
 
@@ -42,24 +42,24 @@ export default function DocHistoryTab({
         <div className="space-y-3">
           <div className="flex gap-2 items-center">
             {['PENDIENTE','APROBADA','RECHAZADA'].map(s=>(
-              <button key={s} onClick={async()=>{ const r=await apiFetch(`${host}/api/anulation-requests?status=${s}`); if(r.ok){const d=await r.json();setAnulationRequests(d);} }} className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border transition-colors ${s==='PENDIENTE'?'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100':s==='APROBADA'?'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100':'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'}`}>{s}</button>
+              <button key={s} onClick={async()=>{ const r=await apiFetch(`${host}/api/anulation-requests?status=${s}`); if(r.ok){const d=await r.json();setAnulationRequests(d);} }} className={`px-3 py-1.5 rounded-xl text-[12px] font-black uppercase border transition-colors ${s==='PENDIENTE'?'bg-amber-50 border-amber-300 text-amber-700 hover:bg-amber-100':s==='APROBADA'?'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100':'bg-red-50 border-red-300 text-red-700 hover:bg-red-100'}`}>{s}</button>
             ))}
-            <button onClick={()=>setAnulHistoryTab('docs')} className="ml-auto text-slate-400 hover:text-slate-700 text-[10px] font-black uppercase flex items-center gap-1"><ArrowLeft size={12}/> Volver al historial</button>
+            <button onClick={()=>setAnulHistoryTab('docs')} className="ml-auto text-slate-500 hover:text-slate-700 text-[12px] font-black uppercase flex items-center gap-1"><ArrowLeft size={12}/> Volver al historial</button>
           </div>
-          {anulationRequests.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-12 text-center text-slate-400"><XCircle className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="font-black uppercase text-xs">Sin solicitudes</p></div>}
+          {anulationRequests.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-12 text-center text-slate-500"><XCircle className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="font-black uppercase text-xs">Sin solicitudes</p></div>}
           {anulationRequests.map(req => (
             <div key={req.id} className={`bg-white rounded-2xl border-2 shadow-sm p-5 ${req.status==='PENDIENTE'?'border-amber-200':req.status==='APROBADA'?'border-emerald-200':'border-red-200'}`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${req.status==='PENDIENTE'?'bg-amber-100 text-amber-700':req.status==='APROBADA'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{req.status}</span>
-                    <span className={`text-[9px] font-black px-2 py-0.5 rounded border ${req.module==='receive'?'bg-emerald-50 text-emerald-700 border-emerald-200':'bg-blue-50 text-blue-700 border-blue-200'}`}>{req.module==='receive'?'RECEPCIÓN':'DESPACHO'}</span>
+                    <span className={`text-[12px] font-black px-2 py-0.5 rounded-full uppercase ${req.status==='PENDIENTE'?'bg-amber-100 text-amber-700':req.status==='APROBADA'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{req.status}</span>
+                    <span className={`text-[12px] font-black px-2 py-0.5 rounded border ${req.module==='receive'?'bg-emerald-50 text-emerald-700 border-emerald-200':'bg-blue-50 text-blue-700 border-blue-200'}`}>{req.module==='receive'?'RECEPCIÓN':'DESPACHO'}</span>
                   </div>
                   <p className="text-sm font-black text-slate-800 uppercase">{req.doc_type ? `[${req.doc_type}]` : ''} {req.doc_num}</p>
                   <p className="text-xs text-slate-600 mt-1">Motivo: <span className="font-bold">"{req.reason}"</span></p>
-                  <p className="text-[10px] text-slate-400 mt-1">Solicitado por <strong>{req.requested_by}</strong> · {new Date(req.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</p>
-                  {req.authorized_by && <p className="text-[10px] text-slate-400">Procesado por <strong>{req.authorized_by}</strong> · {req.resolved_at && new Date(req.resolved_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</p>}
-                  {req.reject_reason && <p className="text-[10px] text-red-500 mt-1">Rechazo: "{req.reject_reason}"</p>}
+                  <p className="text-[12px] text-slate-500 mt-1">Solicitado por <strong>{req.requested_by}</strong> · {new Date(req.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</p>
+                  {req.authorized_by && <p className="text-[12px] text-slate-500">Procesado por <strong>{req.authorized_by}</strong> · {req.resolved_at && new Date(req.resolved_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</p>}
+                  {req.reject_reason && <p className="text-[12px] text-red-500 mt-1">Rechazo: "{req.reject_reason}"</p>}
                 </div>
                 {req.status === 'PENDIENTE' && (
                   <div className="flex gap-2 shrink-0">
@@ -68,7 +68,7 @@ export default function DocHistoryTab({
                       const r=await apiFetch(`${host}/api/anulation-requests/${req.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
                       if(r.ok){showMsg('✅ Anulación aprobada y stock revertido');const d=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`);if(d.ok)setAnulationRequests(await d.json());fetchData();}
                       else{const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                    }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 transition-colors">
+                    }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-1.5 transition-colors">
                       <CheckCircle2 size={12}/> Aprobar
                     </button>
                     <button onClick={async()=>{
@@ -77,7 +77,7 @@ export default function DocHistoryTab({
                       const r=await apiFetch(`${host}/api/anulation-requests/${req.id}/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reject_reason:motivo})});
                       if(r.ok){showMsg('Solicitud rechazada');const d=await apiFetch(`${host}/api/anulation-requests?status=PENDIENTE`);if(d.ok)setAnulationRequests(await d.json());}
                       else{const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                    }} className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 transition-colors border border-red-200">
+                    }} className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-1.5 transition-colors border border-red-200">
                       <X size={12}/> Rechazar
                     </button>
                   </div>
@@ -110,10 +110,10 @@ export default function DocHistoryTab({
             const totalPages = Math.ceil(docHistory.length / DH_PAGE_SIZE);
             return totalPages > 1 ? (
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold text-slate-400 uppercase">{docHistory.length} documentos — página {docHistoryPage + 1} de {totalPages}</p>
+                <p className="text-[12px] font-bold text-slate-500 uppercase">{docHistory.length} documentos — página {docHistoryPage + 1} de {totalPages}</p>
                 <div className="flex gap-2">
-                  <button disabled={docHistoryPage === 0} onClick={() => setDocHistoryPage(p => p - 1)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">← Anterior</button>
-                  <button disabled={docHistoryPage >= totalPages - 1} onClick={() => setDocHistoryPage(p => p + 1)} className="px-3 py-1.5 rounded-xl text-[10px] font-black uppercase border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Siguiente →</button>
+                  <button disabled={docHistoryPage === 0} onClick={() => setDocHistoryPage(p => p - 1)} className="px-3 py-1.5 rounded-xl text-[12px] font-black uppercase border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">← Anterior</button>
+                  <button disabled={docHistoryPage >= totalPages - 1} onClick={() => setDocHistoryPage(p => p + 1)} className="px-3 py-1.5 rounded-xl text-[12px] font-black uppercase border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed">Siguiente →</button>
                 </div>
               </div>
             ) : null;
@@ -134,44 +134,44 @@ export default function DocHistoryTab({
                         <p className={`text-sm font-black uppercase flex items-center gap-2 ${isVoided?'text-red-400 line-through':'text-slate-800'}`}>
                           [{doc.doc_type||doc.module.toUpperCase()}] {doc.doc_num}
                           {isVoided
-                            ? <span className="text-[9px] px-2 py-0.5 rounded font-black bg-red-100 text-red-600 no-underline" style={{textDecoration:'none'}}>ANULADO</span>
-                            : <span className={`text-[9px] px-2 py-0.5 rounded font-black ${doc.module==='receive'?'bg-emerald-100 text-emerald-700':doc.module==='dispatch'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{doc.module==='receive'?'RECEPCIÓN':doc.module==='dispatch'?'DESPACHO':'AJUSTE'}</span>
+                            ? <span className="text-[12px] px-2 py-0.5 rounded font-black bg-red-100 text-red-600 no-underline" style={{textDecoration:'none'}}>ANULADO</span>
+                            : <span className={`text-[12px] px-2 py-0.5 rounded font-black ${doc.module==='receive'?'bg-emerald-100 text-emerald-700':doc.module==='dispatch'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{doc.module==='receive'?'RECEPCIÓN':doc.module==='dispatch'?'DESPACHO':'AJUSTE'}</span>
                           }
                         </p>
-                        <p className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                        <p className="text-[12px] text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                           <span>👤 {doc.username}</span><span>·</span>
                           <span>{new Date(doc.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</span>
                           {doc.glosa && <span>· "{doc.glosa}"</span>}
                           {doc.doc_ref && <span>· Ref: <strong>{doc.doc_ref}</strong></span>}
                           {doc.doc_date && <span>· 📅 {doc.doc_date}</span>}
                         </p>
-                        {isVoided && <p className="text-[9px] text-red-500 font-bold mt-0.5">Anulado por {doc.voided_by} · Motivo: "{doc.void_reason}"</p>}
+                        {isVoided && <p className="text-[12px] text-red-500 font-bold mt-0.5">Anulado por {doc.voided_by} · Motivo: "{doc.void_reason}"</p>}
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
                       <div className="text-right">
                         <p className={`text-lg font-black ${isVoided?'text-red-400':'text-slate-800'}`}>{Number(doc.total_qty).toLocaleString()}</p>
-                        <p className="text-[9px] text-slate-400 uppercase font-bold">unidades</p>
+                        <p className="text-[12px] text-slate-500 uppercase font-bold">unidades</p>
                       </div>
                       {canVoid && (
-                        <button onClick={e=>{e.stopPropagation();setVoidModal({doc});setVoidReason('');}} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1 transition-colors">
+                        <button onClick={e=>{e.stopPropagation();setVoidModal({doc});setVoidReason('');}} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 px-3 py-1.5 rounded-xl text-[12px] font-black uppercase flex items-center gap-1 transition-colors">
                           <XCircle size={11}/> {isAdmin?'Anular':'Solicitar Anulación'}
                         </button>
                       )}
-                      <ChevronRight size={16} className={`text-slate-400 transition-transform ${expandedHistoryDoc===doc.id?'rotate-90':''}`}/>
+                      <ChevronRight size={16} className={`text-slate-500 transition-transform ${expandedHistoryDoc===doc.id?'rotate-90':''}`}/>
                     </div>
                   </div>
                   {expandedHistoryDoc === doc.id && (
                     <div className="border-t border-slate-100 bg-slate-50 p-4">
                       <table className="w-full text-left">
-                        <thead><tr><th className="p-2 text-[9px] font-black text-slate-400 uppercase">SKU</th><th className="p-2 text-[9px] font-black text-slate-400 uppercase">Descripción</th><th className="p-2 text-center text-[9px] font-black text-slate-400 uppercase">Cantidad</th><th className="p-2 text-[9px] font-black text-slate-400 uppercase">Detalle</th></tr></thead>
+                        <thead><tr><th className="p-2 text-[12px] font-black text-slate-500 uppercase">SKU</th><th className="p-2 text-[12px] font-black text-slate-500 uppercase">Descripción</th><th className="p-2 text-center text-[12px] font-black text-slate-500 uppercase">Cantidad</th><th className="p-2 text-[12px] font-black text-slate-500 uppercase">Detalle</th></tr></thead>
                         <tbody className="divide-y divide-slate-100">
                           {JSON.parse(doc.items_json||'[]').map((item,i) => (
                             <tr key={i} className="bg-white hover:bg-slate-50">
                               <td className="p-2 text-xs font-black text-slate-800 uppercase">{item.sku}</td>
-                              <td className="p-2 text-[10px] text-slate-500 truncate max-w-[200px]">{item.desc||'-'}</td>
+                              <td className="p-2 text-[12px] text-slate-500 truncate max-w-[200px]">{item.desc||'-'}</td>
                               <td className="p-2 text-center font-black text-slate-700">{item.qty||item.qtyToPick||'-'}</td>
-                              <td className="p-2 text-[9px] text-slate-400">{item.location_id||item.lpnId||'-'}</td>
+                              <td className="p-2 text-[12px] text-slate-500">{item.location_id||item.lpnId||'-'}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -181,7 +181,7 @@ export default function DocHistoryTab({
                 </div>
               );
             })}
-            {docHistory.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400"><History className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">Usa los filtros y presiona Buscar</p></div>}
+            {docHistory.length === 0 && <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-500"><History className="w-12 h-12 mx-auto mb-3 opacity-50"/><p className="font-black uppercase tracking-widest text-xs">Usa los filtros y presiona Buscar</p></div>}
           </div>
         </>
       )}
@@ -193,27 +193,27 @@ export default function DocHistoryTab({
             <div className="bg-red-600 rounded-t-3xl px-6 py-5 flex items-center justify-between">
               <div>
                 <p className="text-white font-black uppercase tracking-tight flex items-center gap-2"><XCircle size={18}/> {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Documento':'Solicitar Anulación'}</p>
-                <p className="text-red-200 text-[11px] mt-0.5 uppercase font-bold">[{voidModal.doc.doc_type||voidModal.doc.module}] {voidModal.doc.doc_num}</p>
+                <p className="text-red-200 text-[13px] mt-0.5 uppercase font-bold">[{voidModal.doc.doc_type||voidModal.doc.module}] {voidModal.doc.doc_num}</p>
               </div>
               <button onClick={()=>setVoidModal(null)} className="text-white/70 hover:text-white"><X size={18}/></button>
             </div>
             <div className="p-6 space-y-4">
               {!['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[11px] text-amber-800 font-bold">
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[13px] text-amber-800 font-bold">
                   ⚠️ No tienes permisos para anular directamente. Se enviará una solicitud a un administrador para su aprobación.
                 </div>
               )}
               {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
-                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-[11px] text-red-800 font-bold">
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-[13px] text-red-800 font-bold">
                   ⚠️ Esta acción {voidModal.doc.module==='receive'?'eliminará los LPNs creados en esta recepción':'restaurará las cantidades despachadas al inventario'}. No se puede deshacer.
                 </div>
               )}
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Motivo de la anulación *</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest block mb-2">Motivo de la anulación *</label>
                 <textarea rows={3} value={voidReason} onChange={e=>setVoidReason(e.target.value)} placeholder="Describe el motivo de la anulación..." className="w-full border-2 border-slate-200 focus:border-red-400 rounded-xl px-4 py-3 text-sm font-medium outline-none resize-none"/>
               </div>
               <div className="flex gap-3">
-                <button onClick={()=>setVoidModal(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl py-3 font-black uppercase text-[10px] transition-colors">Cancelar</button>
+                <button onClick={()=>setVoidModal(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl py-3 font-black uppercase text-[12px] transition-colors">Cancelar</button>
                 <button disabled={!voidReason.trim()} onClick={async()=>{
                   const isAdmin = ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role);
                   const endpoint = isAdmin
@@ -228,7 +228,7 @@ export default function DocHistoryTab({
                     const res=await apiFetch(`${host}/api/document-history?${params}`); const d=await res.json(); setDocHistory(Array.isArray(d)?d:[]);
                     if(isAdmin) fetchData();
                   } else {const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                }} className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl py-3 font-black uppercase text-[10px] transition-colors flex items-center justify-center gap-2">
+                }} className="flex-1 bg-red-600 hover:bg-red-700 disabled:opacity-40 text-white rounded-xl py-3 font-black uppercase text-[12px] transition-colors flex items-center justify-center gap-2">
                   <XCircle size={14}/> {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role)?'Anular Ahora':'Enviar Solicitud'}
                 </button>
               </div>

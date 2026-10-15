@@ -29,7 +29,7 @@ const ESTADO_CFG = {
 const EstadoBadge = ({ estado }) => {
   const cfg = ESTADO_CFG[estado] || ESTADO_CFG.SIN_DATOS;
   return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${cfg.cls}`}>
+    <span className={`inline-block px-2 py-0.5 rounded-full text-[12px] font-black uppercase whitespace-nowrap ${cfg.cls}`}>
       {cfg.label}
     </span>
   );
@@ -39,7 +39,7 @@ const RESUMEN_ICONS = {
   ACTIVO:    { icon: CheckCircle2, color: 'text-emerald-500' },
   LENTO:     { icon: Clock,        color: 'text-amber-500'   },
   ESTANCADO: { icon: AlertTriangle,color: 'text-red-500'     },
-  SIN_DATOS: { icon: HelpCircle,   color: 'text-slate-400'   },
+  SIN_DATOS: { icon: HelpCircle,   color: 'text-slate-500'   },
 };
 
 export default function SkuMovementTab({ apiFetch, host, clients = [], currentUser }) {
@@ -114,19 +114,19 @@ export default function SkuMovementTab({ apiFetch, host, clients = [], currentUs
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-3">
+        <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-3">
           <Activity className="w-7 h-7 text-indigo-600"/>
           Movimiento por SKU
         </h1>
         <div className="flex items-center gap-2">
           {data?.length > 0 && (
             <button onClick={exportExcel}
-              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2">
+              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2">
               <Download size={12}/> Excel
             </button>
           )}
           <button onClick={load} disabled={loading}
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-sm">
+            className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 shadow-sm">
             <RefreshCcw size={12} className={loading ? 'animate-spin' : ''}/>
             {loading ? 'Cargando…' : 'Generar'}
           </button>
@@ -140,7 +140,7 @@ export default function SkuMovementTab({ apiFetch, host, clients = [], currentUs
           {/* Selector cliente */}
           {clients.length > 0 && (
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1">
+              <label className="block text-[12px] font-black text-slate-500 uppercase mb-1 flex items-center gap-1">
                 <Users size={9}/> Cliente
               </label>
               <select value={clientFilter}
@@ -154,7 +154,7 @@ export default function SkuMovementTab({ apiFetch, host, clients = [], currentUs
 
           {/* Umbral de días (siempre visible para el query) */}
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1">
+            <label className="block text-[12px] font-black text-slate-500 uppercase mb-1 flex items-center gap-1">
               <Clock size={9}/> Días para marcar estancado
               {!isJefeOrAbove && <span className="text-slate-300 ml-1">(solo lectura)</span>}
             </label>
@@ -172,16 +172,16 @@ export default function SkuMovementTab({ apiFetch, host, clients = [], currentUs
           {isJefeOrAbove && (
             <div className="flex flex-col justify-end">
               <button onClick={saveConfig} disabled={savingCfg || !staleDays}
-                className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-900 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-colors">
+                className="flex items-center justify-center gap-2 bg-slate-700 hover:bg-slate-900 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase transition-colors">
                 <Save size={11}/> {savingCfg ? 'Guardando…' : 'Guardar como default'}
               </button>
-              {cfgMsg && <p className="text-[10px] mt-1 text-slate-500">{cfgMsg}</p>}
+              {cfgMsg && <p className="text-[12px] mt-1 text-slate-500">{cfgMsg}</p>}
             </div>
           )}
         </div>
 
         {data && (
-          <p className="text-[10px] text-slate-400 font-bold">
+          <p className="text-[12px] text-slate-500 font-bold">
             Umbral aplicado: <span className="text-indigo-600 font-black">{threshold} días</span>
             {' · '}LENTO ≥ {Math.floor(threshold / 2)}d · ESTANCADO ≥ {threshold}d
           </p>
@@ -200,7 +200,7 @@ export default function SkuMovementTab({ apiFetch, host, clients = [], currentUs
                 <Ico className={`w-8 h-8 ${color} flex-shrink-0`}/>
                 <div>
                   <p className="text-2xl font-black text-slate-800">{count}</p>
-                  <p className={`text-[10px] font-black uppercase ${color}`}>{cfg.label}</p>
+                  <p className={`text-[12px] font-black uppercase ${color}`}>{cfg.label}</p>
                 </div>
               </div>
             );
@@ -212,18 +212,18 @@ export default function SkuMovementTab({ apiFetch, host, clients = [], currentUs
       {data === null ? (
         <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-14 text-center">
           <Activity className="w-10 h-10 mx-auto mb-3 text-slate-300"/>
-          <p className="font-black uppercase tracking-widest text-xs text-slate-400">
+          <p className="font-black uppercase tracking-widest text-xs text-slate-500">
             Selecciona filtros y presiona Generar
           </p>
         </div>
       ) : data.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center text-slate-400 font-bold text-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center text-slate-500 font-bold text-sm">
           Sin SKUs con stock para los filtros seleccionados.
         </div>
       ) : (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3 border-b border-slate-100">
-            <span className="text-[10px] font-black uppercase text-slate-500">
+            <span className="text-[12px] font-black uppercase text-slate-500">
               {data.length} SKUs · umbral {threshold}d
             </span>
           </div>
@@ -237,7 +237,7 @@ export default function SkuMovementTab({ apiFetch, host, clients = [], currentUs
                     'Último despacho', 'Días s/ desp.',
                     'Días sin mov.', 'Estado',
                   ].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">
+                    <th key={h} className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">
                       {h}
                     </th>
                   ))}
@@ -248,7 +248,7 @@ export default function SkuMovementTab({ apiFetch, host, clients = [], currentUs
                   <tr key={i} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
                       <div className="font-bold text-slate-700">{row.client_name || row.client_id || '—'}</div>
-                      <div className="text-slate-400 font-mono text-[10px]">{row.client_id}</div>
+                      <div className="text-slate-500 font-mono text-[12px]">{row.client_id}</div>
                     </td>
                     <td className="px-4 py-3 font-mono text-xs font-bold text-slate-800 whitespace-nowrap">{row.sku}</td>
                     <td className="px-4 py-3 text-xs text-slate-600 max-w-[180px] truncate">{row.sku_desc || '—'}</td>

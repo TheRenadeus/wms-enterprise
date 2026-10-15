@@ -175,7 +175,7 @@ export default function GuidedTour({
             <div className="p-6 space-y-5">
               <div className="text-center">
                 <span className="text-5xl">{CIERRE.icono}</span>
-                <h2 className="text-xl font-black text-slate-800 mt-2 uppercase tracking-tighter">{CIERRE.titulo}</h2>
+                <h2 className="text-xl font-black text-slate-800 mt-2 tracking-tighter">{CIERRE.titulo}</h2>
                 <p className="text-xs text-slate-500 font-bold mt-1">Completaste las {TOTAL_MISIONES} misiones</p>
               </div>
 
@@ -183,8 +183,8 @@ export default function GuidedTour({
                 {CIERRE.ciclo.map((paso) => (
                   <div key={paso.label} className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 text-center">
                     <div className="text-2xl">{paso.emoji}</div>
-                    <p className="text-[10px] font-black text-emerald-700 uppercase mt-1">{paso.label}</p>
-                    <p className="text-[9px] text-slate-500 mt-0.5 leading-tight">{paso.desc}</p>
+                    <p className="text-[12px] font-black text-emerald-700 uppercase mt-1">{paso.label}</p>
+                    <p className="text-[12px] text-slate-500 mt-0.5 leading-tight">{paso.desc}</p>
                   </div>
                 ))}
               </div>
@@ -196,7 +196,7 @@ export default function GuidedTour({
               {/* Feedback */}
               {!feedbackEnviado ? (
                 <div className="space-y-3">
-                  <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">¿Qué te pareció el tutorial?</p>
+                  <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">¿Qué te pareció el tutorial?</p>
                   <div className="flex gap-2 justify-center">
                     {[1,2,3,4,5].map(n => (
                       <button
@@ -216,7 +216,7 @@ export default function GuidedTour({
                   <button
                     onClick={enviarFeedback}
                     disabled={feedbackBusy || !feedbackMsg.trim()}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 rounded-xl text-[10px] uppercase tracking-widest disabled:opacity-40"
+                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 rounded-xl text-[12px] uppercase tracking-widest disabled:opacity-40"
                   >
                     {feedbackBusy ? 'Enviando…' : '✉ Enviar feedback'}
                   </button>
@@ -231,13 +231,13 @@ export default function GuidedTour({
                 <button
                   onClick={reiniciar}
                   disabled={cargando}
-                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3 rounded-xl text-[10px] uppercase tracking-widest disabled:opacity-50"
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3 rounded-xl text-[12px] uppercase tracking-widest disabled:opacity-50"
                 >
                   {cargando ? 'Reiniciando…' : '🔄 Reiniciar tutorial'}
                 </button>
                 <button
                   onClick={salir}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-xl text-[10px] uppercase tracking-widest"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-xl text-[12px] uppercase tracking-widest"
                 >
                   🚀 Explorar libremente
                 </button>
@@ -252,14 +252,14 @@ export default function GuidedTour({
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-3xl shrink-0">{misionActual.icono}</span>
                   <div className="min-w-0">
-                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest">{misionActual.subtitulo || `Misión ${misionActual.indice + 1} de ${TOTAL_MISIONES}`}</p>
+                    <p className="text-[12px] font-black text-indigo-500 uppercase tracking-widest">{misionActual.subtitulo || `Misión ${misionActual.indice + 1} de ${TOTAL_MISIONES}`}</p>
                     <h2 className="text-lg font-black text-slate-800 tracking-tighter leading-tight">{misionActual.titulo}</h2>
                   </div>
                 </div>
                 <button
                   onClick={salir}
                   title="Salir del tutorial (Esc)"
-                  className="shrink-0 p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
+                  className="shrink-0 p-2 text-slate-500 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
                   aria-label="Cerrar tutorial"
                 >✕</button>
               </div>
@@ -288,7 +288,7 @@ export default function GuidedTour({
                     {misionActual.glosario.map(g => (
                       <div key={g.termino} className="flex items-start gap-2">
                         <span className="text-lg shrink-0">{g.emoji}</span>
-                        <p className="text-[11px] text-slate-600 font-bold leading-snug">
+                        <p className="text-[13px] text-slate-600 font-bold leading-snug">
                           <span className="text-slate-800 font-black">{g.termino}:</span> {g.def}
                         </p>
                       </div>
@@ -301,7 +301,7 @@ export default function GuidedTour({
                   <div className="flex items-center gap-1 flex-wrap pt-1 border-t border-slate-200">
                     {misionActual.ciclo.map((paso, i) => (
                       <React.Fragment key={paso}>
-                        <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg text-[10px] font-black">{paso}</span>
+                        <span className="bg-indigo-100 text-indigo-700 px-2 py-1 rounded-lg text-[12px] font-black">{paso}</span>
                         {i < misionActual.ciclo.length - 1 && <span className="text-slate-300 font-black text-xs">→</span>}
                       </React.Fragment>
                     ))}
@@ -311,12 +311,12 @@ export default function GuidedTour({
 
               {/* Objetivo */}
               <div className={`rounded-2xl p-4 border-2 ${validado ? 'bg-emerald-50 border-emerald-300' : 'bg-amber-50 border-amber-200'}`}>
-                <p className="text-[10px] font-black uppercase tracking-widest mb-1 ${validado ? 'text-emerald-600' : 'text-amber-600'}">
+                <p className="text-[12px] font-black uppercase tracking-widest mb-1 ${validado ? 'text-emerald-600' : 'text-amber-600'}">
                   {validado ? '✅ Objetivo cumplido' : '🎯 Tu misión'}
                 </p>
                 <p className="text-xs font-bold text-slate-700 leading-relaxed">{misionActual.objetivo}</p>
                 {misionActual.hint && !validado && (
-                  <p className="text-[10px] text-slate-500 mt-2 italic">{misionActual.hint}</p>
+                  <p className="text-[12px] text-slate-500 mt-2 italic">{misionActual.hint}</p>
                 )}
               </div>
 
@@ -333,7 +333,7 @@ export default function GuidedTour({
                 {misionActual.tieneAccion && !validado && (
                   <button
                     onClick={() => setYaLoHice(true)}
-                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3 rounded-xl text-[10px] uppercase tracking-widest border border-slate-200"
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-black py-3 rounded-xl text-[12px] uppercase tracking-widest border border-slate-200"
                   >
                     Ya lo hice ✓
                   </button>
@@ -343,7 +343,7 @@ export default function GuidedTour({
                 {misionActual.tieneAccion && (
                   <button
                     onClick={saltar}
-                    className="bg-slate-50 hover:bg-slate-100 text-slate-400 font-black py-3 px-4 rounded-xl text-[10px] uppercase tracking-widest border border-slate-200"
+                    className="bg-slate-50 hover:bg-slate-100 text-slate-500 font-black py-3 px-4 rounded-xl text-[12px] uppercase tracking-widest border border-slate-200"
                     title="Saltar esta misión"
                   >
                     Saltar →
@@ -354,7 +354,7 @@ export default function GuidedTour({
                 <button
                   onClick={reiniciar}
                   disabled={cargando}
-                  className="bg-slate-50 hover:bg-slate-100 text-slate-400 font-black py-3 px-4 rounded-xl text-[10px] uppercase border border-slate-200 disabled:opacity-40"
+                  className="bg-slate-50 hover:bg-slate-100 text-slate-500 font-black py-3 px-4 rounded-xl text-[12px] uppercase border border-slate-200 disabled:opacity-40"
                   title="Reiniciar desde M0 y limpiar el sandbox"
                 >
                   🔄
@@ -364,10 +364,10 @@ export default function GuidedTour({
                 <button
                   onClick={avanzar}
                   disabled={misionActual.tieneAccion && !validado}
-                  className={`flex-[2] font-black py-3 rounded-xl text-[10px] uppercase tracking-widest transition-colors ${
+                  className={`flex-[2] font-black py-3 rounded-xl text-[12px] uppercase tracking-widest transition-colors ${
                     !misionActual.tieneAccion || validado
                       ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-md'
-                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      : 'bg-slate-200 text-slate-500 cursor-not-allowed'
                   }`}
                 >
                   {mision >= TOTAL_MISIONES - 1 ? '🏁 Ver resumen' : 'Siguiente →'}
@@ -375,7 +375,7 @@ export default function GuidedTour({
               </div>
 
               {/* Indicador de sandbox */}
-              <p className="text-[9px] text-center text-slate-400 font-bold">
+              <p className="text-[12px] text-center text-slate-500 font-bold">
                 🎮 Modo sandbox — ningún cambio afecta datos reales · Esc para salir
               </p>
             </div>

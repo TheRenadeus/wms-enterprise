@@ -33,7 +33,7 @@ const TipoBadge = ({ tipo }) => {
   const cfg = TIPO_CFG[tipo] || { label: tipo, icon: RefreshCcw, cls: 'bg-slate-100 text-slate-500 border border-slate-200' };
   const Ico = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase whitespace-nowrap ${cfg.cls}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[12px] font-black uppercase whitespace-nowrap ${cfg.cls}`}>
       <Ico size={9}/>{cfg.label}
     </span>
   );
@@ -115,19 +115,19 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
 
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-3">
+        <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-3">
           <BookOpen className="w-7 h-7 text-violet-600"/>
           Kardex por SKU
         </h1>
         <div className="flex items-center gap-2">
           {data?.movimientos?.length > 0 && (
             <button onClick={exportExcel}
-              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2">
+              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2">
               <Download size={12}/> Excel
             </button>
           )}
           <button onClick={load} disabled={loading || !skuInput.trim()}
-            className="bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow-sm">
+            className="bg-violet-600 hover:bg-violet-700 disabled:opacity-40 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 shadow-sm">
             <RefreshCcw size={12} className={loading ? 'animate-spin' : ''}/>
             {loading ? 'Cargando…' : 'Generar'}
           </button>
@@ -140,7 +140,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
 
           {/* Buscador SKU */}
           <div className="relative md:col-span-2">
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1 flex items-center gap-1">
+            <label className="block text-[12px] font-black text-slate-500 uppercase mb-1 flex items-center gap-1">
               <Search size={9}/> SKU <span className="text-red-400">*</span>
             </label>
             <input
@@ -159,7 +159,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
                     onMouseDown={() => selectSku(s)}
                     className="w-full text-left px-3 py-2 text-xs hover:bg-violet-50 flex items-center justify-between gap-2">
                     <span className="font-mono font-bold text-slate-800">{s.sku}</span>
-                    <span className="text-slate-400 truncate">{s.desc}</span>
+                    <span className="text-slate-500 truncate">{s.desc}</span>
                   </button>
                 ))}
               </div>
@@ -169,7 +169,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
           {/* Cliente */}
           {clients.length > 0 && (
             <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Cliente</label>
+              <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Cliente</label>
               <select value={clientFilter} onChange={e => setClientFilter(e.target.value)}
                 className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-400">
                 <option value="">Todos</option>
@@ -180,7 +180,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
 
           {/* Rango fechas */}
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Desde</label>
+            <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Desde</label>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-400"/>
           </div>
@@ -189,7 +189,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
         {/* Segunda fila: Hasta */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3">
           <div className="md:col-start-4">
-            <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Hasta</label>
+            <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Hasta</label>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
               className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-violet-400"/>
           </div>
@@ -200,7 +200,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
       {data === null && (
         <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl p-14 text-center">
           <BookOpen className="w-10 h-10 mx-auto mb-3 text-slate-300"/>
-          <p className="font-black uppercase tracking-widest text-xs text-slate-400">
+          <p className="font-black uppercase tracking-widest text-xs text-slate-500">
             Selecciona un SKU y presiona Generar
           </p>
         </div>
@@ -212,21 +212,21 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
           {/* Header de resultado */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap items-center gap-6">
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase">SKU</p>
+              <p className="text-[12px] font-black text-slate-500 uppercase">SKU</p>
               <p className="font-mono font-black text-slate-800 text-lg">{data.sku}</p>
               {data.sku_desc && <p className="text-xs text-slate-500 mt-0.5">{data.sku_desc}</p>}
             </div>
             <div className="h-10 w-px bg-slate-200"/>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase">Saldo inicial</p>
+              <p className="text-[12px] font-black text-slate-500 uppercase">Saldo inicial</p>
               <p className="font-mono font-black text-slate-700 text-lg">{fmtN(data.saldo_inicial)}</p>
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase">Saldo final</p>
+              <p className="text-[12px] font-black text-slate-500 uppercase">Saldo final</p>
               <p className="font-mono font-black text-violet-700 text-lg">{fmtN(data.saldo_final)}</p>
             </div>
             <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase">Movimientos</p>
+              <p className="text-[12px] font-black text-slate-500 uppercase">Movimientos</p>
               <p className="font-mono font-black text-slate-700 text-lg">
                 {data.movimientos.length}{data.truncado && <span className="text-amber-500 text-xs ml-1">+</span>}
               </p>
@@ -241,7 +241,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
 
           {/* Tabla */}
           {data.movimientos.length === 0 ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center text-slate-400 font-bold text-sm">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-10 text-center text-slate-500 font-bold text-sm">
               Sin movimientos para este SKU en el período seleccionado.
             </div>
           ) : (
@@ -251,7 +251,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
                       {['Fecha', 'Tipo', 'Documento / Glosa', 'Usuario', 'Entrada', 'Salida', 'Saldo'].map(h => (
-                        <th key={h} className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">
+                        <th key={h} className="text-left px-4 py-3 text-[12px] font-black uppercase tracking-widest text-slate-500 whitespace-nowrap">
                           {h}
                         </th>
                       ))}
@@ -261,13 +261,13 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
 
                     {/* Fila saldo inicial */}
                     <tr className="bg-slate-50">
-                      <td className="px-4 py-3 text-xs text-slate-400 italic">—</td>
+                      <td className="px-4 py-3 text-xs text-slate-500 italic">—</td>
                       <td className="px-4 py-3">
-                        <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-slate-200 text-slate-600 whitespace-nowrap">
+                        <span className="inline-block px-2 py-0.5 rounded-full text-[12px] font-black uppercase bg-slate-200 text-slate-600 whitespace-nowrap">
                           Saldo inicial
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-xs text-slate-400 italic">
+                      <td className="px-4 py-3 text-xs text-slate-500 italic">
                         {dateFrom ? `Acumulado hasta ${new Date(dateFrom).toLocaleDateString('es-CL')}` : 'Inicio del histórico'}
                       </td>
                       <td className="px-4 py-3"/>
@@ -287,7 +287,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
                         <td className="px-4 py-3 text-xs text-slate-600 max-w-[240px] truncate" title={m.glosa}>
                           {m.glosa || <span className="text-slate-300 italic">sin glosa</span>}
                         </td>
-                        <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{m.username || '—'}</td>
+                        <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{m.username || '—'}</td>
                         <td className="px-4 py-3 font-mono text-xs font-bold text-emerald-600 text-right whitespace-nowrap">
                           {m.es_reubicacion ? <span className="text-slate-300">—</span>
                             : m.entrada > 0 ? `+${fmtN(m.entrada)}` : ''}
@@ -298,7 +298,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
                         </td>
                         <td className="px-4 py-3 font-mono font-black text-slate-800 text-right whitespace-nowrap">
                           {m.es_reubicacion
-                            ? <span className="text-slate-400 font-normal">{fmtN(m.saldo)}</span>
+                            ? <span className="text-slate-500 font-normal">{fmtN(m.saldo)}</span>
                             : fmtN(m.saldo)}
                         </td>
                       </tr>
@@ -326,7 +326,7 @@ export default function KardexTab({ apiFetch, host, clients = [], skuList = [], 
                             Diferencia: {data.diferencia > 0 ? '+' : ''}{fmtN(data.diferencia)}
                           </span>
                           {!difOk && (
-                            <span className="text-[10px] text-amber-600 ml-1">
+                            <span className="text-[12px] text-amber-600 ml-1">
                               — El saldo según movimientos no cuadra con el stock actual
                               (puede haber cargas iniciales no registradas en audit_log).
                             </span>

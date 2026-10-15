@@ -1716,7 +1716,7 @@ export default function App() {
     if (opsClientScope === 'all') return null;
     if (opsClientScope === 'none') {
       return (
-        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[11px] font-bold text-red-700 max-w-4xl mx-auto">
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[13px] font-bold text-red-700 max-w-4xl mx-auto">
           <ShieldAlert size={14}/>
           <span>Sin clientes asignados. Contactá al administrador para poder crear operaciones.</span>
         </div>
@@ -1724,7 +1724,7 @@ export default function App() {
     }
     const items = (currentUser?.assigned_clients || []).map(c => typeof c === 'string' ? { id: c, name: c } : c);
     return (
-      <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[11px] font-bold text-indigo-700 max-w-4xl mx-auto">
+      <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[13px] font-bold text-indigo-700 max-w-4xl mx-auto">
         <Info size={14}/>
         <span>Operando sobre: </span>
         <div className="flex flex-wrap gap-1.5">
@@ -2055,28 +2055,28 @@ export default function App() {
     const setPick = (lpnId, val) => setSrcState(prev => { const cur = prev[c.component_sku] || { mode: 'manual', picks: {} }; return { ...prev, [c.component_sku]: { ...cur, picks: { ...cur.picks, [lpnId]: val } } }; });
     const sum = Object.values(st.picks || {}).reduce((s, q) => s + (parseFloat(q) || 0), 0);
     const ok = Math.abs(sum - c.needed) < 1e-6;
-    const tBtn = (active) => `text-[9px] font-black uppercase px-2 py-1 rounded-lg border ${active ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}`;
+    const tBtn = (active) => `text-[12px] font-black uppercase px-2 py-1 rounded-lg border ${active ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-200'}`;
     return (
       <div className="mt-2 border-t border-slate-100 pt-2">
         <div className="flex items-center gap-2 mb-2 flex-wrap">
-          <span className="text-[9px] font-black text-slate-400 uppercase">Origen:</span>
+          <span className="text-[12px] font-black text-slate-500 uppercase">Origen:</span>
           <button type="button" onClick={()=>setMode('auto')} className={tBtn(st.mode !== 'manual')}>Automático (FEFO)</button>
           <button type="button" onClick={()=>setMode('manual')} className={tBtn(st.mode === 'manual')}>Elegir origen</button>
-          {st.mode === 'manual' && <span className={`text-[10px] font-black ml-auto ${ok ? 'text-emerald-600' : 'text-red-500'}`}>{sum} / {c.needed}</span>}
+          {st.mode === 'manual' && <span className={`text-[12px] font-black ml-auto ${ok ? 'text-emerald-600' : 'text-red-500'}`}>{sum} / {c.needed}</span>}
         </div>
         {st.mode === 'manual' && (
           <div className="space-y-1">
             {(c.lpns || []).map(l => (
-              <div key={l.id} className="flex items-center gap-2 text-[10px] bg-slate-50 rounded-lg px-2 py-1">
+              <div key={l.id} className="flex items-center gap-2 text-[12px] bg-slate-50 rounded-lg px-2 py-1">
                 <span className="font-mono font-bold text-slate-600 truncate max-w-[90px]" title={l.id}>{l.id}</span>
                 <span className="text-slate-500">📍 {l.location_id || '—'}</span>
                 {l.batch_number && <span className="text-amber-600 font-bold">Lote {l.batch_number}</span>}
                 {l.serial_number && <span className="text-violet-600 font-bold">S/N {l.serial_number}</span>}
-                <span className="text-slate-400 ml-auto">disp {parseFloat(l.qty)}</span>
+                <span className="text-slate-500 ml-auto">disp {parseFloat(l.qty)}</span>
                 <input type="number" min="0" max={parseFloat(l.qty)} step="0.01" value={st.picks[l.id] || ''} onChange={e=>setPick(l.id, e.target.value)} placeholder="0" className="w-16 border border-slate-200 rounded px-1.5 py-1 text-center font-black outline-none focus:border-slate-500"/>
               </div>
             ))}
-            {(c.lpns || []).length === 0 && <p className="text-[10px] text-slate-400">Sin LPN disponibles para este componente.</p>}
+            {(c.lpns || []).length === 0 && <p className="text-[12px] text-slate-500">Sin LPN disponibles para este componente.</p>}
           </div>
         )}
       </div>
@@ -2126,12 +2126,12 @@ export default function App() {
         <GlobalStyles />
         <div className="bg-white p-10 rounded-3xl shadow-2xl w-full max-w-md text-center animate-in zoom-in-95">
           <div className="p-4 bg-red-100 rounded-full w-fit mx-auto mb-6"><ShieldAlert className="w-12 h-12 text-red-600"/></div>
-          <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter mb-2">Sistema en Mantenimiento</h1>
+          <h1 className="text-2xl font-black text-slate-800 tracking-tighter mb-2">Sistema en Mantenimiento</h1>
           <p className="text-slate-500 font-medium mb-6">{maintenanceMessage || 'El sistema está temporalmente fuera de servicio.'}</p>
           <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Por favor, intente más tarde</p>
+            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Por favor, intente más tarde</p>
           </div>
-          <button onClick={handleLogout} className="mt-6 text-[10px] font-black text-slate-400 hover:text-red-500 uppercase tracking-widest transition-colors">Cerrar Sesión</button>
+          <button onClick={handleLogout} className="mt-6 text-[12px] font-black text-slate-500 hover:text-red-500 uppercase tracking-widest transition-colors">Cerrar Sesión</button>
         </div>
       </div>
     );
@@ -2162,15 +2162,15 @@ export default function App() {
           <GlobalStyles />
           <div className="bg-white p-8 rounded-3xl shadow-2xl w-full max-w-sm animate-in zoom-in-95">
             <div className="flex items-center mb-8"><Box className="w-10 h-10 text-indigo-600 mr-3"/><h1 className="text-2xl font-black tracking-tighter text-slate-800">Portal <span className="text-indigo-600">3PL</span></h1></div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">Acceso exclusivo para clientes</p>
+            <p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest mb-6">Acceso exclusivo para clientes</p>
             {portalLoginError && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs font-bold mb-4 border border-red-200">{portalLoginError}</div>}
             <form onSubmit={handlePortalLogin} className="space-y-4">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">ID de Cliente</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">ID de Cliente</label>
                 <input type="text" required value={portalLoginForm.client_id} onChange={e=>setPortalLoginForm({...portalLoginForm,client_id:e.target.value.toUpperCase()})} className="w-full mt-1 border-2 border-slate-200 rounded-xl px-4 py-3 font-black outline-none focus:border-indigo-500 uppercase" placeholder="Ej: CLI-001"/>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contraseña</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Contraseña</label>
                 <input type="password" required value={portalLoginForm.password} onChange={e=>setPortalLoginForm({...portalLoginForm,password:e.target.value})} className="w-full mt-1 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-indigo-500"/>
               </div>
               <button type="submit" className="w-full bg-indigo-600 text-white font-black py-4 rounded-xl shadow-lg shadow-indigo-200 uppercase text-xs tracking-widest hover:bg-indigo-700 transition-colors mt-4">Ingresar al Portal</button>
@@ -2190,19 +2190,19 @@ export default function App() {
       <div className="min-h-screen bg-slate-50 flex flex-col">
         <GlobalStyles />
         <header className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shadow-lg">
-          <div className="flex items-center"><Box className="w-7 h-7 text-indigo-400 mr-2"/><span className="font-black tracking-tighter text-lg">Portal <span className="text-indigo-400">3PL</span></span><span className="ml-3 text-[10px] font-black bg-indigo-600 px-2 py-1 rounded-full uppercase">{portalUser.client_id}</span></div>
-          <button onClick={portalLogout} className="text-[10px] font-black text-slate-400 hover:text-red-400 uppercase tracking-widest transition-colors">Cerrar Sesión</button>
+          <div className="flex items-center"><Box className="w-7 h-7 text-indigo-400 mr-2"/><span className="font-black tracking-tighter text-lg">Portal <span className="text-indigo-400">3PL</span></span><span className="ml-3 text-[12px] font-black bg-indigo-600 px-2 py-1 rounded-full uppercase">{portalUser.client_id}</span></div>
+          <button onClick={portalLogout} className="text-[12px] font-black text-slate-400 hover:text-red-400 uppercase tracking-widest transition-colors">Cerrar Sesión</button>
         </header>
         <div className="flex gap-1 px-6 pt-4 border-b border-slate-200 bg-white">
           {[['inventory','Inventario'],['movements','Movimientos'],['reports','Reportes']].map(([id,label])=>(
-            <button key={id} onClick={()=>setPortalTab(id)} className={`px-4 py-2 text-[10px] font-black uppercase tracking-widest rounded-t-xl transition-colors ${portalTab===id?'bg-indigo-600 text-white':'text-slate-500 hover:text-slate-800'}`}>{label}</button>
+            <button key={id} onClick={()=>setPortalTab(id)} className={`px-4 py-2 text-[12px] font-black uppercase tracking-widest rounded-t-xl transition-colors ${portalTab===id?'bg-indigo-600 text-white':'text-slate-400 hover:text-slate-800'}`}>{label}</button>
           ))}
         </div>
         <main className="flex-1 p-6 max-w-7xl mx-auto w-full">
           {portalTab === 'inventory' && (
             <div className="space-y-4 animate-in fade-in">
               <div className="flex justify-between items-center flex-wrap gap-2">
-                <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Inventario Actual</h2>
+                <h2 className="text-xl font-black text-slate-800 tracking-tighter">Inventario Actual</h2>
                 <div className="flex gap-2 items-center flex-wrap">
                   <input
                     type="text"
@@ -2212,34 +2212,34 @@ export default function App() {
                     onKeyDown={e => e.key === 'Enter' && loadPortalData(portalUser.client_id, portalSkuFilter)}
                     className="border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-400 w-40"
                   />
-                  <button onClick={()=>loadPortalData(portalUser.client_id, portalSkuFilter)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
-                  <button onClick={portalCsvExport} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><FileText size={12}/> Exportar CSV</button>
+                  <button onClick={()=>loadPortalData(portalUser.client_id, portalSkuFilter)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
+                  <button onClick={portalCsvExport} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><FileText size={12}/> Exportar CSV</button>
                 </div>
               </div>
               {portalReports && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[10px] font-black text-slate-400 uppercase">Unidades Totales</p><p className="text-3xl font-black text-slate-800 mt-1">{Number(portalReports.total_units||0).toLocaleString()}</p></div>
-                  <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[10px] font-black text-slate-400 uppercase">LPNs Activos</p><p className="text-3xl font-black text-slate-800 mt-1">{Number(portalReports.total_lpns||0).toLocaleString()}</p></div>
-                  <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[10px] font-black text-slate-400 uppercase">SKUs Distintos</p><p className="text-3xl font-black text-slate-800 mt-1">{Number(portalReports.total_skus||0).toLocaleString()}</p></div>
-                  <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[10px] font-black text-slate-400 uppercase">Recepciones (30d)</p><p className="text-3xl font-black text-slate-800 mt-1">{Number(portalReports.receipts_30d||0).toLocaleString()}</p></div>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[12px] font-black text-slate-500 uppercase">Unidades Totales</p><p className="text-3xl font-black text-slate-800 mt-1">{Number(portalReports.total_units||0).toLocaleString()}</p></div>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[12px] font-black text-slate-500 uppercase">LPNs Activos</p><p className="text-3xl font-black text-slate-800 mt-1">{Number(portalReports.total_lpns||0).toLocaleString()}</p></div>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[12px] font-black text-slate-500 uppercase">SKUs Distintos</p><p className="text-3xl font-black text-slate-800 mt-1">{Number(portalReports.total_skus||0).toLocaleString()}</p></div>
+                  <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[12px] font-black text-slate-500 uppercase">Recepciones (30d)</p><p className="text-3xl font-black text-slate-800 mt-1">{Number(portalReports.receipts_30d||0).toLocaleString()}</p></div>
                 </div>
               )}
               <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-50 border-b"><tr><th className="p-4 text-[10px] font-black text-slate-400 uppercase">SKU</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Descripción</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">LPN</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Lote</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Ubicación</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Estado</th><th className="p-4 text-right text-[10px] font-black text-slate-400 uppercase">Qty</th></tr></thead>
+                  <thead className="bg-slate-50 border-b"><tr><th className="p-4 text-[12px] font-black text-slate-500 uppercase">SKU</th><th className="p-4 text-[12px] font-black text-slate-500 uppercase">Descripción</th><th className="p-4 text-[12px] font-black text-slate-500 uppercase">LPN</th><th className="p-4 text-[12px] font-black text-slate-500 uppercase">Lote</th><th className="p-4 text-[12px] font-black text-slate-500 uppercase">Ubicación</th><th className="p-4 text-[12px] font-black text-slate-500 uppercase">Estado</th><th className="p-4 text-right text-[12px] font-black text-slate-500 uppercase">Qty</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {portalInv.map((i,idx)=>(
                       <tr key={idx} className="hover:bg-slate-50">
                         <td className="p-4 font-black text-xs uppercase text-indigo-700">{i.sku}</td>
                         <td className="p-4 text-xs text-slate-600">{i.desc}</td>
-                        <td className="p-4 font-mono text-[10px] text-slate-500">{i.lpn}</td>
-                        <td className="p-4 text-[10px] text-slate-400">{i.lot_number||'—'}</td>
-                        <td className="p-4"><span className="bg-slate-100 px-2 py-1 rounded-lg font-mono text-[10px] font-bold text-slate-700">{i.location_id||'—'}</span></td>
-                        <td className="p-4"><span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[9px] font-black uppercase">{i.status||'DISPONIBLE'}</span></td>
+                        <td className="p-4 font-mono text-[12px] text-slate-500">{i.lpn}</td>
+                        <td className="p-4 text-[12px] text-slate-500">{i.lot_number||'—'}</td>
+                        <td className="p-4"><span className="bg-slate-100 px-2 py-1 rounded-lg font-mono text-[12px] font-bold text-slate-700">{i.location_id||'—'}</span></td>
+                        <td className="p-4"><span className="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-[12px] font-black uppercase">{i.status||'DISPONIBLE'}</span></td>
                         <td className="p-4 text-right font-black text-slate-800">{i.qty}</td>
                       </tr>
                     ))}
-                    {portalInv.length===0 && <tr><td colSpan="7" className="p-8 text-center text-slate-400 text-xs">Sin inventario disponible</td></tr>}
+                    {portalInv.length===0 && <tr><td colSpan="7" className="p-8 text-center text-slate-500 text-xs">Sin inventario disponible</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -2247,21 +2247,21 @@ export default function App() {
           )}
           {portalTab === 'movements' && (
             <div className="space-y-4 animate-in fade-in">
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Últimos Movimientos</h2>
+              <h2 className="text-xl font-black text-slate-800 tracking-tighter">Últimos Movimientos</h2>
               <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-50 border-b"><tr><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Fecha</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Tipo</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">SKU</th><th className="p-4 text-[10px] font-black text-slate-400 uppercase">Documento</th><th className="p-4 text-right text-[10px] font-black text-slate-400 uppercase">Qty</th></tr></thead>
+                  <thead className="bg-slate-50 border-b"><tr><th className="p-4 text-[12px] font-black text-slate-500 uppercase">Fecha</th><th className="p-4 text-[12px] font-black text-slate-500 uppercase">Tipo</th><th className="p-4 text-[12px] font-black text-slate-500 uppercase">SKU</th><th className="p-4 text-[12px] font-black text-slate-500 uppercase">Documento</th><th className="p-4 text-right text-[12px] font-black text-slate-500 uppercase">Qty</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {portalMovements.map((m,i)=>(
                       <tr key={i} className="hover:bg-slate-50">
-                        <td className="p-4 text-[10px] text-slate-400">{new Date(m.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
-                        <td className="p-4"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${m.movement_type==='INBOUND'?'bg-emerald-100 text-emerald-700':'bg-orange-100 text-orange-700'}`}>{m.movement_type}</span></td>
+                        <td className="p-4 text-[12px] text-slate-500">{new Date(m.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
+                        <td className="p-4"><span className={`px-2 py-0.5 rounded text-[12px] font-black uppercase ${m.movement_type==='INBOUND'?'bg-emerald-100 text-emerald-700':'bg-orange-100 text-orange-700'}`}>{m.movement_type}</span></td>
                         <td className="p-4 font-black text-xs uppercase text-slate-700">{m.sku}</td>
                         <td className="p-4 text-xs text-slate-500">{m.doc_num||'—'}</td>
                         <td className="p-4 text-right font-black text-slate-800">{m.qty}</td>
                       </tr>
                     ))}
-                    {portalMovements.length===0 && <tr><td colSpan="5" className="p-8 text-center text-slate-400 text-xs">Sin movimientos recientes</td></tr>}
+                    {portalMovements.length===0 && <tr><td colSpan="5" className="p-8 text-center text-slate-500 text-xs">Sin movimientos recientes</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -2269,16 +2269,16 @@ export default function App() {
           )}
           {portalTab === 'reports' && portalReports && (
             <div className="space-y-6 animate-in fade-in">
-              <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Reporte de Actividad</h2>
+              <h2 className="text-xl font-black text-slate-800 tracking-tighter">Reporte de Actividad</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[10px] font-black text-slate-400 uppercase">Unidades Totales</p><p className="text-4xl font-black text-indigo-700 mt-1">{Number(portalReports.total_units||0).toLocaleString()}</p></div>
-                <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[10px] font-black text-slate-400 uppercase">LPNs Activos</p><p className="text-4xl font-black text-slate-800 mt-1">{Number(portalReports.total_lpns||0).toLocaleString()}</p></div>
-                <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[10px] font-black text-slate-400 uppercase">SKUs Distintos</p><p className="text-4xl font-black text-slate-800 mt-1">{Number(portalReports.total_skus||0).toLocaleString()}</p></div>
-                <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[10px] font-black text-slate-400 uppercase">Recepciones 30d</p><p className="text-4xl font-black text-slate-800 mt-1">{Number(portalReports.receipts_30d||0).toLocaleString()}</p></div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[12px] font-black text-slate-500 uppercase">Unidades Totales</p><p className="text-4xl font-black text-indigo-700 mt-1">{Number(portalReports.total_units||0).toLocaleString()}</p></div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[12px] font-black text-slate-500 uppercase">LPNs Activos</p><p className="text-4xl font-black text-slate-800 mt-1">{Number(portalReports.total_lpns||0).toLocaleString()}</p></div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[12px] font-black text-slate-500 uppercase">SKUs Distintos</p><p className="text-4xl font-black text-slate-800 mt-1">{Number(portalReports.total_skus||0).toLocaleString()}</p></div>
+                <div className="bg-white rounded-2xl border border-slate-200 p-5"><p className="text-[12px] font-black text-slate-500 uppercase">Recepciones 30d</p><p className="text-4xl font-black text-slate-800 mt-1">{Number(portalReports.receipts_30d||0).toLocaleString()}</p></div>
               </div>
               {(portalReports.top_skus||[]).length > 0 && (
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                  <h3 className="text-sm font-black text-slate-700 uppercase tracking-tighter mb-4">Top SKUs por Unidades</h3>
+                  <h3 className="text-sm font-black text-slate-700 tracking-tighter mb-4">Top SKUs por Unidades</h3>
                   <div className="space-y-3">
                     {portalReports.top_skus.map(s=>(
                       <div key={s.sku} className="flex items-center gap-4">
@@ -2315,26 +2315,26 @@ export default function App() {
           <div className="flex items-center justify-between mb-8">
             <div className="flex items-center">
               <Box className="w-10 h-10 text-indigo-600 mr-3" />
-              <h1 className="text-3xl font-black tracking-tighter text-slate-800 uppercase">{systemConfig.company_name || 'WMS Enterprise'}</h1>
+              <h1 className="text-3xl font-black tracking-tighter text-slate-800">{systemConfig.company_name || 'WMS Enterprise'}</h1>
             </div>
-            <button onClick={()=>setShowNetworkSettings(!showNetworkSettings)} className="p-2 text-slate-400 hover:text-indigo-600 transition-colors"><Settings2 size={18}/></button>
+            <button onClick={()=>setShowNetworkSettings(!showNetworkSettings)} aria-label="Configuración de red" title="Configuración de red" className="p-2 text-slate-500 hover:text-indigo-600 transition-colors"><Settings2 size={18}/></button>
           </div>
 
           {showNetworkSettings && (
              <div className="mb-6 p-4 bg-slate-50 rounded-xl border-2 border-indigo-100 animate-in slide-in-from-top-2">
-                <p className="text-[10px] font-black text-indigo-600 uppercase mb-2 flex items-center"><Globe size={10} className="mr-1"/> Servidor Externo / Túnel</p>
+                <p className="text-[12px] font-black text-indigo-600 uppercase mb-2 flex items-center"><Globe size={10} className="mr-1"/> Servidor Externo / Túnel</p>
                 <input type="text" value={customHost} onChange={e=>setCustomHost(e.target.value)} placeholder="Ej: http://tu-api.ngrok.app" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-indigo-500" />
-                <p className="text-[8px] text-slate-400 mt-2">Deja en blanco para usar red local.</p>
+                <p className="text-[11px] text-slate-500 mt-2">Deja en blanco para usar red local.</p>
              </div>
           )}
 
           {preLoginMaintenance.active && (
             <div className="bg-red-50 border-2 border-red-200 text-red-700 p-4 rounded-2xl mb-5 animate-in slide-in-from-top-2">
-              <p className="text-[10px] font-black uppercase tracking-widest flex items-center gap-2 mb-1">
+              <p className="text-[12px] font-black uppercase tracking-widest flex items-center gap-2 mb-1">
                 <ShieldAlert size={14}/> Sistema en mantenimiento
               </p>
               <p className="text-xs font-bold">{preLoginMaintenance.message}</p>
-              <p className="text-[10px] font-bold text-red-500 mt-2">Solo los SUPERADMIN podrán acceder.</p>
+              <p className="text-[12px] font-bold text-red-500 mt-2">Solo los SUPERADMIN podrán acceder.</p>
             </div>
           )}
           {msg && <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs font-bold mb-4 text-center border border-red-200">{msg.text}</div>}
@@ -2347,7 +2347,7 @@ export default function App() {
                   <span className="text-2xl">🎮</span>
                   <div>
                     <p className="text-sm font-black uppercase tracking-tight">Sandbox Interactivo</p>
-                    <p className="text-[10px] font-medium text-white/80 mt-0.5">Explora el WMS completo sin crear cuenta</p>
+                    <p className="text-[12px] font-medium text-white/80 mt-0.5">Explora el WMS completo sin crear cuenta</p>
                   </div>
                 </div>
                 <div className="bg-white/20 rounded-full w-8 h-8 flex items-center justify-center group-hover:bg-white/30 transition-colors">
@@ -2359,14 +2359,14 @@ export default function App() {
 
           <form onSubmit={handleLogin} method="post" action="javascript:void(0)" className="space-y-4">
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Usuario</label>
-              <input type="text" required value={loginForm.username} onChange={e=>setLoginForm({...loginForm, username: e.target.value.toLowerCase().trim()})} className="w-full mt-1 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-indigo-500" />
+              <label htmlFor="login-usuario" className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Usuario</label>
+              <input id="login-usuario" name="username" autoComplete="username" spellCheck={false} type="text" required value={loginForm.username} onChange={e=>setLoginForm({...loginForm, username: e.target.value.toLowerCase().trim()})} className="w-full mt-1 border-2 border-slate-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-indigo-500" />
             </div>
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Contraseña</label>
+              <label htmlFor="login-clave" className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Contraseña</label>
               <div className="relative mt-1">
-                <input type={showPassword ? "text" : "password"} required value={loginForm.password} onChange={e=>setLoginForm({...loginForm, password: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-indigo-500 pr-12" />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-indigo-600 transition-colors">
+                <input id="login-clave" name="password" autoComplete="current-password" type={showPassword ? "text" : "password"} required value={loginForm.password} onChange={e=>setLoginForm({...loginForm, password: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 font-bold outline-none focus:border-indigo-500 pr-12" />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-indigo-600 transition-colors">
                   {showPassword ? <EyeOff size={18}/> : <Eye size={18}/>}
                 </button>
               </div>
@@ -2375,7 +2375,7 @@ export default function App() {
               {isLoggingIn ? <Loader2 size={16} className="animate-spin"/> : 'Iniciar Sesión'}
             </button>
           </form>
-          <p className="text-center text-[10px] text-slate-400 mt-6 font-bold uppercase tracking-widest">V8.25 - SISTEMA COMPLETADO</p>
+          <p className="text-center text-[12px] text-slate-500 mt-6 font-bold uppercase tracking-widest">V8.25 - SISTEMA COMPLETADO</p>
         </div>
       </div>
     );
@@ -2402,13 +2402,13 @@ export default function App() {
       {reauthPrompt && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
-            <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ShieldAlert size={18} className="text-amber-500"/> Confirmar {reauthPrompt.label}</h3>
+            <h3 className="text-base font-black text-slate-800 tracking-tighter flex items-center gap-2"><ShieldAlert size={18} className="text-amber-500"/> Confirmar {reauthPrompt.label}</h3>
             <p className="text-xs text-slate-500 mt-1">Por seguridad, reingresa tu contraseña para autorizar esta operación.</p>
             <form onSubmit={(e) => { e.preventDefault(); const pw = e.target.elements.reauthpw.value; reauthPrompt.resolve(pw); setReauthPrompt(null); }}>
               <input name="reauthpw" type="password" autoFocus autoComplete="current-password" className="w-full mt-4 border border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-indigo-500" placeholder="Tu contraseña"/>
               <div className="flex gap-2 mt-4">
-                <button type="button" onClick={() => { reauthPrompt.resolve(null); setReauthPrompt(null); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest">Cancelar</button>
-                <button type="submit" className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl uppercase text-[10px] tracking-widest">Confirmar</button>
+                <button type="button" onClick={() => { reauthPrompt.resolve(null); setReauthPrompt(null); }} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl uppercase text-[12px] tracking-widest">Cancelar</button>
+                <button type="submit" className="flex-[2] bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl uppercase text-[12px] tracking-widest">Confirmar</button>
               </div>
             </form>
           </div>
@@ -2429,7 +2429,7 @@ export default function App() {
       <div id="print-section" className="hidden">
         {printLabelData && (
           <div className="w-[10cm] h-[10cm] p-4 flex flex-col justify-center items-center bg-white border-2 border-black rounded-xl">
-            <h1 className="text-4xl font-black uppercase text-black mb-2 tracking-tighter">{printLabelData.sku}</h1>
+            <h1 className="text-4xl font-black text-black mb-2 tracking-tighter">{printLabelData.sku}</h1>
             <p className="text-lg font-bold text-gray-700 mb-1 text-center truncate w-full">{printLabelData.desc || 'ARTÍCULO SIN DESCRIPCIÓN'}</p>
             <div className="w-full border-t-2 border-dashed border-gray-400 my-4"></div>
             <div className="w-full flex justify-between items-center mb-2 px-2">
@@ -2447,7 +2447,7 @@ export default function App() {
               </div>
             )}
             <div className="mt-auto w-full text-center">
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">WMS ENTERPRISE - ETIQUETA LOGÍSTICA</p>
+              <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest">WMS ENTERPRISE - ETIQUETA LOGÍSTICA</p>
             </div>
           </div>
         )}
@@ -2464,23 +2464,23 @@ export default function App() {
         {showNotifPanel && (
           <div className="fixed inset-y-0 right-0 z-50 w-80 bg-white shadow-2xl flex flex-col border-l border-slate-200">
             <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0">
-              <h2 className="font-black text-slate-800 uppercase text-sm tracking-tighter flex items-center gap-2"><Bell size={16} className="text-indigo-500"/> Notificaciones {notifCount > 0 && <span className="bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">{notifCount}</span>}</h2>
+              <h2 className="font-black text-slate-800 text-sm tracking-tighter flex items-center gap-2"><Bell size={16} className="text-indigo-500"/> Notificaciones {notifCount > 0 && <span className="bg-red-500 text-white text-[12px] font-black px-1.5 py-0.5 rounded-full">{notifCount}</span>}</h2>
               <div className="flex gap-2 items-center">
-                {notifCount > 0 && <button onClick={async()=>{ await apiFetch(`${host}/api/notifications/read-all`,{method:'PUT'}); setNotifications(prev=>prev.map(n=>({...n,read:true}))); setNotifCount(0); }} className="text-[10px] font-black text-indigo-500 uppercase hover:underline">Marcar todas</button>}
-                <button onClick={()=>setShowNotifPanel(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={14} className="text-slate-400"/></button>
+                {notifCount > 0 && <button onClick={async()=>{ await apiFetch(`${host}/api/notifications/read-all`,{method:'PUT'}); setNotifications(prev=>prev.map(n=>({...n,read:true}))); setNotifCount(0); }} className="text-[12px] font-black text-indigo-500 uppercase hover:underline">Marcar todas</button>}
+                <button onClick={()=>setShowNotifPanel(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={14} className="text-slate-500"/></button>
               </div>
             </div>
             <div className="flex-1 overflow-y-auto custom-scrollbar">
               {notifications.length === 0 ? (
-                <div className="p-8 text-center text-slate-400"><Bell className="w-10 h-10 mx-auto mb-3 opacity-20"/><p className="text-xs font-bold uppercase tracking-widest">Sin notificaciones</p></div>
+                <div className="p-8 text-center text-slate-500"><Bell className="w-10 h-10 mx-auto mb-3 opacity-20"/><p className="text-xs font-bold uppercase tracking-widest">Sin notificaciones</p></div>
               ) : notifications.map(n => (
                 <div key={n.id} onClick={async()=>{ if(n.read) return; await apiFetch(`${host}/api/notifications/${n.id}/read`,{method:'PUT'}); setNotifications(prev=>prev.map(x=>x.id===n.id?{...x,read:true}:x)); setNotifCount(c=>Math.max(0,c-1)); }} className={`p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50 transition-colors ${n.read?'opacity-50':''}`}>
                   <div className="flex items-start gap-3">
                     <div className={`w-2 h-2 mt-1.5 rounded-full shrink-0 ${n.severity==='CRITICAL'?'bg-red-500':n.severity==='WARNING'?'bg-amber-500':'bg-blue-500'}`}/>
                     <div className="min-w-0">
                       <p className={`text-xs font-black truncate ${n.severity==='CRITICAL'?'text-red-700':n.severity==='WARNING'?'text-amber-700':'text-blue-700'}`}>{n.title}</p>
-                      <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">{n.message}</p>
-                      <p className="text-[9px] text-slate-400 mt-1">{new Date(n.created_at).toLocaleDateString('es-CL')}</p>
+                      <p className="text-[12px] text-slate-500 mt-0.5 leading-relaxed">{n.message}</p>
+                      <p className="text-[12px] text-slate-500 mt-1">{new Date(n.created_at).toLocaleDateString('es-CL')}</p>
                     </div>
                   </div>
                 </div>
@@ -2497,16 +2497,16 @@ export default function App() {
           </div>
           
           <div className="px-6 py-4 bg-slate-800/50 border-b border-white/5">
-            <p className="text-[9px] uppercase font-black tracking-widest text-slate-500">Usuario Activo</p>
+            <p className="text-[12px] uppercase font-black tracking-widest text-slate-400">Usuario Activo</p>
             <div className="flex items-center justify-between mt-1">
               <div>
-                <p className="text-xs font-bold text-white truncate w-36">{currentUser.full_name}</p>
-                <p className="text-[10px] text-indigo-400 font-mono mt-0.5 flex items-center gap-1">
+                <p className="text-xs font-bold text-white line-clamp-2 w-36" title={currentUser.full_name}>{currentUser.full_name}</p>
+                <p className="text-[12px] text-indigo-400 font-mono mt-0.5 flex items-center gap-1">
                    {currentUser.role} 
-                   {!isAllClients && <span className="bg-indigo-600 text-white px-1 py-0.5 rounded text-[8px]">(Restringido)</span>}
+                   {!isAllClients && <span className="bg-indigo-600 text-white px-1 py-0.5 rounded text-[11px]">(Restringido)</span>}
                 </p>
               </div>
-              <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 transition-colors" title="Cerrar Sesión"><LogOut size={16}/></button>
+              <button onClick={handleLogout} aria-label="Cerrar sesión" className="text-slate-400 hover:text-red-400 transition-colors" title="Cerrar Sesión"><LogOut size={16}/></button>
             </div>
           </div>
 
@@ -2514,7 +2514,7 @@ export default function App() {
             {!['PICKER','CLIENTE'].includes(currentUser?.role) && (
               <>
                 {/* ─── PRINCIPAL ─── */}
-                <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Principal</p>
+                <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Principal</p>
                 <button data-tutorial-target="dashboard-tab" onClick={() => switchTab('dashboard')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'dashboard' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><LayoutDashboard size={18} className="mr-3"/> Dashboard</button>
                 <button data-tutorial-target="inventory-tab" onClick={() => switchTab('inventory')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'inventory' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Package size={18} className="mr-3"/> Stock Físico</button>
                 {canView('digital-twin') && <button onClick={() => switchTab('digital-twin')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'digital-twin' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Mapa 3D Bodega</button>}
@@ -2522,13 +2522,13 @@ export default function App() {
                 {/* ─── OPERACIONES DIARIAS ─── */}
                 {(canView('receive') || canView('dispatch') || canView('insumos') || canView('relocate') || canView('change-status') || canView('adjust') || canView('returns')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Operaciones Diarias</p>
+                  <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Operaciones Diarias</p>
                   {canView('receive') && <button data-tutorial-target="receive-tab" onClick={() => switchTab('receive')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'receive' ? 'bg-emerald-500/20 text-emerald-400 font-black' : 'hover:bg-slate-800'}`}><ArrowDownRight size={18} className="mr-3"/> Recepciones (In)</button>}
                   {canView('dispatch') && (
                     <button data-tutorial-target="dispatch-tab" onClick={() => switchTab('dispatch')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'dispatch' ? 'bg-blue-500/20 text-blue-400 font-black' : 'hover:bg-slate-800'}`}>
                       <ArrowUpRight size={18} className="mr-3"/> Despachos (Out)
                       {dispatchKpis?.pending_orders > 0 && (
-                        <span className="ml-auto bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">{dispatchKpis.pending_orders}</span>
+                        <span className="ml-auto bg-red-500 text-white text-[11px] font-black px-1.5 py-0.5 rounded-full">{dispatchKpis.pending_orders}</span>
                       )}
                     </button>
                   )}
@@ -2537,7 +2537,7 @@ export default function App() {
                     <button data-tutorial-target="relocate-tab" onClick={() => switchTab('relocate')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'relocate' ? 'bg-purple-500/20 text-purple-400 font-black' : 'hover:bg-slate-800'}`}>
                       <ArrowRightLeft size={18} className="mr-3"/> Reubicar Stock
                       {relocRequests.filter(r=>r.status==='PENDIENTE').length > 0 && (
-                        <span className="ml-auto bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">{relocRequests.filter(r=>r.status==='PENDIENTE').length}</span>
+                        <span className="ml-auto bg-amber-500 text-white text-[11px] font-black px-1.5 py-0.5 rounded-full">{relocRequests.filter(r=>r.status==='PENDIENTE').length}</span>
                       )}
                     </button>
                   )}
@@ -2549,12 +2549,12 @@ export default function App() {
                 {/* ─── PICKING ─── */}
                 {(canView('picking-monitor') || canView('waves')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Picking</p>
+                  <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Picking</p>
                   {canView('picking-monitor') && (
                     <button data-tutorial-target="picking-tab" onClick={() => switchTab('picking-monitor')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'picking-monitor' ? 'bg-violet-500/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}>
                       <ClipboardList size={18} className="mr-3"/> Monitor de Picking
                       {pickTasks.filter(t => t.line_status === 'PENDIENTE').length > 0 && (
-                        <span className="ml-auto bg-violet-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">{pickTasks.filter(t => t.line_status === 'PENDIENTE').length}</span>
+                        <span className="ml-auto bg-violet-500 text-white text-[11px] font-black px-1.5 py-0.5 rounded-full">{pickTasks.filter(t => t.line_status === 'PENDIENTE').length}</span>
                       )}
                     </button>
                   )}
@@ -2564,12 +2564,12 @@ export default function App() {
                 {/* ─── TRANSPORTE ─── */}
                 {(canView('dispatch-schedule') || canView('docks') || canView('transport') || canView('transporte-coord') || canView('solicitar-transporte') || canView('cierre-transporte')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Transporte</p>
+                  <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Transporte</p>
                   {canView('dispatch-schedule') && (
                     <button onClick={() => switchTab('dispatch-schedule')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'dispatch-schedule' ? 'bg-teal-500/20 text-teal-400 font-black' : 'hover:bg-slate-800'}`}>
                       <CalendarClock size={18} className="mr-3"/> Prog. de Salidas
                       {dispatchSchedules.filter(d => d.status === 'PROGRAMADO').length > 0 && (
-                        <span className="ml-auto bg-teal-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">{dispatchSchedules.filter(d => d.status === 'PROGRAMADO').length}</span>
+                        <span className="ml-auto bg-teal-500 text-white text-[11px] font-black px-1.5 py-0.5 rounded-full">{dispatchSchedules.filter(d => d.status === 'PROGRAMADO').length}</span>
                       )}
                     </button>
                   )}
@@ -2583,7 +2583,7 @@ export default function App() {
                 {/* ─── ABASTECIMIENTO ─── */}
                 {(canView('purchase-orders') || canView('suppliers') || canView('manufacturers')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Abastecimiento</p>
+                  <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Abastecimiento</p>
                   {canView('purchase-orders') && <button onClick={() => switchTab('purchase-orders')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'purchase-orders' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800 text-slate-300'}`}><FileText size={18} className="mr-3"/> Órdenes de Compra</button>}
                   {canView('suppliers') && <button onClick={() => switchTab('suppliers')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'suppliers' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Building2 size={18} className="mr-3"/> Proveedores & ASN</button>}
                   {canView('manufacturers') && <button onClick={() => switchTab('manufacturers')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'manufacturers' ? 'bg-indigo-500/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><HardHat size={18} className="mr-3"/> Fabricantes</button>}
@@ -2592,7 +2592,7 @@ export default function App() {
                 {/* ─── CONTROL E HISTORIAL ─── */}
                 {(canView('cycle-count') || canManageMasters || canView('audit') || canView('doc-history')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Control e Historial</p>
+                  <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Control e Historial</p>
                   {canView('cycle-count') && <button onClick={() => switchTab('cycle-count')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'cycle-count' ? 'bg-cyan-500/20 text-cyan-400 font-black' : 'hover:bg-slate-800 text-slate-300'}`}><ClipboardCheck size={18} className="mr-3"/> Conteos Cíclicos</button>}
                   {canView('audit') && <button onClick={() => switchTab('audit')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'audit' ? 'bg-slate-500/20 text-slate-300 font-black' : 'hover:bg-slate-800'}`}><History size={18} className="mr-3"/> Auditoría (Logs)</button>}
                 </>)}
@@ -2600,7 +2600,7 @@ export default function App() {
                 {/* ─── REPORTES ─── */}
                 {canView('sku-movement') && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Reportes</p>
+                  <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Reportes</p>
                   <button onClick={() => switchTab('sku-movement')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'sku-movement' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Activity size={18} className="mr-3"/> Movimiento por SKU</button>
                   {canView('kardex') && <button onClick={() => switchTab('kardex')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'kardex' ? 'bg-violet-600/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}><BookOpen size={18} className="mr-3"/> Kardex por SKU</button>}
                   {canManageMasters && <button onClick={() => switchTab('lpn-history')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'lpn-history' ? 'bg-violet-600/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}><Search size={18} className="mr-3"/> Historial LPN</button>}
@@ -2610,7 +2610,7 @@ export default function App() {
                 {/* ─── MAESTROS ─── */}
                 {(canView('clients') || canView('master-skus') || canView('kits') || canView('warehouse')) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Maestros</p>
+                  <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Maestros</p>
                   {is3PLMode && canView('clients') && <button onClick={() => switchTab('clients')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'clients' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Users size={18} className="mr-3"/> Clientes 3PL</button>}
                   {canView('master-skus') && <button onClick={() => switchTab('master-skus')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'master-skus' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><FileText size={18} className="mr-3"/> Catálogo SKUs</button>}
                   {canView('kits') && <button onClick={() => switchTab('kits')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'kits' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Package size={18} className="mr-3"/> Armado de Kits</button>}
@@ -2620,7 +2620,7 @@ export default function App() {
                 {/* ─── CONFIGURACIÓN ─── */}
                 {(canView('statuses') || canView('doc-types') || isAdmin) && (<>
                   <div className="my-4 border-t border-slate-800"></div>
-                  <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Configuración</p>
+                  <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Configuración</p>
                   {canView('statuses') && <button onClick={() => switchTab('statuses')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'statuses' ? 'bg-slate-500/20 text-slate-300 font-black' : 'hover:bg-slate-800'}`}><Activity size={18} className="mr-3"/> Estados Físicos</button>}
                   {canView('doc-types') && <button onClick={() => switchTab('doc-types')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'doc-types' ? 'bg-slate-500/20 text-slate-300 font-black' : 'hover:bg-slate-800'}`}><FileType size={18} className="mr-3"/> Tipos Documento</button>}
                   {isAdmin && <button onClick={() => switchTab('users')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'users' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><UserCog size={18} className="mr-3"/> Usuarios del sistema</button>}
@@ -2632,7 +2632,7 @@ export default function App() {
             {currentUser?.role === 'CLIENTE' && (
               <>
                 <div className="my-4 border-t border-slate-800"></div>
-                <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Mi Portal</p>
+                <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Mi Portal</p>
                 <button onClick={() => switchTab('dashboard')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'dashboard' ? 'bg-cyan-600/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><LayoutDashboard size={18} className="mr-3"/> Dashboard</button>
                 <button onClick={() => switchTab('inventory')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'inventory' ? 'bg-cyan-600/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><Package size={18} className="mr-3"/> Mi Stock</button>
                 <button onClick={() => switchTab('doc-history')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'doc-history' ? 'bg-cyan-600/20 text-cyan-400 font-black' : 'hover:bg-slate-800'}`}><History size={18} className="mr-3"/> Mis Documentos</button>
@@ -2646,13 +2646,13 @@ export default function App() {
             {canView('digital-twin') && currentUser?.role === 'PICKER' && (
               <>
                 <div className="my-4 border-t border-slate-800"></div>
-                <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Bodega</p>
+                <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Bodega</p>
                 <button onClick={() => switchTab('inventory')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'inventory' ? 'bg-green-500/20 text-green-400 font-black' : 'hover:bg-slate-800'}`}><Package size={18} className="mr-3"/> Stock Físico</button>
                 <button onClick={() => switchTab('digital-twin')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'digital-twin' ? 'bg-indigo-600/20 text-indigo-400 font-black' : 'hover:bg-slate-800'}`}><Layers size={18} className="mr-3"/> Mapa 3D Bodega</button>
                 <button onClick={() => switchTab('relocate')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'relocate' ? 'bg-amber-500/20 text-amber-400 font-black' : 'hover:bg-slate-800'}`}>
                   <ArrowRightLeft size={18} className="mr-3"/> Solicitar Reubicación
                   {relocRequests.filter(r=>r.status==='PENDIENTE' && r.requested_by===currentUser?.username).length > 0 && (
-                    <span className="ml-auto bg-amber-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">{relocRequests.filter(r=>r.status==='PENDIENTE' && r.requested_by===currentUser?.username).length}</span>
+                    <span className="ml-auto bg-amber-500 text-white text-[11px] font-black px-1.5 py-0.5 rounded-full">{relocRequests.filter(r=>r.status==='PENDIENTE' && r.requested_by===currentUser?.username).length}</span>
                   )}
                 </button>
               </>
@@ -2661,11 +2661,11 @@ export default function App() {
             {currentUser?.role === 'PICKER' && canView('picker-queue') && (
               <>
                 <div className="my-4 border-t border-slate-800"></div>
-                <p className="text-[10px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Mi Trabajo</p>
+                <p className="text-[12px] font-black uppercase text-white/50 mb-3 px-2 tracking-widest">Mi Trabajo</p>
                 <button onClick={() => switchTab('picker-queue')} className={`w-full flex items-center px-4 py-3 rounded-xl transition-colors ${activeTab === 'picker-queue' ? 'bg-violet-500/20 text-violet-400 font-black' : 'hover:bg-slate-800'}`}>
                   <ListTodo size={18} className="mr-3"/> Mi Cola de Tareas
                   {pickQueue.length > 0 && (
-                    <span className="ml-auto bg-violet-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full">{pickQueue.length}</span>
+                    <span className="ml-auto bg-violet-500 text-white text-[11px] font-black px-1.5 py-0.5 rounded-full">{pickQueue.length}</span>
                   )}
                 </button>
               </>
@@ -2678,7 +2678,8 @@ export default function App() {
           {/* BANNER INSTANCIA DE DEMOSTRACIÓN */}
           {systemConfig?.demo_instance_marker === 'true' && (
             <div className="bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white flex items-center px-4 md:px-8 py-2 shrink-0 z-20">
-              <span className="text-[10px] font-black uppercase tracking-widest truncate">Demostración — Datos ficticios · Se reinicia cada noche · Respaldos y gestión de usuarios deshabilitados</span>
+              <span className="text-[12px] font-black uppercase tracking-widest truncate md:hidden">Demo · Datos ficticios</span>
+              <span className="text-[12px] font-black uppercase tracking-widest truncate hidden md:inline">Demostración — Datos ficticios · Se reinicia cada noche · Respaldos y gestión de usuarios deshabilitados</span>
             </div>
           )}
 
@@ -2686,7 +2687,7 @@ export default function App() {
           {currentUser?.role === 'CLIENTE' && (
             <div className="bg-gradient-to-r from-cyan-600 to-teal-600 text-white flex items-center px-4 md:px-8 py-2 shrink-0 z-20">
               <Building2 size={12} className="shrink-0 mr-2"/>
-              <span className="text-[10px] font-black uppercase tracking-widest truncate">Portal Cliente — Solo lectura · Sus datos están filtrados por su empresa</span>
+              <span className="text-[12px] font-black uppercase tracking-widest truncate">Portal Cliente — Solo lectura · Sus datos están filtrados por su empresa</span>
             </div>
           )}
 
@@ -2695,17 +2696,17 @@ export default function App() {
             <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white flex items-center justify-between px-4 md:px-8 py-2 shrink-0 z-20">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-sm shrink-0">🎮</span>
-                <span className="text-[10px] font-black uppercase tracking-widest truncate">
+                <span className="text-[12px] font-black uppercase tracking-widest truncate">
                   Sandbox · {currentUser?.persona_icon} {currentUser?.persona_label || currentUser?.role}
                   {currentUser?.sandbox_scenario && ` · ${SANDBOX_SCENARIOS[currentUser.sandbox_scenario]?.label || currentUser.sandbox_scenario}`}
                   {' '}— Simulación activa
                 </span>
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="bg-white/20 px-2 py-0.5 rounded text-[9px] font-black hidden sm:block">Cambios no se guardan</span>
+                <span className="bg-white/20 px-2 py-0.5 rounded text-[12px] font-black hidden sm:block">Cambios no se guardan</span>
                 <button
                   onClick={tutorial.iniciar}
-                  className="bg-white/25 hover:bg-white/40 text-white font-black px-3 py-1 rounded-lg text-[10px] uppercase tracking-widest transition-colors flex items-center gap-1"
+                  className="bg-white/25 hover:bg-white/40 text-white font-black px-3 py-1 rounded-lg text-[12px] uppercase tracking-widest transition-colors flex items-center gap-1"
                   title="Iniciar tutorial guiado"
                 >
                   📘 Tutorial
@@ -2719,11 +2720,11 @@ export default function App() {
               <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 rounded-xl hover:bg-slate-100 text-slate-600 transition-colors" aria-label="Abrir menú">
                 <Menu size={20} />
               </button>
-              <h1 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-widest opacity-80">{systemConfig.company_name || systemConfig.system_name || 'WMS Enterprise'}</h1>
-              {isDemo && <span className="bg-amber-100 border border-amber-300 text-amber-700 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1">🎮 Sandbox</span>}
-              <div className={`px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest border flex items-center gap-1 ${apiStatus === 'online' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : apiStatus === 'conectando' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 animate-pulse border-red-200'}`}>
+              <h1 className="text-xs md:text-sm font-black text-slate-800 uppercase tracking-wider md:tracking-widest opacity-80 whitespace-nowrap truncate max-w-[40vw] md:max-w-none">{systemConfig.company_name || systemConfig.system_name || 'WMS Enterprise'}</h1>
+              {isDemo && <span className="bg-amber-100 border border-amber-300 text-amber-700 px-2 py-0.5 rounded-full text-[12px] font-black uppercase tracking-widest flex items-center gap-1">🎮 Sandbox</span>}
+              <div className={`px-2 py-1 rounded text-[12px] font-black uppercase tracking-wider md:tracking-widest whitespace-nowrap border flex items-center gap-1 ${apiStatus === 'online' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : apiStatus === 'conectando' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-red-100 text-red-700 animate-pulse border-red-200'}`}>
                 {isFetchingData && <Loader2 size={9} className="animate-spin"/>}
-                {apiStatus === 'online' ? 'API ONLINE' : apiStatus === 'conectando' ? 'Conectando...' : 'API OFFLINE'}
+                {apiStatus === 'online' ? 'API ONLINE' : apiStatus === 'conectando' ? 'Conectando…' : 'API OFFLINE'}
               </div>
               {['ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
                 <button
@@ -2734,7 +2735,7 @@ export default function App() {
                   }}
                   disabled={refreshingStatic}
                   title="Refrescar catálogo — SKUs, clientes, ubicaciones y config"
-                  className="flex items-center gap-1.5 px-2.5 py-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors text-[10px] font-black uppercase disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors text-[12px] font-black uppercase disabled:opacity-50"
                 >
                   {refreshingStatic
                     ? <><Loader2 size={12} className="animate-spin"/> Actualizando…</>
@@ -2744,12 +2745,12 @@ export default function App() {
               )}
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={() => setDarkMode(p => !p)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-500 dark:text-slate-400" title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
+              <button onClick={() => setDarkMode(p => !p)} aria-label={darkMode ? "Cambiar a modo claro" : "Cambiar a modo oscuro"} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-500 dark:text-slate-400" title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
                 {darkMode ? <Sun size={18}/> : <Moon size={18}/>}
               </button>
-              <button onClick={() => setShowNotifPanel(p => !p)} className="relative p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-500 dark:text-slate-400">
+              <button onClick={() => setShowNotifPanel(p => !p)} aria-label="Notificaciones" title="Notificaciones" className="relative p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors text-slate-500 dark:text-slate-400">
                 <Bell size={18}/>
-                {notifCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">{notifCount > 99 ? '99+' : notifCount}</span>}
+                {notifCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[11px] font-black min-w-[20px] h-5 px-1 rounded-full flex items-center justify-center">{notifCount > 99 ? '99+' : notifCount}</span>}
               </button>
             </div>
           </header>
@@ -2773,13 +2774,13 @@ export default function App() {
                         ))}
                       </div>
                     </div>
-                    <button onClick={()=>setShowNotifPanel(true)} className="text-[10px] font-black text-red-600 hover:text-red-800 uppercase tracking-widest shrink-0 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-xl transition-colors">Ver todas</button>
+                    <button onClick={()=>setShowNotifPanel(true)} className="text-[12px] font-black text-red-600 hover:text-red-800 uppercase tracking-widest shrink-0 bg-red-100 hover:bg-red-200 px-3 py-1.5 rounded-xl transition-colors">Ver todas</button>
                   </div>
                 )}
                 <div className="flex justify-between items-end">
                   <div>
                     <div>
-                      <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight uppercase flex flex-wrap items-center gap-2 md:gap-3">
+                      <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight flex flex-wrap items-center gap-2 md:gap-3">
                         Panel de Control
                         <span className={`text-sm px-3 py-1 rounded-xl font-black ${operationMode==='3PL'?'bg-blue-100 text-blue-700':operationMode==='PROPIO'?'bg-emerald-100 text-emerald-700':'bg-purple-100 text-purple-700'}`}>
                           {operationMode==='3PL'?'Modo 3PL — Multi-Cliente':operationMode==='PROPIO'?'Modo Productos Propios':'Modo Mixto — PROPIO por defecto'}
@@ -2791,46 +2792,46 @@ export default function App() {
                     </div>
                   </div>
                   <div className="text-right hidden md:block">
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Operador Activo</p>
+                     <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Operador Activo</p>
                      <p className="text-lg font-bold text-indigo-600">{currentUser?.full_name}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-6 rounded-[2rem] shadow-lg shadow-indigo-200 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform cursor-default">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6">
+                  <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 p-4 md:p-6 rounded-[2rem] shadow-lg shadow-indigo-200 text-white relative overflow-hidden group hover:scale-[1.02] transition-transform cursor-default">
                     <div className="relative z-10">
                       <div className="p-3 bg-white/20 rounded-xl w-fit mb-4 backdrop-blur-md group-hover:bg-white/30 transition-colors"><Package className="text-white"/></div>
-                      <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-100">Unidades Totales</h3>
-                      <p className="text-4xl font-black mt-1">{isAllClients ? Number(stats?.units || 0).toLocaleString() : permittedInventory.reduce((sum, i) => sum + parseFloat(i.qty), 0).toLocaleString()}</p>
+                      <h3 className="text-[12px] font-black uppercase tracking-widest text-indigo-100">Unidades Totales</h3>
+                      <p className="text-3xl md:text-4xl font-black mt-1">{isAllClients ? Number(stats?.units || 0).toLocaleString() : permittedInventory.reduce((sum, i) => sum + parseFloat(i.qty), 0).toLocaleString()}</p>
                     </div>
                     <Box className="absolute -bottom-6 -right-4 w-40 h-40 text-white opacity-10 group-hover:scale-110 transition-transform duration-500" />
                   </div>
 
-                  <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-all hover:shadow-md cursor-default">
+                  <div className="bg-white p-4 md:p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-all hover:shadow-md cursor-default">
                     <div className="p-3 bg-emerald-50 rounded-xl w-fit mb-4 group-hover:bg-emerald-100 transition-colors"><Box className="text-emerald-600"/></div>
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">LPNs Activos</h3>
-                    <p className="text-4xl font-black text-slate-800 mt-1">{isAllClients ? Number(stats?.lpns || 0).toLocaleString() : permittedInventory.length.toLocaleString()}</p>
+                    <h3 className="text-[12px] font-black uppercase tracking-widest text-slate-500">LPNs Activos</h3>
+                    <p className="text-3xl md:text-4xl font-black text-slate-800 mt-1">{isAllClients ? Number(stats?.lpns || 0).toLocaleString() : permittedInventory.length.toLocaleString()}</p>
                   </div>
 
-                  <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-purple-300 transition-all hover:shadow-md cursor-default">
+                  <div className="bg-white p-4 md:p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-purple-300 transition-all hover:shadow-md cursor-default">
                     <div className="p-3 bg-purple-50 rounded-xl w-fit mb-4 group-hover:bg-purple-100 transition-colors"><FileText className="text-purple-600"/></div>
-                    <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Catálogo SKUs</h3>
-                    <p className="text-4xl font-black text-slate-800 mt-1">{isAllClients ? Number(stats?.skus || 0).toLocaleString() : permittedSkus.length.toLocaleString()}</p>
+                    <h3 className="text-[12px] font-black uppercase tracking-widest text-slate-500">Catálogo SKUs</h3>
+                    <p className="text-3xl md:text-4xl font-black text-slate-800 mt-1">{isAllClients ? Number(stats?.skus || 0).toLocaleString() : permittedSkus.length.toLocaleString()}</p>
                   </div>
 
                   {is3PLMode && (
-                    <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-amber-300 transition-all hover:shadow-md cursor-default">
+                    <div className="bg-white p-4 md:p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-amber-300 transition-all hover:shadow-md cursor-default">
                       <div className="p-3 bg-amber-50 rounded-xl w-fit mb-4 group-hover:bg-amber-100 transition-colors"><Users className="text-amber-600"/></div>
-                      <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Clientes 3PL</h3>
-                      <p className="text-4xl font-black text-slate-800 mt-1">{permittedClients.length}</p>
+                      <h3 className="text-[12px] font-black uppercase tracking-widest text-slate-500">Clientes 3PL</h3>
+                      <p className="text-3xl md:text-4xl font-black text-slate-800 mt-1">{permittedClients.length}</p>
                     </div>
                   )}
                   {!is3PLMode && (
-                    <div className="bg-white p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-all hover:shadow-md cursor-default">
+                    <div className="bg-white p-4 md:p-6 rounded-[2rem] border border-slate-200 shadow-sm relative overflow-hidden group hover:border-emerald-300 transition-all hover:shadow-md cursor-default">
                       <div className="p-3 bg-emerald-50 rounded-xl w-fit mb-4 group-hover:bg-emerald-100 transition-colors"><Package className="text-emerald-600"/></div>
-                      <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">SKUs Activos</h3>
-                      <p className="text-4xl font-black text-slate-800 mt-1">{permittedSkus.length}</p>
-                      <p className="text-[9px] text-emerald-600 font-black uppercase mt-1">{systemConfig.own_client_name || 'Bodega Propia'}</p>
+                      <h3 className="text-[12px] font-black uppercase tracking-widest text-slate-500">SKUs Activos</h3>
+                      <p className="text-3xl md:text-4xl font-black text-slate-800 mt-1">{permittedSkus.length}</p>
+                      <p className="text-[12px] text-emerald-600 font-black uppercase mt-1">{systemConfig.own_client_name || 'Bodega Propia'}</p>
                     </div>
                   )}
                 </div>
@@ -2839,10 +2840,10 @@ export default function App() {
                 {isAdmin && dispatchKpis && (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                      <h2 className="text-lg font-black text-slate-800 tracking-tighter flex items-center gap-2">
                         <ArrowUpRight className="text-blue-500 w-5 h-5"/> KPIs de Despacho
                       </h2>
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Hoy / Mes actual</span>
+                      <span className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Hoy / Mes actual</span>
                     </div>
 
                     {/* Row de métricas */}
@@ -2860,7 +2861,7 @@ export default function App() {
                         const gaugeColor = {emerald:'bg-emerald-500',amber:'bg-amber-400',red:'bg-red-500',slate:'bg-slate-300'}[color];
                         return (
                           <div className={`rounded-2xl border p-4 flex flex-col gap-2 ${colorMap[color]}`}>
-                            <p className="text-[9px] font-black uppercase tracking-widest opacity-70">Fill Rate Hoy</p>
+                            <p className="text-[12px] font-black uppercase tracking-widest opacity-70">Fill Rate Hoy</p>
                             <p className="text-3xl font-black">{v !== null ? `${v}%` : '—'}</p>
                             {v !== null && (
                               <div className="w-full bg-white/60 rounded-full h-2 overflow-hidden">
@@ -2873,27 +2874,27 @@ export default function App() {
 
                       {/* Tiempo promedio */}
                       <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex flex-col gap-1">
-                        <p className="text-[9px] font-black uppercase tracking-widest text-purple-500">Tiempo Prom.</p>
+                        <p className="text-[12px] font-black uppercase tracking-widest text-purple-500">Tiempo Prom.</p>
                         <p className="text-3xl font-black text-purple-700">
                           {dispatchKpis.avg_dispatch_time_hours > 0
                             ? `${dispatchKpis.avg_dispatch_time_hours}h`
                             : '—'}
                         </p>
-                        <p className="text-[8px] text-purple-400 font-bold">entre creación y pickup</p>
+                        <p className="text-[11px] text-purple-400 font-bold">entre creación y pickup</p>
                       </div>
 
                       {/* Órdenes pendientes */}
                       <div className={`rounded-2xl border p-4 flex flex-col gap-1 ${dispatchKpis.pending_orders > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
-                        <p className={`text-[9px] font-black uppercase tracking-widest ${dispatchKpis.pending_orders > 0 ? 'text-red-500' : 'text-slate-400'}`}>POs Pendientes</p>
+                        <p className={`text-[12px] font-black uppercase tracking-widest ${dispatchKpis.pending_orders > 0 ? 'text-red-500' : 'text-slate-500'}`}>POs Pendientes</p>
                         <p className={`text-3xl font-black ${dispatchKpis.pending_orders > 0 ? 'text-red-700' : 'text-slate-700'}`}>{dispatchKpis.pending_orders}</p>
-                        <button onClick={()=>switchTab('dispatch')} className={`text-[8px] font-black uppercase underline ${dispatchKpis.pending_orders > 0 ? 'text-red-400 hover:text-red-600' : 'text-slate-400'}`}>Ver módulo</button>
+                        <button onClick={()=>switchTab('dispatch')} className={`text-[11px] font-black uppercase underline ${dispatchKpis.pending_orders > 0 ? 'text-red-400 hover:text-red-600' : 'text-slate-500'}`}>Ver módulo</button>
                       </div>
 
                       {/* SKUs stockout */}
                       <div className={`rounded-2xl border p-4 flex flex-col gap-1 ${dispatchKpis.stockout_skus > 0 ? 'bg-orange-50 border-orange-200' : 'bg-slate-50 border-slate-200'}`}>
-                        <p className={`text-[9px] font-black uppercase tracking-widest ${dispatchKpis.stockout_skus > 0 ? 'text-orange-500' : 'text-slate-400'}`}>SKUs Stockout</p>
+                        <p className={`text-[12px] font-black uppercase tracking-widest ${dispatchKpis.stockout_skus > 0 ? 'text-orange-500' : 'text-slate-500'}`}>SKUs Stockout</p>
                         <p className={`text-3xl font-black ${dispatchKpis.stockout_skus > 0 ? 'text-orange-700' : 'text-slate-700'}`}>{dispatchKpis.stockout_skus}</p>
-                        {dispatchKpis.stockout_skus > 0 && <p className="text-[8px] text-orange-400 font-bold">con actividad reciente</p>}
+                        {dispatchKpis.stockout_skus > 0 && <p className="text-[11px] text-orange-400 font-bold">con actividad reciente</p>}
                       </div>
 
                       {/* On-time rate */}
@@ -2904,25 +2905,25 @@ export default function App() {
                         const bgColor = {emerald:'bg-emerald-50 border-emerald-200',amber:'bg-amber-50 border-amber-200',red:'bg-red-50 border-red-200',slate:'bg-slate-50 border-slate-200'}[color];
                         return (
                           <div className={`rounded-2xl border p-4 flex flex-col gap-1 ${bgColor}`}>
-                            <p className={`text-[9px] font-black uppercase tracking-widest ${v===null?'text-slate-400':textColor}`}>Envíos On-Time</p>
+                            <p className={`text-[12px] font-black uppercase tracking-widest ${v===null?'text-slate-500':textColor}`}>Envíos On-Time</p>
                             <p className={`text-3xl font-black ${textColor}`}>{v !== null ? `${v}%` : '—'}</p>
-                            <p className="text-[8px] text-slate-400 font-bold">últimos 30 días</p>
+                            <p className="text-[11px] text-slate-500 font-bold">últimos 30 días</p>
                           </div>
                         );
                       })()}
 
                       {/* Tasa devoluciones */}
                       <div className={`rounded-2xl border p-4 flex flex-col gap-1 ${dispatchKpis.returns_rate > 5 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
-                        <p className={`text-[9px] font-black uppercase tracking-widest ${dispatchKpis.returns_rate > 5 ? 'text-red-500' : 'text-slate-400'}`}>Tasa Devoluciones</p>
+                        <p className={`text-[12px] font-black uppercase tracking-widest ${dispatchKpis.returns_rate > 5 ? 'text-red-500' : 'text-slate-500'}`}>Tasa Devoluciones</p>
                         <p className={`text-3xl font-black ${dispatchKpis.returns_rate > 5 ? 'text-red-700' : 'text-slate-700'}`}>{dispatchKpis.returns_rate}%</p>
-                        <p className="text-[8px] text-slate-400 font-bold">del mes actual</p>
+                        <p className="text-[11px] text-slate-500 font-bold">del mes actual</p>
                       </div>
                     </div>
 
                     {/* Gráfico de barras semanal */}
                     {weeklyDispatch.length > 0 && (
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                        <h3 className="text-sm font-black text-slate-700 uppercase tracking-tighter mb-5 flex items-center gap-2">
+                        <h3 className="text-sm font-black text-slate-700 tracking-tighter mb-5 flex items-center gap-2">
                           <ArrowUpRight className="text-blue-500 w-4 h-4"/> Despachos — Últimos 7 días
                         </h3>
                         <div className="flex items-end gap-2 h-36">
@@ -2937,23 +2938,23 @@ export default function App() {
                             return (
                               <div key={i} className="flex-1 flex flex-col items-center gap-1 group relative">
                                 {/* Tooltip */}
-                                <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[9px] font-black px-2 py-1 rounded-lg whitespace-nowrap z-10 pointer-events-none">
+                                <div className="absolute bottom-full mb-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-[12px] font-black px-2 py-1 rounded-lg whitespace-nowrap z-10 pointer-events-none">
                                   {d.dispatches} desp. · {Number(d.units).toLocaleString()} un. · FR {d.fill_rate}%
                                 </div>
                                 <div className="w-full flex flex-col justify-end" style={{height:'100%'}}>
                                   <div className={`w-full rounded-t-lg transition-all duration-500 ${barColor}`} style={{height:`${Math.max(pct, d.dispatches > 0 ? 8 : 2)}%`}}/>
                                 </div>
-                                {d.dispatches > 0 && <span className="text-[8px] font-black text-slate-600">{d.dispatches}</span>}
-                                <span className="text-[8px] text-slate-400 font-bold">{dayLabel}</span>
+                                {d.dispatches > 0 && <span className="text-[11px] font-black text-slate-600">{d.dispatches}</span>}
+                                <span className="text-[11px] text-slate-500 font-bold">{dayLabel}</span>
                               </div>
                             );
                           })}
                         </div>
                         <div className="flex gap-4 mt-3 pt-3 border-t border-slate-100">
-                          <span className="flex items-center gap-1 text-[8px] font-black text-slate-500"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block"/> FR ≥ 90%</span>
-                          <span className="flex items-center gap-1 text-[8px] font-black text-slate-500"><span className="w-2 h-2 rounded-sm bg-amber-400 inline-block"/> FR 70-89%</span>
-                          <span className="flex items-center gap-1 text-[8px] font-black text-slate-500"><span className="w-2 h-2 rounded-sm bg-red-400 inline-block"/> FR &lt; 70%</span>
-                          <span className="flex items-center gap-1 text-[8px] font-black text-slate-500 ml-auto">Total mes: <strong>{Number(weeklyDispatch.reduce((s,d)=>s+d.units,0)).toLocaleString()} un.</strong></span>
+                          <span className="flex items-center gap-1 text-[11px] font-black text-slate-500"><span className="w-2 h-2 rounded-sm bg-emerald-500 inline-block"/> FR ≥ 90%</span>
+                          <span className="flex items-center gap-1 text-[11px] font-black text-slate-500"><span className="w-2 h-2 rounded-sm bg-amber-400 inline-block"/> FR 70-89%</span>
+                          <span className="flex items-center gap-1 text-[11px] font-black text-slate-500"><span className="w-2 h-2 rounded-sm bg-red-400 inline-block"/> FR &lt; 70%</span>
+                          <span className="flex items-center gap-1 text-[11px] font-black text-slate-500 ml-auto">Total mes: <strong>{Number(weeklyDispatch.reduce((s,d)=>s+d.units,0)).toLocaleString()} un.</strong></span>
                         </div>
                       </div>
                     )}
@@ -2961,13 +2962,13 @@ export default function App() {
                     {/* Top SKUs despachados */}
                     {(dispatchKpis.top_dispatched_skus||[]).length > 0 && (
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                        <h3 className="text-sm font-black text-slate-700 uppercase tracking-tighter mb-4">Top 5 SKUs Despachados — Mes</h3>
+                        <h3 className="text-sm font-black text-slate-700 tracking-tighter mb-4">Top 5 SKUs Despachados — Mes</h3>
                         <div className="space-y-3">
                           {dispatchKpis.top_dispatched_skus.map((s, i) => {
                             const maxV = dispatchKpis.top_dispatched_skus[0].total_dispatched;
                             return (
                               <div key={s.sku} className="flex items-center gap-3">
-                                <span className="text-[10px] font-black text-slate-400 w-4">{i+1}</span>
+                                <span className="text-[12px] font-black text-slate-500 w-4">{i+1}</span>
                                 <span className="text-xs font-black text-slate-700 uppercase w-28 truncate" title={s.sku}>{s.sku}</span>
                                 <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
                                   <div className="bg-blue-500 h-full rounded-full transition-all duration-700" style={{width:`${Math.round((s.total_dispatched/maxV)*100)}%`}}/>
@@ -2986,13 +2987,13 @@ export default function App() {
                   {/* COLUMNA 1: Tareas y Ocupación */}
                   <div className="space-y-8">
                     {currentUser?.role !== 'CLIENTE' && <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
-                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center mb-6"><ClipboardCheck className="w-5 h-5 mr-2 text-indigo-500"/> Tareas en Progreso</h3>
+                      <h3 className="text-sm font-black text-slate-800 tracking-tighter flex items-center mb-6"><ClipboardCheck className="w-5 h-5 mr-2 text-indigo-500"/> Tareas en Progreso</h3>
                       <div className="space-y-3">
                         {stockAlerts.length > 0 && (
                       <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-2">
-                        <p className="text-[10px] font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-2"><ShieldAlert size={12}/> {stockAlerts.length} Alertas de Stock</p>
+                        <p className="text-[12px] font-black text-red-600 uppercase tracking-widest flex items-center gap-2 mb-2"><ShieldAlert size={12}/> {stockAlerts.length} Alertas de Stock</p>
                         {stockAlerts.slice(0,3).map(a => (
-                          <div key={a.sku} className="flex justify-between text-[9px] font-bold text-red-700 border-t border-red-100 pt-1 mt-1">
+                          <div key={a.sku} className="flex justify-between text-[12px] font-bold text-red-700 border-t border-red-100 pt-1 mt-1">
                             <span>{a.sku}</span>
                             <span className={parseFloat(a.current_stock) < parseFloat(a.stock_min) ? 'text-red-600' : 'text-orange-600'}>
                               {parseFloat(a.current_stock) < parseFloat(a.stock_min) ? `⬇ Mínimo (${a.current_stock}/${a.stock_min})` : `⬆ Máximo (${a.current_stock}/${a.stock_max})`}
@@ -3006,7 +3007,7 @@ export default function App() {
                             <div className="p-2.5 bg-emerald-100 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform"><ArrowDownRight size={18}/></div>
                             <div className="text-left">
                               <p className="text-xs font-black text-slate-800 uppercase">Recepciones</p>
-                              <p className="text-[10px] font-bold text-slate-500 mt-0.5">{workspaces.receive?.length || 0} documento(s) borrador</p>
+                              <p className="text-[12px] font-bold text-slate-500 mt-0.5">{workspaces.receive?.length || 0} documento(s) borrador</p>
                             </div>
                           </div>
                           <ChevronRight size={16} className="text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0" />
@@ -3017,7 +3018,7 @@ export default function App() {
                             <div className="p-2.5 bg-blue-100 text-blue-600 rounded-xl group-hover:scale-110 transition-transform"><ArrowUpRight size={18}/></div>
                             <div className="text-left">
                               <p className="text-xs font-black text-slate-800 uppercase">Despachos</p>
-                              <p className="text-[10px] font-bold text-slate-500 mt-0.5">{workspaces.dispatch?.length || 0} documento(s) borrador</p>
+                              <p className="text-[12px] font-bold text-slate-500 mt-0.5">{workspaces.dispatch?.length || 0} documento(s) borrador</p>
                             </div>
                           </div>
                           <ChevronRight size={16} className="text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0" />
@@ -3028,7 +3029,7 @@ export default function App() {
                             <div className="p-2.5 bg-amber-100 text-amber-600 rounded-xl group-hover:scale-110 transition-transform"><Activity size={18}/></div>
                             <div className="text-left">
                               <p className="text-xs font-black text-slate-800 uppercase">Ajustes Mermas</p>
-                              <p className="text-[10px] font-bold text-slate-500 mt-0.5">{workspaces.adjust?.length || 0} documento(s) borrador</p>
+                              <p className="text-[12px] font-bold text-slate-500 mt-0.5">{workspaces.adjust?.length || 0} documento(s) borrador</p>
                             </div>
                           </div>
                           <ChevronRight size={16} className="text-amber-500 opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0" />
@@ -3037,23 +3038,23 @@ export default function App() {
                     </div>}
 
                     <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 relative overflow-hidden group">
-                       <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center mb-4"><PieChart className="w-5 h-5 mr-2 text-indigo-500"/> {currentUser?.role === 'CLIENTE' ? 'Mi Stock (%)' : is3PLMode ? 'Stock por Cliente (%)' : 'Stock por Estado (%)'}</h3>
+                       <h3 className="text-sm font-black text-slate-800 tracking-tighter flex items-center mb-4"><PieChart className="w-5 h-5 mr-2 text-indigo-500"/> {currentUser?.role === 'CLIENTE' ? 'Mi Stock (%)' : is3PLMode ? 'Stock por Cliente (%)' : 'Stock por Estado (%)'}</h3>
                        <div className="flex items-center gap-6">
                          <SimpleDonut data={occData} colors={occColors} />
                          <div className="flex-1 space-y-2">
                            {occData.map((d, i) => (
-                             <div key={d.label} className="flex items-center justify-between text-[10px] font-black">
-                               <span className="flex items-center truncate gap-2 text-slate-600">
+                             <div key={d.label} className="flex items-center justify-between gap-3 text-[12px] font-black">
+                               <span className="flex items-center gap-2 text-slate-600 min-w-0">
                                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{backgroundColor: occColors[i]}}></span>
-                                 <span className="truncate w-20" title={d.label}>{d.label}</span>
+                                 <span className="truncate" title={d.label}>{d.label}</span>
                                </span>
                                <div className="flex flex-col items-end gap-0.5 shrink-0">
-                                 <span className="font-black text-slate-800" style={{color: occColors[i]}}>{d.pct}%</span>
-                                 <span className="text-[8px] text-slate-400 font-bold">{d.value.toLocaleString()} un</span>
+                                 <span className="font-black text-slate-800">{d.pct}%</span>
+                                 <span className="text-[11px] text-slate-500 font-bold">{d.value.toLocaleString()} un</span>
                                </div>
                              </div>
                            ))}
-                           {occData.length === 0 && <p className="text-xs text-slate-400 italic">Sin inventario</p>}
+                           {occData.length === 0 && <p className="text-xs text-slate-500 italic">Sin inventario</p>}
                          </div>
                        </div>
                     </div>
@@ -3062,11 +3063,11 @@ export default function App() {
                   {/* COLUMNA 2: Flujos y Calidad */}
                   <div className="space-y-8">
                     {currentUser?.role !== 'CLIENTE' && <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6">
-                       <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center mb-6"><BarChart3 className="w-5 h-5 mr-2 text-emerald-500"/> Entradas vs Salidas (7 Días)</h3>
+                       <h3 className="text-sm font-black text-slate-800 tracking-tighter flex items-center mb-6"><BarChart3 className="w-5 h-5 mr-2 text-emerald-500"/> Entradas vs Salidas (7 Días)</h3>
                        <div className="h-40 flex items-end justify-between gap-2 px-2">
                          {flowData.map((d, i) => (
                            <div key={i} className="flex flex-col items-center gap-1 w-full group/bar relative">
-                             <div className="absolute -top-8 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-slate-800 text-white text-[9px] p-1.5 rounded flex flex-col gap-0.5 pointer-events-none z-10 whitespace-nowrap shadow-lg">
+                             <div className="absolute -top-8 opacity-0 group-hover/bar:opacity-100 transition-opacity bg-slate-800 text-white text-[12px] p-1.5 rounded flex flex-col gap-0.5 pointer-events-none z-10 whitespace-nowrap shadow-lg">
                                <span className="text-emerald-400 font-bold">In: {d.inQty}</span>
                                <span className="text-red-400 font-bold">Out: {d.outQty}</span>
                              </div>
@@ -3074,30 +3075,30 @@ export default function App() {
                                <div className="w-full max-w-[12px] bg-emerald-400 rounded-t-sm hover:brightness-110 transition-all" style={{height: `${maxFlow > 0 ? (d.inQty / maxFlow) * 100 : 0}%`, minHeight: d.inQty>0?'4px':'0'}}></div>
                                <div className="w-full max-w-[12px] bg-red-400 rounded-t-sm hover:brightness-110 transition-all" style={{height: `${maxFlow > 0 ? (d.outQty / maxFlow) * 100 : 0}%`, minHeight: d.outQty>0?'4px':'0'}}></div>
                              </div>
-                             <span className="text-[8px] font-bold text-slate-400">{d.date}</span>
+                             <span className="text-[11px] font-bold text-slate-500">{d.date}</span>
                            </div>
                          ))}
                        </div>
-                       <div className="flex justify-center gap-4 mt-4 text-[9px] font-black uppercase text-slate-500">
-                         <span className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-400 rounded-sm"></div> Inbound</span>
-                         <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-400 rounded-sm"></div> Outbound</span>
+                       <div className="flex justify-center gap-4 mt-4 text-[12px] font-black uppercase text-slate-500">
+                         <span className="flex items-center gap-1"><div className="w-2 h-2 bg-emerald-400 rounded-sm"></div> Entradas</span>
+                         <span className="flex items-center gap-1"><div className="w-2 h-2 bg-red-400 rounded-sm"></div> Salidas</span>
                        </div>
                     </div>}
 
                     <div className="bg-slate-800 rounded-[2rem] shadow-xl p-6 text-white relative overflow-hidden">
                       <div className="absolute top-0 right-0 p-4 opacity-5"><Layers size={80}/></div>
-                      <h3 className="text-sm font-black uppercase tracking-tighter mb-4 relative z-10 flex items-center"><Activity className="w-5 h-5 mr-2 text-indigo-400"/> Calidad de Stock</h3>
+                      <h3 className="text-sm font-black tracking-tighter mb-4 relative z-10 flex items-center"><Activity className="w-5 h-5 mr-2 text-indigo-400"/> Calidad de Stock</h3>
                       <div className="space-y-3 relative z-10">
                         {Object.entries(permittedInventory.reduce((acc, curr) => { const s = curr.status || 'DISPONIBLE'; acc[s] = (acc[s] || 0) + 1; return acc; }, {})).slice(0, 4).map(([status, count]) => (
                           <div key={status} className="flex justify-between items-center border-b border-white/10 pb-2 last:border-0 last:pb-0">
-                            <span className="flex items-center gap-3 text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+                            <span className="flex items-center gap-3 text-[12px] font-bold text-slate-300 uppercase tracking-widest">
                               <span className={`w-2.5 h-2.5 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.5)] ${status === 'DISPONIBLE' ? 'bg-emerald-400 shadow-emerald-400/50' : status === 'BLOQUEADO' ? 'bg-red-400 shadow-red-400/50' : 'bg-indigo-400 shadow-indigo-400/50'}`}></span>
                               {status}
                             </span>
                             <span className="font-black text-sm bg-slate-900 px-2 py-0.5 rounded-lg">{count}</span>
                           </div>
                         ))}
-                        {permittedInventory.length === 0 && <p className="text-xs text-slate-500 italic">No hay inventario registrado.</p>}
+                        {permittedInventory.length === 0 && <p className="text-xs text-slate-400 italic">No hay inventario registrado.</p>}
                       </div>
                     </div>
                   </div>
@@ -3105,7 +3106,7 @@ export default function App() {
                   {/* COLUMNA 3: Logs */}
                   {currentUser?.role !== 'CLIENTE' && <div className="lg:col-span-1 bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 flex flex-col h-[600px]">
                     <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4 shrink-0">
-                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><History className="w-5 h-5 mr-2 text-indigo-500"/> Transacciones (Vivo)</h3>
+                      <h3 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><History className="w-5 h-5 mr-2 text-indigo-500"/> Transacciones (Vivo)</h3>
                     </div>
                     
                     <div className="flex-1 pr-2 custom-scrollbar">
@@ -3115,7 +3116,7 @@ export default function App() {
                         itemSize={112}
                         height={520}
                         className="space-y-3"
-                        emptyState={<p className="text-center text-slate-400 text-xs">Sin transacciones recientes</p>}
+                        emptyState={<p className="text-center text-slate-500 text-xs">Sin transacciones recientes</p>}
                         renderItem={(log) => (
                           <div key={log.id} className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-transparent hover:border-slate-200 transition-colors">
                             <div className={`p-2 rounded-xl shrink-0 mt-0.5 shadow-sm ${
@@ -3129,17 +3130,17 @@ export default function App() {
                             <div className="flex-1 min-w-0">
                               <div className="flex justify-between items-center mb-1">
                                 <p className="text-xs font-black text-slate-800 truncate uppercase">{log.sku}</p>
-                                <span className={`text-[10px] font-black bg-white px-1.5 py-0.5 rounded shadow-sm ${
+                                <span className={`text-[12px] font-black bg-white px-1.5 py-0.5 rounded shadow-sm ${
                                    log.type === 'INBOUND' || log.type === 'ADJUST_IN' ? 'text-emerald-600' :
                                    log.type === 'OUTBOUND' || log.type === 'ADJUST_OUT' ? 'text-red-600' : 'text-purple-600'
                                 }`}>{log.type === 'INBOUND' || log.type === 'ADJUST_IN' ? '+' : log.type === 'OUTBOUND' || log.type === 'ADJUST_OUT' ? '-' : ''}{log.qty}</span>
                               </div>
-                              <p className="text-[9px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mb-1.5">
+                              <p className="text-[12px] font-bold text-slate-500 uppercase flex items-center gap-1.5 mb-1.5">
                                  <span className="flex items-center"><Calendar size={8} className="mr-0.5"/> {new Date(log.created_at).toLocaleString('es-ES', { timeStyle: 'short' })}</span>
                                  <span className="text-slate-300">•</span>
                                  <span className="text-indigo-600 flex items-center"><UserCog size={8} className="mr-0.5"/> {log.username || 'SYS'}</span>
                               </p>
-                              <p className="text-[10px] text-slate-600 truncate" title={log.glosa}>
+                              <p className="text-[12px] text-slate-600 truncate" title={log.glosa}>
                                 {log.glosa || 'Sin observaciones.'}
                               </p>
                             </div>
@@ -3147,9 +3148,9 @@ export default function App() {
                         )}
                       />
                       {auditLogs.length === 0 && (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-400 py-10">
+                        <div className="h-full flex flex-col items-center justify-center text-slate-500 py-10">
                           <History size={32} className="opacity-20 mb-2"/>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sin actividad</p>
+                          <p className="text-[12px] font-black uppercase tracking-widest text-slate-500">Sin actividad</p>
                         </div>
                       )}
                     </div>
@@ -3278,30 +3279,30 @@ export default function App() {
               <div className="space-y-4 animate-in fade-in max-w-7xl mx-auto">
                 <div className="flex flex-col gap-3">
                   <div className="flex items-start justify-between gap-2">
-                    <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter leading-tight flex items-center gap-2">
+                    <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tighter leading-tight flex items-center gap-2">
                       Inventario Físico
                       {!is3PLMode && <span className="text-xs px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-700 font-black normal-case tracking-normal">{systemConfig.own_client_name || 'Bodega Propia'}</span>}
                     </h1>
                     <div className="flex gap-1.5 shrink-0 items-center">
                       {/* Toggle vista — oculto para CLIENTE (siempre consolidado) */}
                       {currentUser?.role !== 'CLIENTE' && <div className="flex bg-slate-100 p-1 rounded-xl">
-                        <button onClick={()=>setInvView('lpn')} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${invView==='lpn'?'bg-white text-indigo-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
+                        <button onClick={()=>setInvView('lpn')} className={`px-3 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${invView==='lpn'?'bg-white text-indigo-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
                           <Package size={10}/> LPNs
                         </button>
-                        <button onClick={()=>setInvView('consolidado')} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${invView==='consolidado'?'bg-white text-indigo-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
+                        <button onClick={()=>setInvView('consolidado')} className={`px-3 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-widest transition-all flex items-center gap-1 ${invView==='consolidado'?'bg-white text-indigo-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
                           <BarChart3 size={10}/> Saldo
                         </button>
                       </div>}
-                      <button onClick={async () => { try { await descargarArchivoAutenticado(host, '/api/export/inventory', `inventario_${new Date().toISOString().slice(0,10)}.xlsx`); } catch (e) { showMsg(`⛔ ${e.message}`, true); } }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> <span className="hidden sm:inline">Exportar</span></button>
-                      <button onClick={() => setImportModal({ type: 'inventory' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 sm:px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Upload size={12}/> <span className="hidden sm:inline">Importar</span></button>
+                      <button onClick={async () => { try { await descargarArchivoAutenticado(host, '/api/export/inventory', `inventario_${new Date().toISOString().slice(0,10)}.xlsx`); } catch (e) { showMsg(`⛔ ${e.message}`, true); } }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 sm:px-3 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Download size={12}/> <span className="hidden sm:inline">Exportar</span></button>
+                      <button onClick={() => setImportModal({ type: 'inventory' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 sm:px-3 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest flex items-center gap-1 shadow-sm"><Upload size={12}/> <span className="hidden sm:inline">Importar</span></button>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm focus-within:ring-2 focus-within:ring-indigo-200 transition-all flex-1">
-                      <Search size={14} className="text-slate-400 mr-2 shrink-0" />
+                      <Search size={14} className="text-slate-500 mr-2 shrink-0" />
                       <input type="text" placeholder="Buscar producto, código o ubicación..." value={invSearchTerm} onChange={(e) => { setInvSearchTerm(e.target.value); setInvPage(0); }} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700" />
                     </div>
-                    <select value={invStatusFilter} onChange={(e) => { setInvStatusFilter(e.target.value); setInvPage(0); }} className="bg-white border border-slate-200 rounded-xl px-2 sm:px-3 py-2 text-[10px] sm:text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-200 shadow-sm text-slate-700 uppercase">
+                    <select aria-label="Filtrar por estado" value={invStatusFilter} onChange={(e) => { setInvStatusFilter(e.target.value); setInvPage(0); }} className="bg-white border border-slate-200 rounded-xl px-2 sm:px-3 py-2 text-[12px] sm:text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-200 shadow-sm text-slate-700 uppercase">
                       <option value="">Todos</option>
                       <option value="DISPONIBLE">DISPONIBLE</option>
                       {statuses.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
@@ -3311,12 +3312,12 @@ export default function App() {
 
                 <div className="flex gap-2 flex-wrap">
                   <div className="bg-white px-3 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2">
-                     <span className="text-[10px] font-black text-slate-400 uppercase">Total LPNs:</span>
+                     <span className="text-[12px] font-black text-slate-500 uppercase">Total LPNs:</span>
                      <span className="text-sm font-black text-slate-700">{permittedInventory.length}</span>
                   </div>
                   {Object.entries(permittedInventory.reduce((acc, curr) => { const s = curr.status || 'DISPONIBLE'; acc[s] = (acc[s] || 0) + 1; return acc; }, {})).map(([status, count]) => (
                     <div key={status} className={`px-3 py-2 rounded-xl border shadow-sm flex items-center gap-2 ${getStatusBadge(status)}`}>
-                       <span className="text-[10px] font-black uppercase">{status}:</span>
+                       <span className="text-[12px] font-black uppercase">{status}:</span>
                        <span className="text-sm font-black">{count}</span>
                     </div>
                   ))}
@@ -3344,18 +3345,18 @@ export default function App() {
                       {/* KPI resumen */}
                       <div className="flex flex-wrap gap-3 p-5 border-b border-slate-100 bg-gradient-to-r from-indigo-50 to-white">
                         <div className="flex flex-col">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">SKUs únicos</span>
+                          <span className="text-[12px] font-black text-slate-500 uppercase tracking-widest">SKUs únicos</span>
                           <span className="text-2xl font-black text-indigo-700">{rows.length}</span>
                         </div>
                         <div className="w-px bg-slate-200"/>
                         <div className="flex flex-col">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Unidades totales</span>
+                          <span className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Unidades totales</span>
                           <span className="text-2xl font-black text-slate-800">{totalGeneral.toLocaleString()}</span>
                         </div>
                         <div className="w-px bg-slate-200"/>
                         {allStatuses.map(st => (
                           <div key={st} className="flex flex-col">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{st}</span>
+                            <span className="text-[12px] font-black text-slate-500 uppercase tracking-widest">{st}</span>
                             <span className={`text-xl font-black ${st==='DISPONIBLE'?'text-emerald-600':st==='BLOQUEADO'?'text-red-600':'text-amber-600'}`}>
                               {rows.reduce((s,r) => s + (r.byStatus[st]||0), 0).toLocaleString()}
                             </span>
@@ -3383,7 +3384,7 @@ export default function App() {
                               a.href = URL.createObjectURL(blob);
                               a.download = `inventario_consolidado_${new Date().toISOString().slice(0,10)}.csv`;
                               a.click();
-                            }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm transition-colors">
+                            }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm transition-colors">
                               <Download size={12}/> Exportar CSV
                             </button>
                           </div>
@@ -3393,18 +3394,18 @@ export default function App() {
                         <table className="w-full text-left min-w-[700px]">
                           <thead className="bg-slate-50 border-b">
                             <tr>
-                              <th className="px-5 py-3 text-[10px] font-black text-slate-400 uppercase">SKU / Descripción</th>
-                              {is3PLMode && <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase">Cliente</th>}
-                              <th className="px-4 py-3 text-right text-[10px] font-black text-emerald-600 uppercase">Disponible</th>
-                              <th className="px-4 py-3 text-right text-[10px] font-black text-red-500 uppercase">Bloqueado</th>
-                              <th className="px-4 py-3 text-right text-[10px] font-black text-amber-600 uppercase">Cuarentena</th>
-                              <th className="px-4 py-3 text-right text-[10px] font-black text-slate-600 uppercase">Total</th>
-                              {currentUser?.role !== 'CLIENTE' && <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase">Ubicaciones</th>}
+                              <th className="px-5 py-3 text-[12px] font-black text-slate-500 uppercase">SKU / Descripción</th>
+                              {is3PLMode && <th className="px-4 py-3 text-[12px] font-black text-slate-500 uppercase">Cliente</th>}
+                              <th className="px-4 py-3 text-right text-[12px] font-black text-emerald-600 uppercase">Disponible</th>
+                              <th className="px-4 py-3 text-right text-[12px] font-black text-red-500 uppercase">Bloqueado</th>
+                              <th className="px-4 py-3 text-right text-[12px] font-black text-amber-600 uppercase">Cuarentena</th>
+                              <th className="px-4 py-3 text-right text-[12px] font-black text-slate-600 uppercase">Total</th>
+                              {currentUser?.role !== 'CLIENTE' && <th className="px-4 py-3 text-[12px] font-black text-slate-500 uppercase">Ubicaciones</th>}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {rows.length === 0 && (
-                              <tr><td colSpan={is3PLMode ? (currentUser?.role === 'CLIENTE' ? 6 : 7) : (currentUser?.role === 'CLIENTE' ? 5 : 6)} className="p-8 text-center text-slate-400 text-xs">Sin stock consolidado para los filtros aplicados.</td></tr>
+                              <tr><td colSpan={is3PLMode ? (currentUser?.role === 'CLIENTE' ? 6 : 7) : (currentUser?.role === 'CLIENTE' ? 5 : 6)} className="p-8 text-center text-slate-500 text-xs">Sin stock consolidado para los filtros aplicados.</td></tr>
                             )}
                             {rows.map(r => {
                               const disp = r.byStatus['DISPONIBLE'] || 0;
@@ -3416,10 +3417,10 @@ export default function App() {
                                 <tr key={is3PLMode ? `${r.sku}||${r.client_id}` : r.sku} className="hover:bg-indigo-50/30 transition-colors">
                                   <td className="px-5 py-3">
                                     <p className="text-xs font-black text-slate-800 uppercase">{r.sku}</p>
-                                    <p className="text-[9px] text-slate-400 truncate max-w-[200px]">{r.desc}</p>
+                                    <p className="text-[12px] text-slate-500 truncate max-w-[200px]">{r.desc}</p>
                                   </td>
                                   {is3PLMode && <td className="px-4 py-3">
-                                    <span className="text-[10px] font-bold text-indigo-700 uppercase flex items-center gap-1"><Building2 size={9}/>{clientName}</span>
+                                    <span className="text-[12px] font-bold text-indigo-700 uppercase flex items-center gap-1"><Building2 size={9}/>{clientName}</span>
                                   </td>}
                                   <td className="px-4 py-3 text-right">
                                     <span className={`text-sm font-black ${disp>0?'text-emerald-600':'text-slate-300'}`}>{disp>0?disp.toLocaleString():'—'}</span>
@@ -3436,9 +3437,9 @@ export default function App() {
                                   {currentUser?.role !== 'CLIENTE' && <td className="px-4 py-3">
                                     <div className="flex flex-wrap gap-1">
                                       {locs.slice(0,3).map(l => (
-                                        <span key={l} className="bg-slate-100 border border-slate-200 rounded font-mono text-[8px] font-bold text-slate-600 px-1.5 py-0.5">{l}</span>
+                                        <span key={l} className="bg-slate-100 border border-slate-200 rounded font-mono text-[11px] font-bold text-slate-600 px-1.5 py-0.5">{l}</span>
                                       ))}
-                                      {locs.length > 3 && <span className="text-[8px] text-slate-400 font-bold">+{locs.length-3}</span>}
+                                      {locs.length > 3 && <span className="text-[11px] text-slate-500 font-bold">+{locs.length-3}</span>}
                                     </div>
                                   </td>}
                                 </tr>
@@ -3457,25 +3458,25 @@ export default function App() {
                   <table className="w-full text-left min-w-[900px]">
                     <thead className="bg-slate-50 border-b">
                       <tr>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">ID Movimiento / LPN</th>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">Ubicación y Estado</th>
-                        <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">SKU / Producto</th>
-                        {is3PLMode && <th className="px-5 pt-4 pb-1 text-[10px] font-black text-slate-400 uppercase">Cliente</th>}
-                        <th className="px-5 pt-4 pb-1 text-right text-[10px] font-black text-slate-400 uppercase">Cantidad</th>
-                        <th className="px-5 pt-4 pb-1 text-center text-[10px] font-black text-slate-400 uppercase">
+                        <th className="px-5 pt-4 pb-1 text-[12px] font-black text-slate-500 uppercase">LPN</th>
+                        <th className="px-5 pt-4 pb-1 text-[12px] font-black text-slate-500 uppercase">Ubicación y Estado</th>
+                        <th className="px-5 pt-4 pb-1 text-[12px] font-black text-slate-500 uppercase">SKU / Producto</th>
+                        {is3PLMode && <th className="px-5 pt-4 pb-1 text-[12px] font-black text-slate-500 uppercase">Cliente</th>}
+                        <th className="px-5 pt-4 pb-1 text-right text-[12px] font-black text-slate-500 uppercase">Cantidad</th>
+                        <th className="px-5 pt-4 pb-1 text-center text-[12px] font-black text-slate-500 uppercase">
                           {(invSearchTerm||invStatusFilter||invClientFilter||invSkuFilter||invLocFilter) && (
-                            <button onClick={() => { setInvSearchTerm(''); setInvStatusFilter(''); setInvClientFilter(''); setInvSkuFilter(''); setInvLocFilter(''); }} className="bg-red-100 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase flex items-center gap-1 ml-auto"><X size={8}/> Limpiar</button>
+                            <button onClick={() => { setInvSearchTerm(''); setInvStatusFilter(''); setInvClientFilter(''); setInvSkuFilter(''); setInvLocFilter(''); }} className="bg-red-100 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[11px] font-black uppercase flex items-center gap-1 ml-auto"><X size={8}/> Limpiar</button>
                           )}
                         </th>
                       </tr>
                       <tr className="border-t border-slate-100">
                         <td className="px-3 pb-3 pt-1">
-                          <input type="text" placeholder="🔍 Buscar LPN..." value={invSearchTerm} onChange={e=>setInvSearchTerm(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 placeholder-slate-300"/>
+                          <input type="text" aria-label="Buscar LPN" placeholder="🔍 Buscar LPN…" value={invSearchTerm} onChange={e=>setInvSearchTerm(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 placeholder-slate-300"/>
                         </td>
                         <td className="px-3 pb-3 pt-1">
                           <div className="flex flex-col gap-1">
-                            <input type="text" placeholder="🔍 Ubicación..." value={invLocFilter} onChange={e=>setInvLocFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 placeholder-slate-300"/>
-                            <select value={invStatusFilter} onChange={e=>setInvStatusFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
+                            <input type="text" aria-label="Filtrar por ubicación" placeholder="🔍 Ubicación…" value={invLocFilter} onChange={e=>setInvLocFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 placeholder-slate-300"/>
+                            <select aria-label="Filtrar por estado" value={invStatusFilter} onChange={e=>setInvStatusFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
                               <option value="">Todos los estados</option>
                               <option value="DISPONIBLE">DISPONIBLE</option>
                               {statuses.map(s => <option key={s.id} value={s.id}>{s.id}</option>)}
@@ -3483,14 +3484,14 @@ export default function App() {
                           </div>
                         </td>
                         <td className="px-3 pb-3 pt-1">
-                          <select value={invSkuFilter} onChange={e=>setInvSkuFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
+                          <select aria-label="Filtrar por SKU" value={invSkuFilter} onChange={e=>setInvSkuFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700 uppercase">
                             <option value="">Todos los SKUs</option>
                             {[...new Set(permittedInventory.map(i=>i.sku))].sort().map(sku=><option key={sku} value={sku}>{sku}</option>)}
                           </select>
                         </td>
                         {is3PLMode && (
                           <td className="px-3 pb-3 pt-1">
-                            <select value={invClientFilter} onChange={e=>setInvClientFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700">
+                            <select aria-label="Filtrar por cliente" value={invClientFilter} onChange={e=>setInvClientFilter(e.target.value)} className="w-full border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] font-bold outline-none focus:border-indigo-400 bg-white text-slate-700">
                               <option value="">Todos los clientes</option>
                               {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                             </select>
@@ -3499,14 +3500,14 @@ export default function App() {
                         <td className="px-3 pb-3 pt-1" colSpan="2">
                           <div className="flex gap-2 items-end">
                             <div className="flex flex-col gap-1 flex-1">
-                              <span className="text-[8px] font-black text-indigo-500 uppercase">📸 Ver stock en otra fecha</span>
-                              <input type="date" value={snapshotDate} onChange={e=>{setSnapshotDate(e.target.value); setShowHistory(false); setSnapshotData([]);}} className="w-full border-2 border-indigo-200 rounded-lg px-2 py-1.5 text-[10px] font-bold outline-none focus:border-indigo-500 bg-indigo-50 text-indigo-700" title="Ver stock tal como estaba ese día"/>
+                              <span className="text-[11px] font-black text-indigo-500 uppercase">📸 Ver stock en otra fecha</span>
+                              <input type="date" aria-label="Ver stock en otra fecha" value={snapshotDate} onChange={e=>{setSnapshotDate(e.target.value); setShowHistory(false); setSnapshotData([]);}} className="w-full border-2 border-indigo-200 rounded-lg px-2 py-1.5 text-[12px] font-bold outline-none focus:border-indigo-500 bg-indigo-50 text-indigo-700" title="Ver stock tal como estaba ese día"/>
                             </div>
-                            <button onClick={loadSnapshot} disabled={isLoadingSnapshot || !snapshotDate} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border border-indigo-200 rounded-lg px-2 py-1.5 text-[9px] font-black uppercase flex items-center gap-1 whitespace-nowrap disabled:opacity-50">
+                            <button onClick={loadSnapshot} disabled={isLoadingSnapshot || !snapshotDate} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 border border-indigo-200 rounded-lg px-2 py-1.5 text-[12px] font-black uppercase flex items-center gap-1 whitespace-nowrap disabled:opacity-50">
                               {isLoadingSnapshot ? <Loader2 size={10} className="animate-spin"/> : <Search size={10}/>} Ver
                             </button>
                             {showHistory && snapshotDate && (
-                              <button onClick={() => { setShowHistory(false); setSnapshotData([]); setSnapshotDate(''); }} className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 rounded-lg px-2 py-1.5 text-[9px] font-black uppercase flex items-center gap-1 whitespace-nowrap">
+                              <button onClick={() => { setShowHistory(false); setSnapshotData([]); setSnapshotDate(''); }} className="bg-slate-100 hover:bg-slate-200 text-slate-600 border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] font-black uppercase flex items-center gap-1 whitespace-nowrap">
                                 <X size={10}/> Volver
                               </button>
                             )}
@@ -3518,41 +3519,39 @@ export default function App() {
                       {(showHistory && snapshotDate ? snapshotData : showHistory ? historyData : filteredInventory.slice(invPage * INV_PAGE_SIZE, (invPage + 1) * INV_PAGE_SIZE)).map(i => (
                         <tr key={i.id} className={`hover:bg-slate-50 border-b border-slate-50 ${showHistory && parseFloat(i.qty) === 0 ? 'opacity-50' : ''}`}>
                           <td className="p-4">
-                            <p className="font-mono text-[10px] font-black text-slate-500">{i.id}</p>
-                            <p className="text-xs font-black text-slate-800 uppercase mt-1">{i.sku}</p>
-                            <p className="text-[9px] text-slate-500 truncate max-w-[160px] mt-0.5">{i.desc}</p>
+                            <p className="font-mono text-[12px] font-black text-slate-600">{i.id}</p>
                           </td>
                           <td className="p-4">
-                            <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono text-[10px] font-bold text-slate-700 block w-max mb-1">{i.location_id || 'PISO-RECEPCION'}</span>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${getStatusBadge(i.status)}`}>{statusLabel(i.status || 'DISPONIBLE')}</span>
-                            {i.batch_number && <p className="text-[8px] font-black text-amber-700 uppercase mt-1">LT: {i.batch_number}</p>}
+                            <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono text-[12px] font-bold text-slate-700 block w-max mb-1">{i.location_id || 'PISO-RECEPCION'}</span>
+                            <span className={`px-2 py-0.5 rounded text-[12px] font-black uppercase border ${getStatusBadge(i.status)}`}>{statusLabel(i.status || 'DISPONIBLE')}</span>
+                            {i.batch_number && <p className="text-[11px] font-black text-amber-700 uppercase mt-1">LT: {i.batch_number}</p>}
                             {i.expiry_date && (() => {
                               const d = new Date(i.expiry_date);
                               const today = new Date(); today.setHours(0,0,0,0);
                               const days = Math.ceil((d - today) / 86400000);
                               const cls = isNaN(d.getTime()) ? 'text-slate-500' : days < 0 ? 'text-red-700' : days <= 30 ? 'text-orange-600' : 'text-amber-700';
-                              return <p className={`text-[8px] font-black uppercase mt-0.5 ${cls}`}><Calendar size={9} className="inline mr-0.5 -mt-0.5"/>VENCE: {isNaN(d.getTime()) ? i.expiry_date : d.toLocaleDateString('es-ES')}{!isNaN(d.getTime()) && days < 0 ? ' (VENCIDO)' : ''}</p>;
+                              return <p className={`text-[11px] font-black uppercase mt-0.5 ${cls}`}><Calendar size={9} className="inline mr-0.5 -mt-0.5"/>VENCE: {isNaN(d.getTime()) ? i.expiry_date : d.toLocaleDateString('es-ES')}{!isNaN(d.getTime()) && days < 0 ? ' (VENCIDO)' : ''}</p>;
                             })()}
-                            {i.serial_number && <p className="text-[8px] font-black text-indigo-700 uppercase mt-0.5">SN: {i.serial_number}</p>}
+                            {i.serial_number && <p className="text-[11px] font-black text-indigo-700 uppercase mt-0.5">SN: {i.serial_number}</p>}
                           </td>
                           <td className="p-4">
                             <p className="text-xs font-black text-slate-800 uppercase">{i.sku}</p>
-                            <p className="text-[9px] text-slate-400 truncate max-w-[150px]">{i.desc}</p>
-                            {!is3PLMode && i.glosa && <p className="text-[9px] text-slate-400 italic mt-1 max-w-[150px] truncate">"{i.glosa}"</p>}
+                            <p className="text-[12px] text-slate-500 truncate max-w-[150px]">{i.desc}</p>
+                            {!is3PLMode && i.glosa && <p className="text-[12px] text-slate-500 italic mt-1 max-w-[150px] truncate">"{i.glosa}"</p>}
                           </td>
                           {is3PLMode && (
                             <td className="p-4">
-                              <p className="text-[10px] font-bold text-indigo-700 uppercase"><Building2 size={10} className="inline mr-1"/>{clients.find(c => c.id === permittedSkus.find(s => s.sku === i.sku)?.client_id)?.name || i.client_id || 'GENERAL'}</p>
-                              {showHistory && <p className="text-[8px] text-slate-400 mt-1">{i.created_at ? new Date(i.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'}) : ''}</p>}
-                              {i.glosa && <p className="text-[9px] text-slate-400 italic mt-1 max-w-[150px] truncate">"{i.glosa}"</p>}
+                              <p className="text-[12px] font-bold text-indigo-700 uppercase"><Building2 size={10} className="inline mr-1"/>{clients.find(c => c.id === permittedSkus.find(s => s.sku === i.sku)?.client_id)?.name || i.client_id || 'GENERAL'}</p>
+                              {showHistory && <p className="text-[11px] text-slate-500 mt-1">{i.created_at ? new Date(i.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'}) : ''}</p>}
+                              {i.glosa && <p className="text-[12px] text-slate-500 italic mt-1 max-w-[150px] truncate">"{i.glosa}"</p>}
                             </td>
                           )}
                           <td className="p-4 text-right">
                             <span className={`font-black text-lg ${parseFloat(i.qty) === 0 ? 'text-red-400 line-through' : 'text-slate-800'}`}>{parseFloat(i.qty).toLocaleString()}</span>
                           </td>
                           <td className="p-4 text-center">
-                            {!showHistory && <button onClick={() => handlePrintLabel(i)} className="bg-white p-2 rounded-full border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all"><Printer size={16}/></button>}
-                            {showHistory && <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${parseFloat(i.qty) > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{parseFloat(i.qty) > 0 ? 'Activo' : 'Consumido'}</span>}
+                            {!showHistory && <button onClick={() => handlePrintLabel(i)} aria-label="Imprimir etiqueta" title="Imprimir etiqueta" className="bg-white p-2 rounded-full border border-slate-200 text-slate-500 hover:text-indigo-600 hover:border-indigo-300 shadow-sm transition-all"><Printer size={16}/></button>}
+                            {showHistory && <span className={`text-[11px] font-black px-2 py-1 rounded uppercase ${parseFloat(i.qty) > 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{parseFloat(i.qty) > 0 ? 'Activo' : 'Consumido'}</span>}
                           </td>
                         </tr>
                       ))}
@@ -3562,12 +3561,12 @@ export default function App() {
                         <tr>
                           <td colSpan={is3PLMode ? 6 : 5} className="px-4 py-3 border-t border-slate-100">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-slate-500">
+                              <span className="text-[12px] font-bold text-slate-500">
                                 Mostrando {invPage * INV_PAGE_SIZE + 1}–{Math.min((invPage + 1) * INV_PAGE_SIZE, filteredInventory.length)} de {filteredInventory.length} LPNs
                               </span>
                               <div className="flex gap-2">
-                                <button disabled={invPage === 0} onClick={() => setInvPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 transition-colors">← Anterior</button>
-                                <button disabled={(invPage + 1) * INV_PAGE_SIZE >= filteredInventory.length} onClick={() => setInvPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-[10px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 transition-colors">Siguiente →</button>
+                                <button disabled={invPage === 0} onClick={() => setInvPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-[12px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 transition-colors">← Anterior</button>
+                                <button disabled={(invPage + 1) * INV_PAGE_SIZE >= filteredInventory.length} onClick={() => setInvPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-[12px] font-black bg-slate-100 hover:bg-slate-200 text-slate-700 disabled:opacity-40 transition-colors">Siguiente →</button>
                               </div>
                             </div>
                           </td>
@@ -3605,12 +3604,12 @@ export default function App() {
                     <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20}/>
                     <div className="flex-1">
                       <p className="text-sm font-black text-amber-900 uppercase tracking-tighter">Desincronización con el Mapa 3D</p>
-                      <p className="text-[11px] text-amber-800 mt-1">
+                      <p className="text-[13px] text-amber-800 mt-1">
                         {locAudit.without_3d_coords > 0 && <><strong>{locAudit.without_3d_coords}</strong> ubicaciones sin posición 3D no se mostrarán en el mapa. </>}
                         {locAudit.orphan_inventory?.length > 0 && <><strong>{locAudit.orphan_inventory.length}</strong> ubicaciones de LPNs no existen en el maestro. </>}
                       </p>
                       <div className="flex flex-wrap gap-2 mt-3">
-                        <button onClick={()=>setLocAuditModalOpen(true)} className="bg-amber-600 hover:bg-amber-700 text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase">Ver detalle</button>
+                        <button onClick={()=>setLocAuditModalOpen(true)} className="bg-amber-600 hover:bg-amber-700 text-white text-[12px] font-black px-3 py-1.5 rounded-xl uppercase">Ver detalle</button>
 
                         {/* Mover todo a recepción — aplica a LPNs en ubicaciones huérfanas */}
                         {locAudit.orphan_inventory?.length > 0 && (
@@ -3623,7 +3622,7 @@ export default function App() {
                               showMsg(`✅ ${d.moved} LPN(s) movidos a PISO-RECEPCION.`);
                               const r2 = await apiFetch(`${host}/api/locations/audit-3d`); if (r2.ok) setLocAudit(await r2.json());
                             } else { showMsg('⛔ Error al mover LPNs', true); }
-                          }} className="bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1">
+                          }} className="bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1">
                             <ArrowDownRight size={11}/> Mover todo a Recepción
                           </button>
                         )}
@@ -3643,7 +3642,7 @@ export default function App() {
                             showMsg(`✅ Posiciones generadas: ${applied.migrated} ubicaciones actualizadas.`);
                             const r2 = await apiFetch(`${host}/api/locations/audit-3d`); if (r2.ok) setLocAudit(await r2.json());
                             fetchData();
-                          }} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1">
+                          }} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1">
                             <MapIcon size={11}/> Generar Posiciones 3D
                           </button>
                         )}
@@ -3659,12 +3658,12 @@ export default function App() {
                 <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm space-y-8">
                   <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                     <div>
-                      <h3 className="text-xl font-black text-slate-800 uppercase tracking-tighter">Diseño de Bodega Paramétrico</h3>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Configura Bodegas, Zonas, Filas, Columnas y Pasillos</p>
+                      <h3 className="text-xl font-black text-slate-800 tracking-tighter">Diseño de Bodega Paramétrico</h3>
+                      <p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest mt-1">Configura Bodegas, Zonas, Filas, Columnas y Pasillos</p>
                     </div>
                     <div className="flex gap-2 items-center">
-                      <button onClick={handleExportLocsCsv} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-black border border-slate-200 flex items-center gap-1"><Download size={12}/>Exportar CSV</button>
-                      <label className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-2 rounded-xl text-[10px] font-black border border-emerald-200 flex items-center gap-1 cursor-pointer"><Upload size={12}/>Importar CSV<input type="file" accept=".csv" className="hidden" onChange={e=>{if(e.target.files[0])handleImportLocsCsv(e.target.files[0]);e.target.value=''}}/></label>
+                      <button onClick={handleExportLocsCsv} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 py-2 rounded-xl text-[12px] font-black border border-slate-200 flex items-center gap-1"><Download size={12}/>Exportar CSV</button>
+                      <label className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-3 py-2 rounded-xl text-[12px] font-black border border-emerald-200 flex items-center gap-1 cursor-pointer"><Upload size={12}/>Importar CSV<input type="file" accept=".csv" className="hidden" onChange={e=>{if(e.target.files[0])handleImportLocsCsv(e.target.files[0]);e.target.value=''}}/></label>
                       <Warehouse className="text-indigo-500 w-8 h-8 ml-2" />
                     </div>
                   </div>
@@ -3674,12 +3673,12 @@ export default function App() {
                     <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
                       {Object.entries(locZoneStats).map(([zone, st]) => (
                         <button key={zone} onClick={()=>{setWhZoneFilter(whZoneFilter===zone?'':zone);setLocPage(0);}} className={`p-3 rounded-2xl border text-left transition-all ${whZoneFilter===zone?'border-indigo-400 bg-indigo-50 shadow-md':'border-slate-200 bg-white hover:border-slate-300'}`}>
-                          <p className="text-[9px] font-black text-slate-500 uppercase truncate">{zone}</p>
+                          <p className="text-[12px] font-black text-slate-500 uppercase truncate">{zone}</p>
                           <p className="text-lg font-black text-slate-800">{st.total}</p>
                           <div className="w-full bg-slate-200 rounded-full h-1.5 mt-1">
                             <div className="bg-emerald-500 h-1.5 rounded-full" style={{width:`${st.total>0?Math.round(st.occupied/st.total*100):0}%`}}></div>
                           </div>
-                          <p className="text-[8px] font-bold text-slate-400 mt-1">{st.occupied} ocupadas / {st.total - st.occupied} libres</p>
+                          <p className="text-[11px] font-bold text-slate-500 mt-1">{st.occupied} ocupadas / {st.total - st.occupied} libres</p>
                         </button>
                       ))}
                     </div>
@@ -3688,7 +3687,7 @@ export default function App() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="space-y-4">
                       <h4 className="text-xs font-black text-slate-600 uppercase border-b border-slate-100 pb-2">1. Bodegas Físicas</h4>
-                      <p className="text-[10px] text-slate-400 font-bold">Número que identifica el almacén + glosa (descripción) vinculada.</p>
+                      <p className="text-[12px] text-slate-500 font-bold">Número que identifica el almacén + glosa (descripción) vinculada.</p>
                       <div className="flex gap-2">
                         <input value={newWh} onChange={e=>setNewWh(e.target.value)} placeholder="N°" type="number" min="1" className="w-16 border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/>
                         <input value={newWhGlosa} onChange={e=>setNewWhGlosa(e.target.value)} placeholder="Glosa (ej: Bodega Principal)" className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"
@@ -3697,7 +3696,7 @@ export default function App() {
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {warehouses.map(w => (
-                          <span key={w.id} className="bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg text-[10px] font-black border border-indigo-200 flex items-center gap-2 shadow-sm">
+                          <span key={w.id} className="bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg text-[12px] font-black border border-indigo-200 flex items-center gap-2 shadow-sm">
                             <span className="font-mono bg-indigo-200 text-indigo-800 px-1.5 rounded">{w.id}</span>
                             <span className="text-indigo-600">{w.name}</span>
                             <button onClick={()=>setWarehouses(warehouses.filter(x=>x.id!==w.id))} className="text-red-400 hover:text-red-600 ml-1"><X size={11}/></button>
@@ -3711,7 +3710,7 @@ export default function App() {
                      <h4 className="text-xs font-black text-slate-600 uppercase mb-4">3. Generador Automático — Código: bodega-pasillo-columna-fila</h4>
                      <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-500 uppercase">Bodega (número)</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Bodega (número)</label>
                           <select value={draftLoc.activeWarehouse} onChange={e=>{
                             const wh = warehouses.find(w=>w.id===e.target.value);
                             setDraftLoc({...draftLoc, activeWarehouse: e.target.value, activeZone: wh?.name || draftLoc.activeZone});
@@ -3720,56 +3719,56 @@ export default function App() {
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1">
+                          <label className="text-[12px] font-black text-slate-500 uppercase flex items-center gap-1">
                             Zona lógica (glosa)
-                            <span className="text-indigo-400 font-normal normal-case text-[9px]">— vinculada a bodega</span>
+                            <span className="text-indigo-400 font-normal normal-case text-[12px]">— vinculada a bodega</span>
                           </label>
                           <input value={draftLoc.activeZone} onChange={e=>setDraftLoc({...draftLoc, activeZone: e.target.value})} placeholder="Ej: Bodega Principal" list="zone-glosa-list" className="w-full border-2 border-indigo-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500 bg-indigo-50"/>
                           <datalist id="zone-glosa-list">{warehouses.map(w=><option key={w.id} value={w.name}/>)}{zones.map(z=><option key={z.id} value={z.id}/>)}</datalist>
-                          <p className="text-[9px] text-slate-400 font-medium">Se rellena automáticamente al seleccionar bodega.</p>
+                          <p className="text-[12px] text-slate-500 font-medium">Se rellena automáticamente al seleccionar bodega.</p>
                         </div>
                      </div>
 
                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-4">
                         <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-500 uppercase">Tipo pasillo</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Tipo pasillo</label>
                           <select value={draftLoc.aisleType} onChange={e=>setDraftLoc({...draftLoc, aisleType: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500 bg-white">
                              <option value="LETTERS">Letras (a-z / A-Z)</option>
                              <option value="NUMBERS">Números (1-99)</option>
                           </select>
                         </div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Desde pasillo</label><input value={draftLoc.aisleStart} onChange={e=>setDraftLoc({...draftLoc, aisleStart: e.target.value})} placeholder={draftLoc.aisleType==='LETTERS'?'a':'1'} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Hasta pasillo</label><input value={draftLoc.aisleEnd} onChange={e=>setDraftLoc({...draftLoc, aisleEnd: e.target.value})} placeholder={draftLoc.aisleType==='LETTERS'?'c':'3'} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Columnas</label><input type="number" min="1" value={draftLoc.colCount} onChange={e=>setDraftLoc({...draftLoc, colCount: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Filas</label><input type="number" min="1" value={draftLoc.levelCount} onChange={e=>setDraftLoc({...draftLoc, levelCount: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/></div>
+                        <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Desde pasillo</label><input value={draftLoc.aisleStart} onChange={e=>setDraftLoc({...draftLoc, aisleStart: e.target.value})} placeholder={draftLoc.aisleType==='LETTERS'?'a':'1'} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/></div>
+                        <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Hasta pasillo</label><input value={draftLoc.aisleEnd} onChange={e=>setDraftLoc({...draftLoc, aisleEnd: e.target.value})} placeholder={draftLoc.aisleType==='LETTERS'?'c':'3'} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/></div>
+                        <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Columnas</label><input type="number" min="1" value={draftLoc.colCount} onChange={e=>setDraftLoc({...draftLoc, colCount: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/></div>
+                        <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Filas</label><input type="number" min="1" value={draftLoc.levelCount} onChange={e=>setDraftLoc({...draftLoc, levelCount: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500"/></div>
                      </div>
                   </div>
 
                   {/* Preview en tiempo real — formato 4 segmentos: bodega-pasillo-columna-fila */}
                   <div className="bg-slate-900 rounded-3xl p-6 text-center shadow-inner relative overflow-hidden">
                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(67,56,202,0.2),transparent)]"></div>
-                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 relative z-10">Preview de IDs a generar</p>
+                     <p className="text-[12px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 relative z-10">Preview de IDs a generar</p>
                      <div className="flex justify-center gap-4 items-center relative z-10">
                        <span className="text-sm font-mono font-black text-emerald-400 bg-slate-800 px-4 py-2 rounded-lg">{draftLoc.activeWarehouse}-{draftLoc.aisleStart}-01-1</span>
-                       <span className="text-slate-500 font-black">...</span>
+                       <span className="text-slate-400 font-black">...</span>
                        <span className="text-sm font-mono font-black text-emerald-400 bg-slate-800 px-4 py-2 rounded-lg">{draftLoc.activeWarehouse}-{draftLoc.aisleEnd}-{String(draftLoc.colCount).padStart(2,'0')}-{draftLoc.levelCount}</span>
                      </div>
-                     <p className="text-[9px] text-slate-500 mt-3 uppercase font-bold tracking-[0.1em] relative z-10">
+                     <p className="text-[12px] text-slate-400 mt-3 uppercase font-bold tracking-[0.1em] relative z-10">
                        Total: {(() => { const s = draftLoc.aisleType==='LETTERS'?draftLoc.aisleStart.charCodeAt(0):parseInt(draftLoc.aisleStart); const e = draftLoc.aisleType==='LETTERS'?draftLoc.aisleEnd.charCodeAt(0):parseInt(draftLoc.aisleEnd); return Math.max(0,(e-s+1)*parseInt(draftLoc.colCount||1)*parseInt(draftLoc.levelCount||1)); })()} ubicaciones
                        {safeLocs.some(l => l.location_id === `${draftLoc.activeWarehouse}-${draftLoc.aisleStart}-01-1`) && <span className="ml-3 text-amber-400">Algunas ya existen</span>}
                      </p>
-                     <p className="text-[9px] text-slate-500 mt-1 uppercase font-bold relative z-10 flex justify-center gap-2">
+                     <p className="text-[12px] text-slate-400 mt-1 uppercase font-bold relative z-10 flex justify-center gap-2">
                        <span>Bodega</span><span>-</span><span>Pasillo</span><span>-</span><span>Columna</span><span>-</span><span>Fila</span>
                      </p>
                   </div>
 
                   {/* MEJORA 1: Vista previa visual del layout */}
                   <div className="flex items-center gap-3">
-                    <label className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase">
+                    <label className="flex items-center gap-2 text-[12px] font-black text-slate-500 uppercase">
                       <input type="checkbox" checked={whOverwrite} onChange={e=>setWhOverwrite(e.target.checked)} className="rounded"/>
                       Sobrescribir duplicados
                     </label>
-                    <button onClick={()=>{setWhShowPreview(!whShowPreview);setWhExcluded(new Set())}} className="text-[10px] font-black text-indigo-600 hover:text-indigo-800 underline">{whShowPreview?'Ocultar grilla':'Mostrar grilla visual'}</button>
+                    <button onClick={()=>{setWhShowPreview(!whShowPreview);setWhExcluded(new Set())}} className="text-[12px] font-black text-indigo-600 hover:text-indigo-800 underline">{whShowPreview?'Ocultar grilla':'Mostrar grilla visual'}</button>
                   </div>
 
                   {whShowPreview && (() => {
@@ -3783,25 +3782,25 @@ export default function App() {
                     return (
                       <div className="space-y-3 p-4 bg-slate-50 rounded-2xl border border-slate-200">
                         <div className="flex justify-between items-center">
-                          <p className="text-[10px] font-black text-slate-600 uppercase">Grilla: {aisles.length} pasillos x {cols} columnas x {draftLoc.levelCount} niveles</p>
+                          <p className="text-[12px] font-black text-slate-600 uppercase">Grilla: {aisles.length} pasillos x {cols} columnas x {draftLoc.levelCount} niveles</p>
                           <div className="text-right">
-                            <p className="text-[10px] font-black text-emerald-600">Se generaran {newCount} ubicaciones nuevas{existingCount>0?` (${existingCount} ya existen)`:''}</p>
+                            <p className="text-[12px] font-black text-emerald-600">Se generaran {newCount} ubicaciones nuevas{existingCount>0?` (${existingCount} ya existen)`:''}</p>
                             {newCount===0 && existingCount>0 && (
-                              <p className="text-[9px] font-bold text-amber-600">Todas ya existen. "Generar" solo reescribe si marcas "Sobrescribir duplicados".</p>
+                              <p className="text-[12px] font-bold text-amber-600">Todas ya existen. "Generar" solo reescribe si marcas "Sobrescribir duplicados".</p>
                             )}
                           </div>
                         </div>
                         <div className="overflow-auto max-h-60 custom-scrollbar">
                           {aisles.map(aisle => (
                             <div key={aisle} className="mb-2">
-                              <p className="text-[9px] font-black text-slate-500 mb-1">Pasillo {aisle}</p>
+                              <p className="text-[12px] font-black text-slate-500 mb-1">Pasillo {aisle}</p>
                               <div className="flex flex-wrap gap-1">
                                 {preview.filter(p=>p.location_id.includes(`-${aisle}-`)).map(p => {
                                   const exists = existingIds.has(p.location_id);
                                   const excluded = whExcluded.has(p.location_id);
                                   return (
                                     <button key={p.location_id} onClick={()=>{const s=new Set(whExcluded);if(excluded)s.delete(p.location_id);else s.add(p.location_id);setWhExcluded(s);}}
-                                      className={`px-1.5 py-0.5 rounded text-[7px] font-mono font-bold border transition-all ${excluded?'bg-red-50 border-red-200 text-red-400 line-through':exists?'bg-slate-200 border-slate-300 text-slate-500':'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
+                                      className={`px-1.5 py-0.5 rounded text-[11px] font-mono font-bold border transition-all ${excluded?'bg-red-50 border-red-200 text-red-400 line-through':exists?'bg-slate-200 border-slate-300 text-slate-500':'bg-emerald-50 border-emerald-200 text-emerald-700'}`}
                                       title={excluded?'Excluida (click para incluir)':exists?'Ya existe':'Nueva (click para excluir)'}>
                                       {p.location_id.split('-').slice(1).join('-')}
                                     </button>
@@ -3811,7 +3810,7 @@ export default function App() {
                             </div>
                           ))}
                         </div>
-                        <p className="text-[8px] text-slate-400 font-bold">Click en celda verde para excluir. Gris = ya existe.</p>
+                        <p className="text-[11px] text-slate-500 font-bold">Click en celda verde para excluir. Gris = ya existe.</p>
                       </div>
                     );
                   })()}
@@ -3832,38 +3831,38 @@ export default function App() {
                      <div className="flex flex-wrap justify-between items-center mb-4 gap-3">
                        <h4 className="text-xs font-black text-slate-600 uppercase">4. Ubicaciones Existentes ({filteredLocs.length})</h4>
                        <div className="flex flex-wrap gap-2 items-center">
-                         <select value={whBodegaFilter} onChange={e=>{setWhBodegaFilter(e.target.value);setLocPage(0)}} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold bg-white">
+                         <select value={whBodegaFilter} onChange={e=>{setWhBodegaFilter(e.target.value);setLocPage(0)}} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] font-bold bg-white">
                            <option value="">Todas las bodegas</option>
                            {warehouses.map(w=><option key={w.id} value={w.id}>{w.id}</option>)}
                          </select>
-                         <select value={whZoneFilter} onChange={e=>{setWhZoneFilter(e.target.value);setLocPage(0)}} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[10px] font-bold bg-white">
+                         <select value={whZoneFilter} onChange={e=>{setWhZoneFilter(e.target.value);setLocPage(0)}} className="border border-slate-200 rounded-lg px-2 py-1.5 text-[12px] font-bold bg-white">
                            <option value="">Todas las zonas</option>
                            {[...new Set(safeLocs.map(l=>l.zone_code||'SIN ZONA'))].sort().map(z=><option key={z} value={z}>{z}</option>)}
                          </select>
                          <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm w-36 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
-                           <Search size={12} className="text-slate-400 mr-2" />
-                           <input type="text" placeholder="Ubicación..." value={locCodeFilter} onChange={(e) => { setLocCodeFilter(e.target.value); setLocPage(0); }} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700" />
+                           <Search size={12} className="text-slate-500 mr-2" />
+                           <input type="text" placeholder="Ubicación..." value={locCodeFilter} onChange={(e) => { setLocCodeFilter(e.target.value); setLocPage(0); }} className="bg-transparent text-[12px] font-bold outline-none w-full text-slate-700" />
                          </div>
                          <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 shadow-sm w-36 focus-within:ring-2 focus-within:ring-indigo-200 transition-all">
-                           <Search size={12} className="text-slate-400 mr-2" />
-                           <input type="text" placeholder="Zona..." value={locZoneFilter} onChange={(e) => { setLocZoneFilter(e.target.value); setLocPage(0); }} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700" />
+                           <Search size={12} className="text-slate-500 mr-2" />
+                           <input type="text" placeholder="Zona..." value={locZoneFilter} onChange={(e) => { setLocZoneFilter(e.target.value); setLocPage(0); }} className="bg-transparent text-[12px] font-bold outline-none w-full text-slate-700" />
                          </div>
-                         {(locCodeFilter||locZoneFilter) && <button onClick={()=>{setLocCodeFilter('');setLocZoneFilter('');setLocPage(0);}} className="bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1.5 text-[9px] font-black uppercase flex items-center gap-1"><X size={9}/> Limpiar</button>}
+                         {(locCodeFilter||locZoneFilter) && <button onClick={()=>{setLocCodeFilter('');setLocZoneFilter('');setLocPage(0);}} className="bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1.5 text-[12px] font-black uppercase flex items-center gap-1"><X size={9}/> Limpiar</button>}
                        </div>
                      </div>
 
                      {/* MEJORA 3: Acciones masivas */}
                      {whSelected.size > 0 && (
                        <div className="flex items-center gap-3 mb-3 p-3 bg-indigo-50 rounded-xl border border-indigo-200">
-                         <span className="text-[10px] font-black text-indigo-700">{whSelected.size} seleccionadas</span>
-                         <select value={whBulkAction} onChange={e=>setWhBulkAction(e.target.value)} className="border border-indigo-200 rounded-lg px-2 py-1 text-[10px] font-bold bg-white">
+                         <span className="text-[12px] font-black text-indigo-700">{whSelected.size} seleccionadas</span>
+                         <select value={whBulkAction} onChange={e=>setWhBulkAction(e.target.value)} className="border border-indigo-200 rounded-lg px-2 py-1 text-[12px] font-bold bg-white">
                            <option value="">Accion masiva...</option>
                            <option value="zone">Cambiar zona</option>
                            <option value="delete">Eliminar</option>
                          </select>
-                         {whBulkAction==='zone' && <select value={whBulkZone} onChange={e=>setWhBulkZone(e.target.value)} className="border border-indigo-200 rounded-lg px-2 py-1 text-[10px] font-bold bg-white"><option value="">Zona...</option>{zones.map(z=><option key={z.id} value={z.id}>{z.id}</option>)}</select>}
-                         <button onClick={handleBulkLocAction} disabled={!whBulkAction} className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-[10px] font-black disabled:opacity-40">Aplicar</button>
-                         <button onClick={()=>setWhSelected(new Set())} className="text-[10px] font-bold text-slate-500 hover:text-red-500">Deseleccionar</button>
+                         {whBulkAction==='zone' && <select value={whBulkZone} onChange={e=>setWhBulkZone(e.target.value)} className="border border-indigo-200 rounded-lg px-2 py-1 text-[12px] font-bold bg-white"><option value="">Zona...</option>{zones.map(z=><option key={z.id} value={z.id}>{z.id}</option>)}</select>}
+                         <button onClick={handleBulkLocAction} disabled={!whBulkAction} className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-[12px] font-black disabled:opacity-40">Aplicar</button>
+                         <button onClick={()=>setWhSelected(new Set())} className="text-[12px] font-bold text-slate-500 hover:text-red-500">Deseleccionar</button>
                        </div>
                      )}
 
@@ -3872,11 +3871,11 @@ export default function App() {
                          <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-10">
                            <tr>
                              <th className="p-3 pl-4"><input type="checkbox" checked={filteredLocs.slice(locPage*PAGE_SIZE,(locPage+1)*PAGE_SIZE).every(l=>whSelected.has(l.location_id))} onChange={e=>{const s=new Set(whSelected);filteredLocs.slice(locPage*PAGE_SIZE,(locPage+1)*PAGE_SIZE).forEach(l=>{if(e.target.checked)s.add(l.location_id);else s.delete(l.location_id)});setWhSelected(s)}} className="rounded"/></th>
-                             <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Estado</th>
-                             <th className="p-3 text-[9px] font-black text-slate-400 uppercase">ID Ubicacion</th>
-                             <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Zona</th>
-                             <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Tipo</th>
-                             <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Accion</th>
+                             <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Estado</th>
+                             <th className="p-3 text-[12px] font-black text-slate-500 uppercase">ID Ubicacion</th>
+                             <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Zona</th>
+                             <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Tipo</th>
+                             <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Accion</th>
                            </tr>
                          </thead>
                          <tbody className="divide-y divide-slate-200">
@@ -3888,23 +3887,23 @@ export default function App() {
                                <td className="p-3 pl-4"><input type="checkbox" checked={whSelected.has(l.location_id)} onChange={e=>{const s=new Set(whSelected);if(e.target.checked)s.add(l.location_id);else s.delete(l.location_id);setWhSelected(s)}} className="rounded"/></td>
                                <td className="p-3 text-center text-sm" title={heat==='blocked'?'Stock bloqueado':heat==='stock'?'Con stock':'Vacia'}>{heatIcon}</td>
                                <td className="p-3 text-xs font-mono font-bold text-slate-700">{l.location_id}</td>
-                               <td className="p-3"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-[9px] font-black uppercase border border-slate-200">{l.zone_code || 'SIN ZONA'}</span></td>
-                               <td className="p-3"><span className="text-[9px] font-bold text-slate-500 uppercase">{l.loc_type || 'PALLET'}</span></td>
+                               <td className="p-3"><span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-[12px] font-black uppercase border border-slate-200">{l.zone_code || 'SIN ZONA'}</span></td>
+                               <td className="p-3"><span className="text-[12px] font-bold text-slate-500 uppercase">{l.loc_type || 'PALLET'}</span></td>
                                <td className="p-3 text-center">
                                  <button onClick={() => handleDeleteLocation(l.location_id)} className="text-slate-300 hover:text-red-500 transition-colors" title="Eliminar"><Trash2 size={13}/></button>
                                </td>
                              </tr>);
                            })}
-                           {filteredLocs.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-[10px] font-bold uppercase text-slate-400 tracking-widest">No se encontraron ubicaciones.</td></tr>}
+                           {filteredLocs.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-[12px] font-bold uppercase text-slate-500 tracking-widest">No se encontraron ubicaciones.</td></tr>}
                          </tbody>
                        </table>
                      </div>
                      {filteredLocs.length > PAGE_SIZE && (
                        <div className="flex items-center justify-between px-4 py-2 border-t border-slate-200 bg-slate-50 rounded-b-xl">
-                         <span className="text-[10px] font-bold text-slate-500">{locPage * PAGE_SIZE + 1}–{Math.min((locPage + 1) * PAGE_SIZE, filteredLocs.length)} de {filteredLocs.length}</span>
+                         <span className="text-[12px] font-bold text-slate-500">{locPage * PAGE_SIZE + 1}–{Math.min((locPage + 1) * PAGE_SIZE, filteredLocs.length)} de {filteredLocs.length}</span>
                          <div className="flex gap-2">
-                           <button disabled={locPage === 0} onClick={() => setLocPage(p => p - 1)} className="px-2 py-1 rounded text-[10px] font-black bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40">←</button>
-                           <button disabled={(locPage + 1) * PAGE_SIZE >= filteredLocs.length} onClick={() => setLocPage(p => p + 1)} className="px-2 py-1 rounded text-[10px] font-black bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40">→</button>
+                           <button disabled={locPage === 0} onClick={() => setLocPage(p => p - 1)} className="px-2 py-1 rounded text-[12px] font-black bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40">←</button>
+                           <button disabled={(locPage + 1) * PAGE_SIZE >= filteredLocs.length} onClick={() => setLocPage(p => p + 1)} className="px-2 py-1 rounded text-[12px] font-black bg-white border border-slate-200 hover:bg-slate-100 disabled:opacity-40">→</button>
                          </div>
                        </div>
                      )}
@@ -3915,23 +3914,23 @@ export default function App() {
                 <div className="bg-white p-8 rounded-[40px] border border-slate-200 shadow-sm space-y-6">
                   <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
                     <div>
-                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Layers className="text-indigo-500" size={16}/> Crear ubicación individual</h3>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Con posición 3D explícita para sincronizar con el mapa</p>
+                      <h3 className="text-sm font-black text-slate-800 tracking-tighter flex items-center gap-2"><Layers className="text-indigo-500" size={16}/> Crear ubicación individual</h3>
+                      <p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Con posición 3D explícita para sincronizar con el mapa</p>
                     </div>
                   </div>
 
                   {/* Sección 1: datos básicos */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Código de ubicación (vacío para auto-generar)</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Código de ubicación (vacío para auto-generar)</label>
                       <input type="text" value={singleLocForm.location_id} onChange={e=>setSingleLocForm(p=>({...p, location_id: e.target.value.toUpperCase()}))} placeholder="Ej: B1-RES-A-01-01" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 uppercase"/>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Zona *</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Zona *</label>
                       <input type="text" value={singleLocForm.zone_code} onChange={e=>setSingleLocForm(p=>({...p, zone_code: e.target.value.toUpperCase()}))} placeholder="Ej: RES-A" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 uppercase"/>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Tipo</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Tipo</label>
                       <select value={singleLocForm.loc_type} onChange={e=>setSingleLocForm(p=>({...p, loc_type: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 bg-white">
                         <option value="RACK">RACK (estructura)</option>
                         <option value="SHELF">SHELF (estante)</option>
@@ -3941,11 +3940,11 @@ export default function App() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Capacidad máx. (kg)</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Capacidad máx. (kg)</label>
                         <input type="number" value={singleLocForm.max_kg} onChange={e=>setSingleLocForm(p=>({...p, max_kg: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Pallets máximos</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Pallets máximos</label>
                         <input type="number" value={singleLocForm.max_pallets} onChange={e=>setSingleLocForm(p=>({...p, max_pallets: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/>
                       </div>
                     </div>
@@ -3957,7 +3956,7 @@ export default function App() {
                       <input type="checkbox" checked={singleLocForm.enable_3d} onChange={e=>setSingleLocForm(p=>({...p, enable_3d: e.target.checked}))} className="w-4 h-4 accent-indigo-600"/>
                       <div>
                         <p className="text-xs font-black text-slate-800">Definir posición en el mapa 3D</p>
-                        <p className="text-[10px] text-slate-500 font-medium">Sin esto, la ubicación no aparecerá en el gemelo digital.</p>
+                        <p className="text-[12px] text-slate-500 font-medium">Sin esto, la ubicación no aparecerá en el gemelo digital.</p>
                       </div>
                     </label>
                     {singleLocForm.enable_3d && (() => {
@@ -3981,25 +3980,25 @@ export default function App() {
                       return (
                         <div className="animate-in fade-in space-y-4">
                           <div className="flex bg-white p-1 rounded-xl border border-slate-200 w-fit">
-                            <button onClick={()=>setSingleLocForm(p=>({...p, coordsMode: 'auto'}))} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase ${singleLocForm.coordsMode==='auto'?'bg-indigo-600 text-white':'text-slate-500'}`}>Pasillo/Columna/Nivel</button>
-                            <button onClick={()=>setSingleLocForm(p=>({...p, coordsMode: 'manual'}))} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase ${singleLocForm.coordsMode==='manual'?'bg-indigo-600 text-white':'text-slate-500'}`}>Coordenadas exactas</button>
+                            <button onClick={()=>setSingleLocForm(p=>({...p, coordsMode: 'auto'}))} className={`px-3 py-1.5 rounded-lg text-[12px] font-black uppercase ${singleLocForm.coordsMode==='auto'?'bg-indigo-600 text-white':'text-slate-500'}`}>Pasillo/Columna/Nivel</button>
+                            <button onClick={()=>setSingleLocForm(p=>({...p, coordsMode: 'manual'}))} className={`px-3 py-1.5 rounded-lg text-[12px] font-black uppercase ${singleLocForm.coordsMode==='manual'?'bg-indigo-600 text-white':'text-slate-500'}`}>Coordenadas exactas</button>
                           </div>
                           {singleLocForm.coordsMode === 'auto' ? (
                             <div className="grid grid-cols-3 gap-3">
-                              <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Pasillo</label><input type="text" value={singleLocForm.aisle} onChange={e=>setSingleLocForm(p=>({...p, aisle: e.target.value.toUpperCase()}))} placeholder="A" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 uppercase"/></div>
-                              <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Columna</label><input type="number" min="1" value={singleLocForm.row_num} onChange={e=>setSingleLocForm(p=>({...p, row_num: e.target.value}))} placeholder="1" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
-                              <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Nivel</label><input type="number" min="1" value={singleLocForm.level} onChange={e=>setSingleLocForm(p=>({...p, level: e.target.value}))} placeholder="1" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
+                              <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Pasillo</label><input type="text" value={singleLocForm.aisle} onChange={e=>setSingleLocForm(p=>({...p, aisle: e.target.value.toUpperCase()}))} placeholder="A" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500 uppercase"/></div>
+                              <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Columna</label><input type="number" min="1" value={singleLocForm.row_num} onChange={e=>setSingleLocForm(p=>({...p, row_num: e.target.value}))} placeholder="1" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
+                              <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Nivel</label><input type="number" min="1" value={singleLocForm.level} onChange={e=>setSingleLocForm(p=>({...p, level: e.target.value}))} placeholder="1" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
                             </div>
                           ) : (
                             <div className="grid grid-cols-3 gap-3">
-                              <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">X (metros)</label><input type="number" step="0.1" value={singleLocForm.x} onChange={e=>setSingleLocForm(p=>({...p, x: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
-                              <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Y (metros)</label><input type="number" step="0.1" value={singleLocForm.y} onChange={e=>setSingleLocForm(p=>({...p, y: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
-                              <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Z (metros)</label><input type="number" step="0.1" value={singleLocForm.z} onChange={e=>setSingleLocForm(p=>({...p, z: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
+                              <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">X (metros)</label><input type="number" step="0.1" value={singleLocForm.x} onChange={e=>setSingleLocForm(p=>({...p, x: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
+                              <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Y (metros)</label><input type="number" step="0.1" value={singleLocForm.y} onChange={e=>setSingleLocForm(p=>({...p, y: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
+                              <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Z (metros)</label><input type="number" step="0.1" value={singleLocForm.z} onChange={e=>setSingleLocForm(p=>({...p, z: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
                             </div>
                           )}
 
                           {singleLocForm.coordsMode === 'auto' && (
-                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-[10px] font-bold text-indigo-700 flex items-center gap-3">
+                            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 text-[12px] font-bold text-indigo-700 flex items-center gap-3">
                               <span>Coordenadas calculadas:</span>
                               <span className="font-mono">X: {dispX}</span>
                               <span className="font-mono">Y: {dispY}</span>
@@ -4008,12 +4007,12 @@ export default function App() {
                           )}
 
                           <div className="grid grid-cols-1 md:grid-cols-4 gap-3 pt-2 border-t border-slate-200">
-                            <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Ancho (m)</label><input type="number" step="0.1" value={singleLocForm.width} onChange={e=>setSingleLocForm(p=>({...p, width: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
-                            <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Profundidad (m)</label><input type="number" step="0.1" value={singleLocForm.depth} onChange={e=>setSingleLocForm(p=>({...p, depth: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
-                            <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Alto (m)</label><input type="number" step="0.1" value={singleLocForm.height} onChange={e=>setSingleLocForm(p=>({...p, height: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
-                            <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Color en mapa</label><input type="color" value={singleLocForm.color_hex || '#6366f1'} onChange={e=>setSingleLocForm(p=>({...p, color_hex: e.target.value}))} className="w-full h-[42px] border-2 border-slate-200 rounded-xl cursor-pointer"/></div>
+                            <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Ancho (m)</label><input type="number" step="0.1" value={singleLocForm.width} onChange={e=>setSingleLocForm(p=>({...p, width: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
+                            <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Profundidad (m)</label><input type="number" step="0.1" value={singleLocForm.depth} onChange={e=>setSingleLocForm(p=>({...p, depth: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
+                            <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Alto (m)</label><input type="number" step="0.1" value={singleLocForm.height} onChange={e=>setSingleLocForm(p=>({...p, height: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-indigo-500"/></div>
+                            <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Color en mapa</label><input type="color" value={singleLocForm.color_hex || '#6366f1'} onChange={e=>setSingleLocForm(p=>({...p, color_hex: e.target.value}))} className="w-full h-[42px] border-2 border-slate-200 rounded-xl cursor-pointer"/></div>
                           </div>
-                          <p className="text-[10px] text-slate-500 font-bold italic">
+                          <p className="text-[12px] text-slate-500 font-bold italic">
                             Si ingresas Pasillo/Columna/Nivel, las coordenadas X/Y/Z se calculan automáticamente. Si prefieres, pasá al modo "Coordenadas exactas" para ingresarlas directamente.
                           </p>
                         </div>
@@ -4054,7 +4053,7 @@ export default function App() {
                     } else {
                       showMsg(`⛔ ${data.error || 'Error al crear'}`, true);
                     }
-                  }} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 px-8 rounded-2xl uppercase text-[10px] tracking-widest shadow-lg">Crear ubicación</button>
+                  }} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 px-8 rounded-2xl uppercase text-[12px] tracking-widest shadow-lg">Crear ubicación</button>
                 </div>
               </div>
             )}
@@ -4065,20 +4064,20 @@ export default function App() {
                 <div className="bg-white rounded-[40px] shadow-sm border border-slate-200 p-8 flex flex-col md:flex-row gap-8">
                   {currentUser?.role !== 'CLIENTE' && <div className="flex-1 space-y-6 border-r border-slate-100 pr-8">
                     <div>
-                      <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center">
+                      <h2 className="text-xl font-black text-slate-800 tracking-tighter flex items-center">
                         <Box className="w-5 h-5 mr-2 text-blue-500"/> 
                         {isEditingSku ? 'Editando Artículo Existente' : 'Definición Logística (SKU)'}
                       </h2>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                      <p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest mt-1">
                         {isEditingSku ? 'Modifica los datos y presiona actualizar' : 'Registrar nuevo producto con datos logísticos completos'}
                       </p>
                     </div>
                     <form onSubmit={handleSaveSku} className="space-y-6">
                       <div className="space-y-4">
-                        <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center"><Package className="w-4 h-4 mr-2"/> Identificación Básica</h3>
+                        <h3 className="text-[12px] font-black text-blue-600 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center"><Package className="w-4 h-4 mr-2"/> Identificación Básica</h3>
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase">Código SKU *</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Código SKU *</label>
                             <input 
                               type="text" 
                               value={skuForm.sku} 
@@ -4088,14 +4087,14 @@ export default function App() {
                               className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-blue-500 uppercase ${isEditingSku ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300' : 'bg-white'}`} 
                               placeholder="Ej: SF-BUJ-01"
                             />
-                            {isEditingSku && <p className="text-[9px] text-amber-600 font-bold mt-1">El código no se puede modificar. Si necesita otro código, elimínelo y créelo de nuevo.</p>}
+                            {isEditingSku && <p className="text-[12px] text-amber-600 font-bold mt-1">El código no se puede modificar. Si necesita otro código, elimínelo y créelo de nuevo.</p>}
                           </div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Categoría / Familia</label><input type="text" value={skuForm.category} onChange={e=>setSkuForm({...skuForm, category: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500" placeholder="Ej: Repuestos"/></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Categoría / Familia</label><input type="text" value={skuForm.category} onChange={e=>setSkuForm({...skuForm, category: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500" placeholder="Ej: Repuestos"/></div>
                         </div>
                         <div className={`grid gap-4 mt-4 ${is3PLMode ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Código de Barras (UPC/EAN)</label><input type="text" value={skuForm.barcode || ''} onChange={e=>setSkuForm({...skuForm, barcode: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500" placeholder="Opcional"/></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Código de Barras (UPC/EAN)</label><input type="text" value={skuForm.barcode || ''} onChange={e=>setSkuForm({...skuForm, barcode: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500" placeholder="Opcional"/></div>
                           {is3PLMode && (
-                            <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Cliente / Dueño *</label>
+                            <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Cliente / Dueño *</label>
                               <select value={skuForm.client_id || ''} onChange={e=>setSkuForm({...skuForm, client_id: e.target.value})} required disabled={isEditingSku} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500 ${isEditingSku ? 'bg-slate-100 text-slate-500 cursor-not-allowed border-slate-300' : 'bg-white'}`}>
                                 <option value="">-- Seleccione Cliente --</option>
                                 {clients.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
@@ -4103,24 +4102,24 @@ export default function App() {
                             </div>
                           )}
                         </div>
-                        <div className="space-y-1 mt-4"><label className="text-[10px] font-black text-slate-400 uppercase">Descripción Comercial *</label><input type="text" value={skuForm.desc} onChange={e=>setSkuForm({...skuForm, desc: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500" placeholder="Nombre completo del producto"/></div>
+                        <div className="space-y-1 mt-4"><label className="text-[12px] font-black text-slate-500 uppercase">Descripción Comercial *</label><input type="text" value={skuForm.desc} onChange={e=>setSkuForm({...skuForm, desc: e.target.value})} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-blue-500" placeholder="Nombre completo del producto"/></div>
                       </div>
 
                       <div className="space-y-4">
-                        <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center"><Sliders className="w-4 h-4 mr-2"/> Pesos y Dimensiones</h3>
+                        <h3 className="text-[12px] font-black text-blue-600 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center"><Sliders className="w-4 h-4 mr-2"/> Pesos y Dimensiones</h3>
                         <div className="grid grid-cols-4 gap-4">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Peso (Kg)</label><input type="number" step="0.01" value={skuForm.weight} onChange={e=>setSkuForm({...skuForm, weight: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-2 py-3 text-xs font-bold outline-none focus:border-blue-500"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Largo (cm)</label><input type="number" step="0.1" value={skuForm.length} onChange={e=>setSkuForm({...skuForm, length: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-2 py-3 text-xs font-bold outline-none focus:border-blue-500"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Ancho (cm)</label><input type="number" step="0.1" value={skuForm.width} onChange={e=>setSkuForm({...skuForm, width: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-2 py-3 text-xs font-bold outline-none focus:border-blue-500"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Alto (cm)</label><input type="number" step="0.1" value={skuForm.height} onChange={e=>setSkuForm({...skuForm, height: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-2 py-3 text-xs font-bold outline-none focus:border-blue-500"/></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Peso (Kg)</label><input type="number" step="0.01" value={skuForm.weight} onChange={e=>setSkuForm({...skuForm, weight: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-2 py-3 text-xs font-bold outline-none focus:border-blue-500"/></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Largo (cm)</label><input type="number" step="0.1" value={skuForm.length} onChange={e=>setSkuForm({...skuForm, length: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-2 py-3 text-xs font-bold outline-none focus:border-blue-500"/></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Ancho (cm)</label><input type="number" step="0.1" value={skuForm.width} onChange={e=>setSkuForm({...skuForm, width: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-2 py-3 text-xs font-bold outline-none focus:border-blue-500"/></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Alto (cm)</label><input type="number" step="0.1" value={skuForm.height} onChange={e=>setSkuForm({...skuForm, height: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-2 py-3 text-xs font-bold outline-none focus:border-blue-500"/></div>
                         </div>
                       </div>
 
                       <div className="space-y-4">
-                        <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center"><MapIcon className="w-4 h-4 mr-2"/> Almacenaje y Controles</h3>
+                        <h3 className="text-[12px] font-black text-blue-600 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center"><MapIcon className="w-4 h-4 mr-2"/> Almacenaje y Controles</h3>
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Empaque (UOM)</label><select value={skuForm.uom} onChange={e=>setSkuForm({...skuForm, uom: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none uppercase bg-white focus:border-blue-500"><option value="UN">Unidad (UN)</option><option value="CJ">Caja (CJ)</option><option value="PL">Pallet (PL)</option></select></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Rotación (Clase ABC)</label><select value={skuForm.abc_class} onChange={e=>setSkuForm({...skuForm, abc_class: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none uppercase bg-white focus:border-blue-500"><option value="-">Sin Clasificar</option><option value="A">Clase A (Alta)</option><option value="B">Clase B (Media)</option><option value="C">Clase C (Baja)</option></select></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Empaque (UOM)</label><select value={skuForm.uom} onChange={e=>setSkuForm({...skuForm, uom: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none uppercase bg-white focus:border-blue-500"><option value="UN">Unidad (UN)</option><option value="CJ">Caja (CJ)</option><option value="PL">Pallet (PL)</option></select></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Rotación (Clase ABC)</label><select value={skuForm.abc_class} onChange={e=>setSkuForm({...skuForm, abc_class: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-xs font-bold outline-none uppercase bg-white focus:border-blue-500"><option value="-">Sin Clasificar</option><option value="A">Clase A (Alta)</option><option value="B">Clase B (Media)</option><option value="C">Clase C (Baja)</option></select></div>
                         </div>
                       </div>
 
@@ -4138,7 +4137,7 @@ export default function App() {
                               <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5"/>
                               <div>
                                 <p className="text-xs font-black text-amber-900 uppercase tracking-widest">Cambio crítico con stock activo</p>
-                                <p className="text-[11px] text-amber-800 mt-1">Cambiar el control de lote/serie en un SKU con stock activo creará una <strong>versión nueva</strong> automáticamente. El stock existente seguirá en la versión anterior hasta ser despachado.</p>
+                                <p className="text-[13px] text-amber-800 mt-1">Cambiar el control de lote/serie en un SKU con stock activo creará una <strong>versión nueva</strong> automáticamente. El stock existente seguirá en la versión anterior hasta ser despachado.</p>
                               </div>
                             </div>
                           );
@@ -4152,10 +4151,10 @@ export default function App() {
 
                       {/* ── Fabricante (opcional) ──────────────────────── */}
                       <div className="space-y-4 bg-slate-50 -mx-2 px-4 py-4 rounded-2xl border border-slate-200">
-                        <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center"><HardHat className="w-4 h-4 mr-2 text-slate-500"/> Fabricante <span className="ml-2 bg-slate-200 text-slate-500 px-2 py-0.5 rounded text-[9px]">opcional</span></h3>
+                        <h3 className="text-[12px] font-black text-slate-600 uppercase tracking-widest flex items-center"><HardHat className="w-4 h-4 mr-2 text-slate-500"/> Fabricante <span className="ml-2 bg-slate-200 text-slate-500 px-2 py-0.5 rounded text-[12px]">opcional</span></h3>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1 col-span-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase">Fabricante</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Fabricante</label>
                             <select
                               value={skuForm.manufacturer_id || ''}
                               onChange={e => {
@@ -4174,18 +4173,18 @@ export default function App() {
                             </select>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase">Código del fabricante</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Código del fabricante</label>
                             <input
                               type="text"
                               value={skuForm.manufacturer_code || ''}
                               onChange={e=>setSkuForm(p=>({...p, manufacturer_code: e.target.value.toUpperCase()}))}
                               disabled={!!skuForm.manufacturer_id}
                               placeholder={skuForm.manufacturer_id ? '(usa el código del fabricante seleccionado)' : 'Texto libre si no está registrado'}
-                              className={`w-full border-2 rounded-xl px-3 py-2.5 text-xs font-bold outline-none uppercase ${skuForm.manufacturer_id ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed' : 'border-slate-200 focus:border-indigo-500'}`}
+                              className={`w-full border-2 rounded-xl px-3 py-2.5 text-xs font-bold outline-none uppercase ${skuForm.manufacturer_id ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed' : 'border-slate-200 focus:border-indigo-500'}`}
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase">Cód. producto del fabricante</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Cód. producto del fabricante</label>
                             <input
                               type="text"
                               value={skuForm.manufacturer_sku || ''}
@@ -4195,7 +4194,7 @@ export default function App() {
                             />
                           </div>
                           <div className="space-y-1 col-span-2">
-                            <label className="text-[10px] font-black text-slate-400 uppercase">Marca</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Marca</label>
                             <input
                               type="text"
                               value={skuForm.brand || ''}
@@ -4203,25 +4202,25 @@ export default function App() {
                               placeholder="Ej: BoxMaster, 3M, Phillips…"
                               className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"
                             />
-                            <p className="text-[9px] text-slate-400 font-bold">La marca puede ser distinta al fabricante.</p>
+                            <p className="text-[12px] text-slate-500 font-bold">La marca puede ser distinta al fabricante.</p>
                           </div>
                         </div>
                       </div>
 
                       {/* ── Sustitutos ────────────────────────────────── */}
                       <div className="space-y-3 bg-slate-50 -mx-2 px-4 py-4 rounded-2xl border border-slate-200">
-                        <h3 className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center"><RefreshCcw className="w-4 h-4 mr-2 text-slate-500"/> Sustitutos</h3>
+                        <h3 className="text-[12px] font-black text-slate-600 uppercase tracking-widest flex items-center"><RefreshCcw className="w-4 h-4 mr-2 text-slate-500"/> Sustitutos</h3>
                         <label className="flex items-start gap-3 cursor-pointer p-3 bg-white border-2 border-slate-200 rounded-xl hover:border-emerald-300 transition-colors">
                           <input type="checkbox" checked={!!skuForm.allow_substitutes} onChange={e=>setSkuForm(p=>({...p, allow_substitutes: e.target.checked}))} className="mt-0.5 w-4 h-4 accent-emerald-600"/>
                           <div>
                             <p className="text-xs font-black text-slate-800">Ofrecer sustitutos cuando falte stock</p>
-                            <p className="text-[10px] text-slate-500 font-medium mt-0.5">Al activar, el sistema sugerirá SKUs similares si no hay suficiente disponibilidad.</p>
+                            <p className="text-[12px] text-slate-500 font-medium mt-0.5">Al activar, el sistema sugerirá SKUs similares si no hay suficiente disponibilidad.</p>
                           </div>
                         </label>
                         {skuForm.allow_substitutes && (
                           <div className="bg-white border-2 border-slate-200 rounded-xl p-4 space-y-3 animate-in fade-in">
                             <div>
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Alcance de la búsqueda</p>
+                              <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2">Alcance de la búsqueda</p>
                               <div className="space-y-1.5">
                                 {[
                                   ['any','Cualquier SKU similar'],
@@ -4239,11 +4238,11 @@ export default function App() {
                             </div>
                             {skuForm.substitute_scope !== 'manual_only' && (
                               <div>
-                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Similitud mínima (opcional)</label>
+                                <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Similitud mínima (opcional)</label>
                                 <div className="flex items-center gap-2 mt-1">
                                   <input type="number" min="1" max="100" step="1" value={skuForm.substitute_threshold || ''} onChange={e=>setSkuForm(p=>({...p, substitute_threshold: e.target.value}))} placeholder="35" className="w-24 border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-emerald-500"/>
                                   <span className="text-xs font-bold text-slate-500">%</span>
-                                  <p className="text-[10px] text-slate-400 font-bold">Vacío = usar valor global (35%)</p>
+                                  <p className="text-[12px] text-slate-500 font-bold">Vacío = usar valor global (35%)</p>
                                 </div>
                               </div>
                             )}
@@ -4267,29 +4266,29 @@ export default function App() {
                     <div className="sticky top-0 bg-white pt-2 pb-3 z-10 border-b border-slate-100 space-y-2 mb-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
-                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Catálogo ({filteredSkusList.length})</p>
-                          <button onClick={() => { const headers = 'sku,client_id,desc,category,uom,weight,length,width,height,abc_class,requires_lot,requires_serial,barcode,manufacturer_code,manufacturer_sku,brand'; const csv = filteredSkusList.map(s => Object.values({sku:s.sku,client_id:s.client_id||'',desc:s.desc||'',category:s.category||'',uom:s.uom||'',weight:s.weight||0,length:s.length||0,width:s.width||0,height:s.height||0,abc_class:s.abc_class||'',requires_lot:s.requires_lot||false,requires_serial:s.requires_serial||false,barcode:s.barcode||'',manufacturer_code:s.manufacturer_code||s.manufacturer?.code||'',manufacturer_sku:s.manufacturer_sku||'',brand:s.brand||''}).map(v=>`"${v}"`).join(',')).join('\n'); const blob = new Blob([headers+'\n'+csv],{type:'text/csv'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='skus_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
-                          {currentUser?.role !== 'CLIENTE' && <button onClick={() => setImportModal({ type: 'skus' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Upload size={10}/> Importar</button>}
+                          <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Catálogo ({filteredSkusList.length})</p>
+                          <button onClick={() => { const headers = 'sku,client_id,desc,category,uom,weight,length,width,height,abc_class,requires_lot,requires_serial,barcode,manufacturer_code,manufacturer_sku,brand'; const csv = filteredSkusList.map(s => Object.values({sku:s.sku,client_id:s.client_id||'',desc:s.desc||'',category:s.category||'',uom:s.uom||'',weight:s.weight||0,length:s.length||0,width:s.width||0,height:s.height||0,abc_class:s.abc_class||'',requires_lot:s.requires_lot||false,requires_serial:s.requires_serial||false,barcode:s.barcode||'',manufacturer_code:s.manufacturer_code||s.manufacturer?.code||'',manufacturer_sku:s.manufacturer_sku||'',brand:s.brand||''}).map(v=>`"${v}"`).join(',')).join('\n'); const blob = new Blob([headers+'\n'+csv],{type:'text/csv'}); const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='skus_filtrados.csv'; a.click(); }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[12px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
+                          {currentUser?.role !== 'CLIENTE' && <button onClick={() => setImportModal({ type: 'skus' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded-lg text-[12px] font-black uppercase flex items-center gap-1"><Upload size={10}/> Importar</button>}
                         </div>
-                        {(skuSearchTerm||skuClientFilter||skuCategoryFilter||skuAbcFilter) && <button onClick={() => { setSkuSearchTerm(''); setSkuClientFilter(''); setSkuCategoryFilter(''); setSkuAbcFilter(''); }} className="bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[9px] font-black uppercase flex items-center gap-1"><X size={9}/> Limpiar</button>}
+                        {(skuSearchTerm||skuClientFilter||skuCategoryFilter||skuAbcFilter) && <button onClick={() => { setSkuSearchTerm(''); setSkuClientFilter(''); setSkuCategoryFilter(''); setSkuAbcFilter(''); }} className="bg-red-50 text-red-500 border border-red-200 rounded-lg px-2 py-1 text-[12px] font-black uppercase flex items-center gap-1"><X size={9}/> Limpiar</button>}
                       </div>
                       <div className="grid grid-cols-2 gap-1">
-                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 col-span-2"><Search size={11} className="text-slate-400 mr-1 shrink-0" /><input type="text" placeholder="Buscar por código o nombre..." value={skuSearchTerm} onChange={(e) => { setSkuSearchTerm(e.target.value); setSkuPage(0); }} className="bg-transparent text-[10px] font-bold outline-none w-full text-slate-700" /></div>
+                        <div className="flex items-center bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 col-span-2"><Search size={11} className="text-slate-500 mr-1 shrink-0" /><input type="text" placeholder="Buscar por código o nombre..." value={skuSearchTerm} onChange={(e) => { setSkuSearchTerm(e.target.value); setSkuPage(0); }} className="bg-transparent text-[12px] font-bold outline-none w-full text-slate-700" /></div>
                         {is3PLMode ? (
-                          <select value={skuClientFilter} onChange={e=>setSkuClientFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none text-slate-700">
+                          <select value={skuClientFilter} onChange={e=>setSkuClientFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[12px] font-bold outline-none text-slate-700">
                             <option value="">Todos los clientes</option>
                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         ) : (
-                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 text-[10px] font-black text-emerald-700 flex items-center gap-1 col-span-1">
+                          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-2 py-1 text-[12px] font-black text-emerald-700 flex items-center gap-1 col-span-1">
                             <Package size={9} className="text-emerald-500"/> {systemConfig.own_client_name || 'Productos Propios'}
                           </div>
                         )}
-                        <select value={skuCategoryFilter} onChange={e=>setSkuCategoryFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none text-slate-700">
+                        <select value={skuCategoryFilter} onChange={e=>setSkuCategoryFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[12px] font-bold outline-none text-slate-700">
                           <option value="">Todas las categorías</option>
                           {[...new Set(permittedSkus.map(s=>s.category||'General'))].sort().map(c=><option key={c} value={c}>{c}</option>)}
                         </select>
-                        <select value={skuAbcFilter} onChange={e=>setSkuAbcFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none text-slate-700">
+                        <select value={skuAbcFilter} onChange={e=>setSkuAbcFilter(e.target.value)} className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[12px] font-bold outline-none text-slate-700">
                           <option value="">Clase ABC</option>
                           <option value="A">Clase A</option>
                           <option value="B">Clase B</option>
@@ -4309,27 +4308,27 @@ export default function App() {
                                   const hasOld = !!s.has_old_stock;
                                   if (ver === 1 && !hasOld) return null;
                                   return (
-                                    <button onClick={()=>handleOpenVersions(s.sku)} className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${hasOld ? 'bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`} title={hasOld ? `Hay stock en versiones anteriores. Click para ver historial` : 'Click para ver historial'}>
+                                    <button onClick={()=>handleOpenVersions(s.sku)} className={`text-[12px] font-black px-1.5 py-0.5 rounded uppercase ${hasOld ? 'bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`} title={hasOld ? `Hay stock en versiones anteriores. Click para ver historial` : 'Click para ver historial'}>
                                       v{ver}{hasOld ? ' (hist.)' : ''}
                                     </button>
                                   );
                                 })()}
-                                {s.barcode && <span className="text-[9px] bg-slate-200 text-slate-600 px-1 rounded font-mono">UPC: {s.barcode}</span>}
+                                {s.barcode && <span className="text-[12px] bg-slate-200 text-slate-600 px-1 rounded font-mono">UPC: {s.barcode}</span>}
                               </p>
-                              <p className="text-[10px] text-slate-500 truncate w-48 md:w-72">
+                              <p className="text-[12px] text-slate-500 truncate w-48 md:w-72">
                                 {s.desc}
                                 {s.client_id && <span className="text-indigo-600 font-bold"> · {clients.find(c=>c.id===s.client_id)?.name || s.client_id}</span>}
-                                {(s.weight || s.length || s.width || s.height) && <span className="text-slate-400"> · {s.weight ? `${s.weight}kg ` : ''}{(s.length || s.width || s.height) ? `${s.length||0}×${s.width||0}×${s.height||0}cm` : ''}</span>}
+                                {(s.weight || s.length || s.width || s.height) && <span className="text-slate-500"> · {s.weight ? `${s.weight}kg ` : ''}{(s.length || s.width || s.height) ? `${s.length||0}×${s.width||0}×${s.height||0}cm` : ''}</span>}
                               </p>
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
-                              {(s.requires_lot || s.requires_serial) && <span className="text-[9px] font-black bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded uppercase text-amber-800 mr-1">{s.requires_lot ? 'LOTE' : 'SERIE'}</span>}
+                              {(s.requires_lot || s.requires_serial) && <span className="text-[12px] font-black bg-amber-100 border border-amber-200 px-1.5 py-0.5 rounded uppercase text-amber-800 mr-1">{s.requires_lot ? 'LOTE' : 'SERIE'}</span>}
 
-                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleEditSku(s)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all" title="Editar Producto">
+                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleEditSku(s)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-300 shadow-sm transition-all" title="Editar Producto">
                                 <Pencil size={13}/>
                               </button>}
 
-                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleDeleteSku(s.sku, s.client_id)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-300 shadow-sm transition-all" title="Eliminar Producto">
+                              {currentUser?.role !== 'CLIENTE' && <button onClick={() => handleDeleteSku(s.sku, s.client_id)} className="bg-white p-1.5 rounded-full border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-300 shadow-sm transition-all" title="Eliminar Producto">
                                 <Trash2 size={13}/>
                               </button>}
                             </div>
@@ -4338,10 +4337,10 @@ export default function App() {
                       ))}
                       {filteredSkusList.length > PAGE_SIZE && (
                         <div className="flex items-center justify-between px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                          <span className="text-[10px] font-bold text-slate-500">Mostrando {skuPage * PAGE_SIZE + 1}–{Math.min((skuPage + 1) * PAGE_SIZE, filteredSkusList.length)} de {filteredSkusList.length} SKUs</span>
+                          <span className="text-[12px] font-bold text-slate-500">Mostrando {skuPage * PAGE_SIZE + 1}–{Math.min((skuPage + 1) * PAGE_SIZE, filteredSkusList.length)} de {filteredSkusList.length} SKUs</span>
                           <div className="flex gap-2">
-                            <button disabled={skuPage === 0} onClick={() => setSkuPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-[10px] font-black bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 disabled:opacity-40">← Anterior</button>
-                            <button disabled={(skuPage + 1) * PAGE_SIZE >= filteredSkusList.length} onClick={() => setSkuPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-[10px] font-black bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 disabled:opacity-40">Siguiente →</button>
+                            <button disabled={skuPage === 0} onClick={() => setSkuPage(p => p - 1)} className="px-3 py-1.5 rounded-lg text-[12px] font-black bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 disabled:opacity-40">← Anterior</button>
+                            <button disabled={(skuPage + 1) * PAGE_SIZE >= filteredSkusList.length} onClick={() => setSkuPage(p => p + 1)} className="px-3 py-1.5 rounded-lg text-[12px] font-black bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 disabled:opacity-40">Siguiente →</button>
                           </div>
                         </div>
                       )}
@@ -4352,10 +4351,10 @@ export default function App() {
                 {/* PANEL ALERTAS STOCK MIN/MAX */}
                 {isAdmin && (
                 <div className="bg-white rounded-3xl border border-amber-200 shadow-sm p-6">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter mb-5 flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-amber-500"/> Alertas de Stock Mínimo / Máximo</h3>
+                  <h3 className="text-sm font-black text-slate-800 tracking-tighter mb-5 flex items-center gap-2"><ShieldAlert className="w-4 h-4 text-amber-500"/> Alertas de Stock Mínimo / Máximo</h3>
                   <form onSubmit={handleSaveAlert} className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-slate-400 uppercase">SKU *</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">SKU *</label>
                       <select required value={alertForm.sku} onChange={e=>setAlertForm({...alertForm,sku:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black outline-none focus:border-amber-500 bg-white uppercase">
                         <option value="">-- Seleccionar --</option>
                         {permittedSkus.map(s=><option key={s.sku} value={s.sku}>{s.sku}</option>)}
@@ -4363,7 +4362,7 @@ export default function App() {
                     </div>
                     {is3PLMode && (
                       <div className="space-y-1">
-                        <label className="text-[9px] font-black text-slate-400 uppercase">Cliente</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Cliente</label>
                         <select value={alertForm.client_id} onChange={e=>setAlertForm({...alertForm,client_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:border-amber-500 bg-white">
                           <option value="">GENERAL</option>
                           {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
@@ -4371,26 +4370,26 @@ export default function App() {
                       </div>
                     )}
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-slate-400 uppercase">Stock Mínimo</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Stock Mínimo</label>
                       <input type="number" min="0" step="0.01" value={alertForm.stock_min} onChange={e=>setAlertForm({...alertForm,stock_min:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black outline-none focus:border-amber-500 text-center" placeholder="0"/>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[9px] font-black text-slate-400 uppercase">Stock Máximo (0=sin límite)</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Stock Máximo (0=sin límite)</label>
                       <input type="number" min="0" step="0.01" value={alertForm.stock_max} onChange={e=>setAlertForm({...alertForm,stock_max:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-black outline-none focus:border-amber-500 text-center" placeholder="0"/>
                     </div>
-                    <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white font-black py-2.5 px-4 rounded-xl text-[10px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2"><CheckCircle2 size={14}/> Guardar</button>
+                    <button type="submit" className="bg-amber-500 hover:bg-amber-600 text-white font-black py-2.5 px-4 rounded-xl text-[12px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2"><CheckCircle2 size={14}/> Guardar</button>
                   </form>
                   {stockAlerts.length > 0 && (
                     <div className="mt-4 space-y-2">
-                      <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-2">{stockAlerts.length} SKU(s) fuera de rango:</p>
+                      <p className="text-[12px] font-black text-amber-600 uppercase tracking-widest mb-2">{stockAlerts.length} SKU(s) fuera de rango:</p>
                       {stockAlerts.map(a=>(
                         <div key={a.sku} className="flex justify-between items-center bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">
                           <span className="text-xs font-black text-slate-800 uppercase">{a.sku}</span>
-                          <span className="text-[10px] text-slate-500">{a.client_id}</span>
-                          <span className={`text-[10px] font-black ${parseFloat(a.current_stock)<parseFloat(a.stock_min)?'text-red-600':'text-orange-600'}`}>
+                          <span className="text-[12px] text-slate-500">{a.client_id}</span>
+                          <span className={`text-[12px] font-black ${parseFloat(a.current_stock)<parseFloat(a.stock_min)?'text-red-600':'text-orange-600'}`}>
                             Stock: {a.current_stock} · {parseFloat(a.current_stock)<parseFloat(a.stock_min)?`⬇ Mín ${a.stock_min}`:`⬆ Máx ${a.stock_max}`}
                           </span>
-                          <button onClick={()=>setAlertForm({sku:a.sku,client_id:a.client_id,stock_min:a.stock_min||'',stock_max:a.stock_max||''})} className="text-[9px] font-black text-amber-600 hover:text-amber-800 bg-white border border-amber-200 px-2 py-1 rounded-lg uppercase">Editar</button>
+                          <button onClick={()=>setAlertForm({sku:a.sku,client_id:a.client_id,stock_min:a.stock_min||'',stock_max:a.stock_max||''})} className="text-[12px] font-black text-amber-600 hover:text-amber-800 bg-white border border-amber-200 px-2 py-1 rounded-lg uppercase">Editar</button>
                         </div>
                       ))}
                     </div>
@@ -4405,7 +4404,7 @@ export default function App() {
               <div className="space-y-4">
                 {opsScopeBanner}
                 <div className="max-w-4xl mx-auto flex justify-end">
-                  <button onClick={() => setImportModal({ type: 'receive' })} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm transition-colors"><Upload size={14}/> Importar desde Excel</button>
+                  <button onClick={() => setImportModal({ type: 'receive' })} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-4 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm transition-colors"><Upload size={14}/> Importar desde Excel</button>
                 </div>
                 <DocTrayView
                   module="receive" title="Documento de Ingreso" colorClass="bg-emerald-50" textClass="text-emerald-700" btnColor="bg-emerald-500 hover:bg-emerald-600" Icon={ArrowDownRight}
@@ -4423,22 +4422,22 @@ export default function App() {
                     <div className="flex items-center gap-4">
                       <button onClick={() => setActiveDocId(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition-colors"><ArrowLeft size={16} className="text-emerald-700"/></button>
                       <div>
-                        <h2 className="text-lg font-black text-emerald-900 uppercase tracking-tighter flex items-center">[{activeDoc.docType}] {activeDoc.docNum}</h2>
-                        {activeDoc.client && <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
-                        <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mt-0.5">Editando... (Autoguardado activado)</p>
+                        <h2 className="text-lg font-black text-emerald-900 tracking-tighter flex items-center">[{activeDoc.docType}] {activeDoc.docNum}</h2>
+                        {activeDoc.client && <p className="text-[12px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
+                        <p className="text-[12px] font-bold text-emerald-600 uppercase tracking-widest mt-0.5">Editando... (Autoguardado activado)</p>
                       </div>
                     </div>
                   </div>
                   <div className="p-8 bg-slate-50 flex-1">
                     <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4 mb-6">
-                      <h3 className="text-[10px] font-black text-emerald-600 uppercase tracking-widest border-b border-slate-100 pb-2">Agregar Producto a la Carga</h3>
+                      <h3 className="text-[12px] font-black text-emerald-600 uppercase tracking-widest border-b border-slate-100 pb-2">Agregar Producto a la Carga</h3>
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-500 uppercase">Producto (SKU) *</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Producto (SKU) *</label>
                         {/* SCANNER DE BARCODE */}
                         <div className="flex gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
                           <Scan size={16} className="text-emerald-600 shrink-0 mt-2"/>
                           <div className="flex-1">
-                            <p className="text-[9px] font-black text-emerald-700 uppercase mb-1">Escanear Código de Barras / SKU</p>
+                            <p className="text-[12px] font-black text-emerald-700 uppercase mb-1">Escanear Código de Barras / SKU</p>
                             <div className="flex gap-2">
                               <input
                                 ref={barcodeInputRef}
@@ -4451,7 +4450,7 @@ export default function App() {
                                 disabled={isScanning}
                                 autoFocus
                               />
-                              <button onClick={() => handleBarcodeSubmit(barcodeInput)} disabled={isScanning || !barcodeInput} className="bg-emerald-600 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase flex items-center gap-1 disabled:opacity-50">
+                              <button onClick={() => handleBarcodeSubmit(barcodeInput)} disabled={isScanning || !barcodeInput} className="bg-emerald-600 text-white px-3 py-2 rounded-lg text-[12px] font-black uppercase flex items-center gap-1 disabled:opacity-50">
                                 {isScanning ? <Loader2 size={12} className="animate-spin"/> : <Search size={12}/>}
                               </button>
                             </div>
@@ -4464,39 +4463,39 @@ export default function App() {
                       </div>
                       {selSku.requires_lot && (
                         <div className="grid grid-cols-2 gap-4 bg-amber-50 p-4 rounded-xl border border-amber-200">
-                          <div className="space-y-1"><label className="text-[9px] font-black text-amber-800 uppercase flex items-center"><Calendar className="w-3 h-3 mr-1"/> Lote *</label><input type="text" value={lineItem.batch} onChange={e=>setLineItem({...lineItem, batch: e.target.value.toUpperCase()})} className="w-full border-2 border-amber-200 rounded-lg px-3 py-2 text-xs font-bold outline-none uppercase" /></div>
-                          <div className="space-y-1"><label className="text-[9px] font-black text-amber-800 uppercase">Vencimiento</label><input type="date" value={lineItem.expDate} onChange={e=>setLineItem({...lineItem, expDate: e.target.value})} className="w-full border-2 border-amber-200 rounded-lg px-3 py-2 text-xs font-bold outline-none bg-white" /></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-amber-800 uppercase flex items-center"><Calendar className="w-3 h-3 mr-1"/> Lote *</label><input type="text" value={lineItem.batch} onChange={e=>setLineItem({...lineItem, batch: e.target.value.toUpperCase()})} className="w-full border-2 border-amber-200 rounded-lg px-3 py-2 text-xs font-bold outline-none uppercase" /></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-amber-800 uppercase">Vencimiento</label><input type="date" value={lineItem.expDate} onChange={e=>setLineItem({...lineItem, expDate: e.target.value})} className="w-full border-2 border-amber-200 rounded-lg px-3 py-2 text-xs font-bold outline-none bg-white" /></div>
                         </div>
                       )}
                       {selSku.requires_serial && (
                         <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                          <label className="text-[9px] font-black text-blue-800 uppercase flex items-center"><Tag className="w-3 h-3 mr-1"/> Número de Serie (SN) *</label>
+                          <label className="text-[12px] font-black text-blue-800 uppercase flex items-center"><Tag className="w-3 h-3 mr-1"/> Número de Serie (SN) *</label>
                           <input type="text" value={lineItem.serial} onChange={e=>setLineItem({...lineItem, serial: e.target.value.toUpperCase()})} placeholder="ESCANEAR SERIE" className="w-full border-2 border-blue-200 rounded-lg px-3 py-3 text-lg font-black outline-none uppercase text-center mt-1" />
                         </div>
                       )}
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Destino *</label>
+                        <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Destino *</label>
                           <select value={lineItem.location_id} onChange={e=>setLineItem({...lineItem, location_id: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-emerald-500 bg-white">
                             <option value="PISO-RECEPCION">PISO-RECEPCION</option>
                             {safeLocs.map(l => <option key={l.location_id} value={l.location_id}>{l.location_id}</option>)}
                           </select>
                         </div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Cantidad *</label><input type="number" min="0.01" step="0.01" value={lineItem.qty} onChange={e=>setLineItem({...lineItem, qty: e.target.value})} disabled={selSku.requires_serial} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-xl font-black text-emerald-600 outline-none text-center ${selSku.requires_serial ? 'bg-slate-100 opacity-50' : 'focus:border-emerald-500'}`} /></div>
+                        <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Cantidad *</label><input type="number" min="0.01" step="0.01" value={lineItem.qty} onChange={e=>setLineItem({...lineItem, qty: e.target.value})} disabled={selSku.requires_serial} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-xl font-black text-emerald-600 outline-none text-center ${selSku.requires_serial ? 'bg-slate-100 opacity-50' : 'focus:border-emerald-500'}`} /></div>
                       </div>
-                      <button onClick={addReceiveLine} disabled={!lineItem.sku || !lineItem.qty || (selSku.requires_lot && !lineItem.batch) || (selSku.requires_serial && !lineItem.serial)} className="w-full bg-emerald-100 text-emerald-800 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest hover:bg-emerald-200 transition-colors flex justify-center items-center disabled:opacity-50"><Plus size={14} className="mr-1"/> Agregar Línea al Documento</button>
+                      <button onClick={addReceiveLine} disabled={!lineItem.sku || !lineItem.qty || (selSku.requires_lot && !lineItem.batch) || (selSku.requires_serial && !lineItem.serial)} className="w-full bg-emerald-100 text-emerald-800 font-black py-3 rounded-xl uppercase text-[12px] tracking-widest hover:bg-emerald-200 transition-colors flex justify-center items-center disabled:opacity-50"><Plus size={14} className="mr-1"/> Agregar Línea al Documento</button>
                     </div>
 
                     {activeDoc.items.length > 0 && (
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-                        <div className="bg-slate-50 border-b border-slate-200 p-4"><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Líneas del Documento ({activeDoc.items.length})</h3></div>
+                        <div className="bg-slate-50 border-b border-slate-200 p-4"><h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Líneas del Documento ({activeDoc.items.length})</h3></div>
                         <table className="w-full text-left">
-                          <thead className="bg-slate-100 border-b border-slate-200"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">SKU / Detalle</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Cant</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Destino</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Borrar</th></tr></thead>
+                          <thead className="bg-slate-100 border-b border-slate-200"><tr><th className="p-3 text-[12px] font-black text-slate-500 uppercase pl-5">SKU / Detalle</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Cant</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Destino</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Borrar</th></tr></thead>
                           <tbody className="divide-y divide-slate-100">
                             {activeDoc.items.map((it, idx) => (
                               <tr key={idx} className="hover:bg-slate-50">
-                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[9px] text-slate-500">{it.batch ? `LT: ${it.batch}` : ''} {it.serial ? `SN: ${it.serial}` : ''}</p></td>
+                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[12px] text-slate-500">{it.batch ? `LT: ${it.batch}` : ''} {it.serial ? `SN: ${it.serial}` : ''}</p></td>
                                 <td className="p-3 text-center text-lg font-black text-emerald-600">+{it.qty}</td>
-                                <td className="p-3 text-center text-[10px] font-mono font-bold text-slate-500">{it.location_id}</td>
+                                <td className="p-3 text-center text-[12px] font-mono font-bold text-slate-500">{it.location_id}</td>
                                 <td className="p-3 text-center"><button onClick={() => removeLineFromDoc(idx)} className="text-red-400 hover:text-red-600"><MinusCircle size={16}/></button></td>
                               </tr>
                             ))}
@@ -4504,7 +4503,7 @@ export default function App() {
                         </table>
                       </div>
                     )}
-                    <button disabled={activeDoc.items.length === 0 || isCommitting} onClick={() => handleCommitAPI('receive_batch', 'receive')} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">{isCommitting ? <><Loader2 size={16} className="mr-2 animate-spin"/> Procesando...</> : <><Database size={16} className="mr-2"/> Procesar e Ingresar Definitivamente</>}</button>
+                    <button disabled={activeDoc.items.length === 0 || isCommitting} onClick={() => handleCommitAPI('receive_batch', 'receive')} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[12px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">{isCommitting ? <><Loader2 size={16} className="mr-2 animate-spin"/> Procesando...</> : <><Database size={16} className="mr-2"/> Procesar e Ingresar Definitivamente</>}</button>
                   </div>
                 </div>
               </div>
@@ -4515,7 +4514,7 @@ export default function App() {
               <div className="space-y-4">
                 {opsScopeBanner}
                 <div className="max-w-4xl mx-auto flex justify-end">
-                  <button onClick={() => setImportModal({ type: 'dispatch' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm transition-colors"><Upload size={14}/> Despachar desde Excel</button>
+                  <button onClick={() => setImportModal({ type: 'dispatch' })} className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest flex items-center gap-2 shadow-sm transition-colors"><Upload size={14}/> Despachar desde Excel</button>
                 </div>
                 <DocTrayView
                   module="dispatch" title="Orden de Salida" colorClass="bg-blue-50" textClass="text-blue-700" btnColor="bg-blue-600 hover:bg-blue-700" Icon={ArrowUpRight}
@@ -4533,22 +4532,22 @@ export default function App() {
                     <div className="flex items-center gap-4">
                       <button onClick={() => setActiveDocId(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition-colors"><ArrowLeft size={16} className="text-blue-700"/></button>
                       <div>
-                        <h2 className="text-lg font-black text-blue-900 uppercase tracking-tighter flex items-center">[{activeDoc.docType}] {activeDoc.docNum}</h2>
-                        {activeDoc.client && <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
-                        <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Armando carro de extracción...</p>
+                        <h2 className="text-lg font-black text-blue-900 tracking-tighter flex items-center">[{activeDoc.docType}] {activeDoc.docNum}</h2>
+                        {activeDoc.client && <p className="text-[12px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
+                        <p className="text-[12px] font-bold text-blue-600 uppercase tracking-widest mt-0.5">Armando carro de extracción...</p>
                       </div>
                     </div>
                   </div>
                   <div className="p-8 bg-slate-50 flex-1">
                     <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4 mb-6">
-                      <h3 className="text-[10px] font-black text-blue-600 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center"><Search className="w-4 h-4 mr-2"/>Buscar Stock Físico (Apto)</h3>
+                      <h3 className="text-[12px] font-black text-blue-600 uppercase tracking-widest border-b border-slate-100 pb-2 flex items-center"><Search className="w-4 h-4 mr-2"/>Buscar Stock Físico (Apto)</h3>
                       <div className="flex gap-2 p-3 bg-blue-50 border border-blue-200 rounded-xl">
                         <Scan size={16} className="text-blue-600 shrink-0 mt-2"/>
                         <div className="flex-1">
-                          <p className="text-[9px] font-black text-blue-700 uppercase mb-1">Escanear Código de Barras / SKU</p>
+                          <p className="text-[12px] font-black text-blue-700 uppercase mb-1">Escanear Código de Barras / SKU</p>
                           <div className="flex gap-2">
                             <input ref={barcodeInputRef} type="text" value={barcodeInput} onChange={e=>setBarcodeInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();handleBarcodeSubmit(barcodeInput);}}} placeholder="Escanear o escribir código..." className="flex-1 border border-blue-300 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-blue-500 bg-white uppercase" disabled={isScanning} autoFocus />
-                            <button onClick={()=>handleBarcodeSubmit(barcodeInput)} disabled={isScanning||!barcodeInput} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase flex items-center gap-1 disabled:opacity-50">{isScanning ? <Loader2 size={12} className="animate-spin"/> : <Search size={12}/>}</button>
+                            <button onClick={()=>handleBarcodeSubmit(barcodeInput)} disabled={isScanning||!barcodeInput} className="bg-blue-600 text-white px-3 py-2 rounded-lg text-[12px] font-black uppercase flex items-center gap-1 disabled:opacity-50">{isScanning ? <Loader2 size={12} className="animate-spin"/> : <Search size={12}/>}</button>
                           </div>
                         </div>
                       </div>
@@ -4564,23 +4563,23 @@ export default function App() {
                           {totalAvailDisp > 0 ? (
                             <>
                               <div className="flex bg-white p-1 rounded-xl mb-4 border border-slate-200 shadow-sm">
-                                <button onClick={() => setOutboundMethod('AUTO')} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-lg transition-colors ${outboundMethod === 'AUTO' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>Por Producto (Automático FIFO)</button>
-                                <button onClick={() => setOutboundMethod('MANUAL')} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-lg transition-colors ${outboundMethod === 'MANUAL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>Por Caja/LPN (Manual)</button>
+                                <button onClick={() => setOutboundMethod('AUTO')} className={`flex-1 py-3 text-[12px] font-black uppercase rounded-lg transition-colors ${outboundMethod === 'AUTO' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>Por Producto (Automático FIFO)</button>
+                                <button onClick={() => setOutboundMethod('MANUAL')} className={`flex-1 py-3 text-[12px] font-black uppercase rounded-lg transition-colors ${outboundMethod === 'MANUAL' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}>Por Caja/LPN (Manual)</button>
                               </div>
 
                               {outboundMethod === 'AUTO' ? (
                                 selSku.requires_serial ? (
                                   <div className="p-4 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl text-center shadow-inner">
                                     <p className="text-xs font-black uppercase">⚠️ Requiere Control de Serie</p>
-                                    <p className="text-[10px] mt-1">Este producto es serializado. Cambia a la selección "Por Caja/LPN (Manual)" para confirmar las series exactas a despachar.</p>
+                                    <p className="text-[12px] mt-1">Este producto es serializado. Cambia a la selección "Por Caja/LPN (Manual)" para confirmar las series exactas a despachar.</p>
                                   </div>
                                 ) : (
                                   <div className="bg-white p-6 rounded-2xl border border-blue-100 flex flex-col items-center shadow-sm">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Cantidad Total a Extraer</p>
+                                    <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3">Cantidad Total a Extraer</p>
                                     <input type="number" min="0.01" step="0.01" max={totalAvailDisp} value={outboundAutoQty} onChange={e=>setOutboundAutoQty(e.target.value)} disabled={isValidating} className="w-full max-w-xs border-2 border-blue-200 rounded-xl px-4 py-4 text-3xl font-black text-center outline-none focus:border-blue-600 text-blue-700 bg-blue-50/50 shadow-inner disabled:opacity-50" placeholder="0" />
-                                    <p className="text-[10px] text-blue-600 mt-3 font-bold bg-blue-50 px-3 py-1 rounded-full border border-blue-100">Stock DISPONIBLE: {totalAvailDisp} {selSku.uom}</p>
+                                    <p className="text-[12px] text-blue-600 mt-3 font-bold bg-blue-50 px-3 py-1 rounded-full border border-blue-100">Stock DISPONIBLE: {totalAvailDisp} {selSku.uom}</p>
                                     
-                                    <button onClick={handleAddAutoOutboundItem} disabled={!outboundAutoQty || parseFloat(outboundAutoQty) <= 0 || parseFloat(outboundAutoQty) > totalAvailDisp || isValidating} className="mt-5 bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-4 rounded-xl uppercase text-[10px] tracking-widest transition-transform active:scale-95 disabled:opacity-50 flex items-center shadow-lg shadow-blue-200">
+                                    <button onClick={handleAddAutoOutboundItem} disabled={!outboundAutoQty || parseFloat(outboundAutoQty) <= 0 || parseFloat(outboundAutoQty) > totalAvailDisp || isValidating} className="mt-5 bg-blue-600 hover:bg-blue-700 text-white font-black px-8 py-4 rounded-xl uppercase text-[12px] tracking-widest transition-transform active:scale-95 disabled:opacity-50 flex items-center shadow-lg shadow-blue-200">
                                       {isValidating ? <Loader2 size={16} className="mr-2 animate-spin"/> : <ListPlus size={16} className="mr-2"/>}
                                       {isValidating ? 'Verificando Stock Real...' : 'Auto-Asignar (FIFO) al Carro'}
                                     </button>
@@ -4589,17 +4588,17 @@ export default function App() {
                               ) : (
                                 <div className="border border-slate-200 rounded-xl overflow-hidden max-h-60 overflow-y-auto custom-scrollbar bg-white shadow-sm">
                                   <table className="w-full text-left bg-slate-50">
-                                    <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-10"><tr><th className="p-3 text-[9px] font-black text-slate-500 uppercase">LPN Físico (Apto para Salida)</th><th className="p-3 text-[9px] font-black text-slate-500 uppercase text-center">Base Restante</th><th className="p-3 text-[9px] font-black text-slate-500 uppercase text-center">Extracción</th></tr></thead>
+                                    <thead className="bg-slate-100 border-b border-slate-200 sticky top-0 z-10"><tr><th className="p-3 text-[12px] font-black text-slate-500 uppercase">LPN Físico (Apto para Salida)</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Base Restante</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Extracción</th></tr></thead>
                                     <tbody className="divide-y divide-slate-200">
                                       {stockForDisp.map(lpn => (
                                         <tr key={lpn.id} className="bg-white hover:bg-blue-50/50">
-                                          <td className="p-3 text-xs font-mono font-bold text-slate-600"><p>{lpn.id}</p><p className="text-[9px] text-slate-400 mt-1">Rack: {lpn.location_id || 'PISO'} - <span className={getStatusBadge(lpn.status)}>{statusLabel(lpn.status || 'DISPONIBLE')}</span></p>{selSku.requires_serial && !lpn.serial_number && <p className="text-[8px] font-black text-amber-600 uppercase mt-1">⚠ Sin serie — stock anterior</p>}</td>
+                                          <td className="p-3 text-xs font-mono font-bold text-slate-600"><p>{lpn.id}</p><p className="text-[12px] text-slate-500 mt-1">Rack: {lpn.location_id || 'PISO'} - <span className={getStatusBadge(lpn.status)}>{statusLabel(lpn.status || 'DISPONIBLE')}</span></p>{selSku.requires_serial && !lpn.serial_number && <p className="text-[11px] font-black text-amber-600 uppercase mt-1">⚠ Sin serie — stock anterior</p>}</td>
                                           <td className="p-3 text-sm font-black text-indigo-600 text-center">{lpn.effectiveQty}</td>
                                           <td className="p-3 text-center flex justify-center items-center h-full pt-4">
                                             {lpn.serial_number ? (
                                               <label className="cursor-pointer flex items-center justify-center gap-1 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-colors shadow-sm">
                                                 <input type="checkbox" checked={lineItem.selectedLpns[lpn.id] === 1} onChange={(e) => handleLpnQtyChange(lpn.id, e.target.checked ? 1 : 0, 1)} disabled={lpn.effectiveQty <= 0 || isValidating} className="w-4 h-4 text-indigo-600 rounded cursor-pointer disabled:opacity-50" />
-                                                <span className="text-[10px] font-black text-indigo-800 uppercase">Extraer</span>
+                                                <span className="text-[12px] font-black text-indigo-800 uppercase">Extraer</span>
                                               </label>
                                             ) : (
                                               <input type="number" min="0" max={lpn.effectiveQty} value={lineItem.selectedLpns[lpn.id] || ''} onChange={(e) => handleLpnQtyChange(lpn.id, e.target.value, lpn.effectiveQty)} disabled={isValidating} className="w-20 border-2 rounded-lg px-2 py-1 text-center font-black text-sm outline-none border-slate-200 focus:border-blue-500 disabled:opacity-50" placeholder="0" />
@@ -4610,7 +4609,7 @@ export default function App() {
                                     </tbody>
                                   </table>
                                   <div className="flex justify-end p-4 border-t border-slate-200 bg-slate-50">
-                                    <button onClick={addDispatchLineManual} disabled={Object.values(lineItem.selectedLpns).reduce((a,b)=>a+b,0) <= 0 || isValidating} className="bg-blue-100 text-blue-800 font-black px-6 py-3 rounded-xl uppercase text-[10px] tracking-widest hover:bg-blue-200 transition-colors disabled:opacity-50 flex items-center">
+                                    <button onClick={addDispatchLineManual} disabled={Object.values(lineItem.selectedLpns).reduce((a,b)=>a+b,0) <= 0 || isValidating} className="bg-blue-100 text-blue-800 font-black px-6 py-3 rounded-xl uppercase text-[12px] tracking-widest hover:bg-blue-200 transition-colors disabled:opacity-50 flex items-center">
                                       {isValidating ? <Loader2 size={14} className="mr-2 animate-spin"/> : <ListPlus size={14} className="mr-2"/>}
                                       {isValidating ? 'Validando Stock...' : 'Añadir Selección al Carro'}
                                     </button>
@@ -4619,7 +4618,7 @@ export default function App() {
                               )}
                             </>
                           ) : (
-                            <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-center"><p className="text-xs font-black text-red-600 uppercase">Sin Stock DISPONIBLE</p><p className="text-[10px] text-red-500 mt-1">El stock podría estar asignado al carro, bloqueado en revisión, o no hay inventario físico.</p></div>
+                            <div className="p-4 bg-red-50 border border-red-100 rounded-xl text-center"><p className="text-xs font-black text-red-600 uppercase">Sin Stock DISPONIBLE</p><p className="text-[12px] text-red-500 mt-1">El stock podría estar asignado al carro, bloqueado en revisión, o no hay inventario físico.</p></div>
                           )}
                         </div>
                       )}
@@ -4629,27 +4628,27 @@ export default function App() {
                     {activeDoc.client && (
                       <div className="bg-white rounded-3xl border-2 border-violet-100 shadow-sm overflow-hidden mb-6">
                         <div className="bg-violet-50 border-b border-violet-100 p-4">
-                          <h3 className="text-[10px] font-black text-violet-600 uppercase tracking-widest">📦 Despachar kit (explota componentes)</h3>
-                          <p className="text-[9px] text-violet-400 mt-0.5">El kit no genera stock propio: se descuentan sus componentes con trazabilidad de origen.</p>
+                          <h3 className="text-[12px] font-black text-violet-600 uppercase tracking-widest">📦 Despachar kit (explota componentes)</h3>
+                          <p className="text-[12px] text-violet-400 mt-0.5">El kit no genera stock propio: se descuentan sus componentes con trazabilidad de origen.</p>
                         </div>
                         <div className="p-4 space-y-3">
                           {(() => {
                             const availKits = (kits || []).filter(k => k.client_id === activeDoc.client && (k.components || []).length > 0);
-                            if (availKits.length === 0) return <p className="text-[10px] text-slate-400">No hay kits con receta para este cliente.</p>;
+                            if (availKits.length === 0) return <p className="text-[12px] text-slate-500">No hay kits con receta para este cliente.</p>;
                             return (
                               <div className="flex flex-wrap items-end gap-2">
                                 <div className="flex-1 min-w-[180px]">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase">Kit</label>
+                                  <label className="text-[12px] font-black text-slate-500 uppercase">Kit</label>
                                   <select value={dispKitForm.kit_sku} onChange={e => { setDispKitForm(f => ({ ...f, kit_sku: e.target.value })); setDispKitAvail(null); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-violet-500">
                                     <option value="">— Selecciona —</option>
                                     {availKits.map(k => <option key={k.kit_sku} value={k.kit_sku}>{k.kit_sku}{k.description ? ` · ${k.description}` : ''}</option>)}
                                   </select>
                                 </div>
                                 <div className="w-24">
-                                  <label className="text-[9px] font-black text-slate-400 uppercase">Cant. kits</label>
+                                  <label className="text-[12px] font-black text-slate-500 uppercase">Cant. kits</label>
                                   <input type="number" min="1" value={dispKitForm.qty} onChange={e => { setDispKitForm(f => ({ ...f, qty: e.target.value })); setDispKitAvail(null); }} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs text-center font-black outline-none focus:border-violet-500"/>
                                 </div>
-                                <button type="button" onClick={checkDispKitAvail} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest">Verificar</button>
+                                <button type="button" onClick={checkDispKitAvail} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest">Verificar</button>
                               </div>
                             );
                           })()}
@@ -4659,9 +4658,9 @@ export default function App() {
                               <div className="space-y-2">
                                 {(dispKitAvail.components || []).map(c => (
                                   <div key={c.component_sku} className="bg-white rounded-xl px-3 py-2 border border-slate-100">
-                                    <div className="flex items-center gap-2 text-[11px]">
+                                    <div className="flex items-center gap-2 text-[13px]">
                                       <span className="font-black uppercase text-slate-700 flex-1 truncate">{c.component_sku}</span>
-                                      <span className="text-slate-400">necesita {c.needed}</span>
+                                      <span className="text-slate-500">necesita {c.needed}</span>
                                       <span className={`font-black ${c.available >= c.needed ? 'text-emerald-600' : 'text-red-600'}`}>disp {c.available}</span>
                                     </div>
                                     {renderKitSourcePicker(c, dispKitSources, setDispKitSources)}
@@ -4669,7 +4668,7 @@ export default function App() {
                                 ))}
                               </div>
                               {dispKitAvail.can_build && (
-                                <button type="button" onClick={addKitLineToDispatch} className="mt-3 w-full bg-violet-600 hover:bg-violet-700 text-white font-black py-2.5 rounded-xl uppercase text-[10px] tracking-widest">+ Agregar kit al carro</button>
+                                <button type="button" onClick={addKitLineToDispatch} className="mt-3 w-full bg-violet-600 hover:bg-violet-700 text-white font-black py-2.5 rounded-xl uppercase text-[12px] tracking-widest">+ Agregar kit al carro</button>
                               )}
                             </div>
                           )}
@@ -4679,20 +4678,20 @@ export default function App() {
 
                     {activeDoc.items.length > 0 && (
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-                        <div className="bg-slate-50 border-b border-slate-200 p-4 flex justify-between items-center"><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Carro de Extracción ({activeDoc.items.length} posiciones)</h3><span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-1 rounded font-black uppercase">Total: {activeDoc.items.reduce((sum, it) => sum + (parseFloat(it.qtyToPick) || 0), 0)} Unds.</span></div>
+                        <div className="bg-slate-50 border-b border-slate-200 p-4 flex justify-between items-center"><h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Carro de Extracción ({activeDoc.items.length} posiciones)</h3><span className="text-[12px] bg-blue-100 text-blue-800 px-2 py-1 rounded font-black uppercase">Total: {activeDoc.items.reduce((sum, it) => sum + (parseFloat(it.qtyToPick) || 0), 0)} Unds.</span></div>
                         <table className="w-full text-left">
-                          <thead className="bg-slate-100 border-b border-slate-200"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Origen LPN / SKU</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Sacar</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Eliminar</th></tr></thead>
+                          <thead className="bg-slate-100 border-b border-slate-200"><tr><th className="p-3 text-[12px] font-black text-slate-500 uppercase pl-5">Origen LPN / SKU</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Sacar</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Eliminar</th></tr></thead>
                           <tbody className="divide-y divide-slate-100">
                             {activeDoc.items.map((it, idx) => (
                               <tr key={idx} className="hover:bg-slate-50">
                                 {it.isKit ? (
                                   <>
-                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku} <span className="ml-1 bg-violet-100 text-violet-700 px-1.5 rounded font-black text-[9px] uppercase">KIT</span></p><p className="text-[9px] text-slate-500">{it._compSummary}</p><p className="text-[8px] text-slate-400 uppercase">{(it.components||[]).every(c=>c.mode!=='manual') ? 'Origen automático (FEFO)' : 'Origen mixto / seleccionado'}</p></td>
+                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku} <span className="ml-1 bg-violet-100 text-violet-700 px-1.5 rounded font-black text-[12px] uppercase">KIT</span></p><p className="text-[12px] text-slate-500">{it._compSummary}</p><p className="text-[11px] text-slate-500 uppercase">{(it.components||[]).every(c=>c.mode!=='manual') ? 'Origen automático (FEFO)' : 'Origen mixto / seleccionado'}</p></td>
                                     <td className="p-3 text-center text-lg font-black text-violet-600">{it.qtyKits} kit{it.qtyKits>1?'s':''}</td>
                                   </>
                                 ) : (
                                   <>
-                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}{!it.serial && skus.find(s=>s.sku===it.sku)?.requires_serial && <span className="ml-1 bg-amber-100 text-amber-700 px-1 rounded font-bold">⚠ Sin serie</span>}</p></td>
+                                    <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[12px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}{!it.serial && skus.find(s=>s.sku===it.sku)?.requires_serial && <span className="ml-1 bg-amber-100 text-amber-700 px-1 rounded font-bold">⚠ Sin serie</span>}</p></td>
                                     <td className="p-3 text-center text-lg font-black text-blue-600">-{it.qtyToPick}</td>
                                   </>
                                 )}
@@ -4714,20 +4713,20 @@ export default function App() {
                         <div className="bg-violet-50 border-2 border-violet-200 rounded-2xl p-4 space-y-3">
                           <div className="flex items-center justify-between">
                             <h4 className="text-xs font-black text-violet-700 uppercase tracking-widest flex items-center"><ClipboardList size={14} className="mr-2"/>Estado del Picking ({total} líneas)</h4>
-                            <button onClick={loadDocPickLines} className="text-[9px] font-black text-violet-500 hover:text-violet-700 uppercase">↺ Actualizar</button>
+                            <button onClick={loadDocPickLines} className="text-[12px] font-black text-violet-500 hover:text-violet-700 uppercase">↺ Actualizar</button>
                           </div>
                           <div className="grid grid-cols-3 gap-2">
                             <div className="bg-amber-50 border border-amber-200 rounded-xl p-2 text-center">
                               <p className="text-2xl font-black text-amber-700">{pending}</p>
-                              <p className="text-[8px] font-black text-amber-600 uppercase">Pendientes</p>
+                              <p className="text-[11px] font-black text-amber-600 uppercase">Pendientes</p>
                             </div>
                             <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2 text-center">
                               <p className="text-2xl font-black text-emerald-700">{completed}</p>
-                              <p className="text-[8px] font-black text-emerald-600 uppercase">Confirmadas</p>
+                              <p className="text-[11px] font-black text-emerald-600 uppercase">Confirmadas</p>
                             </div>
                             <div className="bg-red-50 border border-red-200 rounded-xl p-2 text-center">
                               <p className="text-2xl font-black text-red-700">{diffs}</p>
-                              <p className="text-[8px] font-black text-red-600 uppercase">Diferencias</p>
+                              <p className="text-[11px] font-black text-red-600 uppercase">Diferencias</p>
                             </div>
                           </div>
                           {/* Detalle por línea */}
@@ -4735,40 +4734,40 @@ export default function App() {
                             {docPickLines.map(pl => (
                               <div key={pl.line_id} className="flex items-center justify-between bg-white border border-slate-100 rounded-lg px-3 py-1.5">
                                 <div>
-                                  <span className="font-mono text-[10px] font-black text-slate-700">{pl.sku}</span>
-                                  {pl.lpn_id && <span className="text-[9px] text-slate-400 ml-2">LPN: {pl.lpn_id}</span>}
+                                  <span className="font-mono text-[12px] font-black text-slate-700">{pl.sku}</span>
+                                  {pl.lpn_id && <span className="text-[12px] text-slate-500 ml-2">LPN: {pl.lpn_id}</span>}
                                 </div>
                                 <div className="flex items-center gap-2">
-                                  {pl.qty_confirmed !== null && <span className="text-[9px] font-black text-blue-600">✓{pl.qty_confirmed}</span>}
-                                  {pl.batch_confirmed && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded">L:{pl.batch_confirmed}</span>}
-                                  {pl.serial_confirmed && <span className="text-[8px] bg-indigo-100 text-indigo-700 px-1 rounded">S:{pl.serial_confirmed}</span>}
-                                  <span className={`text-[8px] font-black px-1.5 py-0.5 rounded uppercase ${pl.line_status==='COMPLETADA'?'bg-emerald-100 text-emerald-700':pl.line_status==='DIFERENCIA'?'bg-red-100 text-red-700':pl.line_status==='EN_PROCESO'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{pl.line_status}</span>
+                                  {pl.qty_confirmed !== null && <span className="text-[12px] font-black text-blue-600">✓{pl.qty_confirmed}</span>}
+                                  {pl.batch_confirmed && <span className="text-[11px] bg-amber-100 text-amber-700 px-1 rounded">L:{pl.batch_confirmed}</span>}
+                                  {pl.serial_confirmed && <span className="text-[11px] bg-indigo-100 text-indigo-700 px-1 rounded">S:{pl.serial_confirmed}</span>}
+                                  <span className={`text-[11px] font-black px-1.5 py-0.5 rounded uppercase ${pl.line_status==='COMPLETADA'?'bg-emerald-100 text-emerald-700':pl.line_status==='DIFERENCIA'?'bg-red-100 text-red-700':pl.line_status==='EN_PROCESO'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{pl.line_status}</span>
                                 </div>
                               </div>
                             ))}
                           </div>
-                          {pending > 0 && <p className="text-[9px] font-black text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">⚠️ {pending} líneas aún pendientes de confirmación por el picker. Puede despachar igualmente.</p>}
-                          {diffs > 0 && <p className="text-[9px] font-black text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">⚠️ {diffs} líneas con diferencia. La confirmación usará las cantidades del picker.</p>}
+                          {pending > 0 && <p className="text-[12px] font-black text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200">⚠️ {pending} líneas aún pendientes de confirmación por el picker. Puede despachar igualmente.</p>}
+                          {diffs > 0 && <p className="text-[12px] font-black text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-200">⚠️ {diffs} líneas con diferencia. La confirmación usará las cantidades del picker.</p>}
                         </div>
                       ) : (
                         <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
                           <ClipboardList size={18} className="text-violet-400 shrink-0"/>
                           <div className="flex-1">
                             <p className="text-xs font-black text-slate-600">Sin tareas de picking asignadas</p>
-                            <p className="text-[9px] text-slate-400">Puede despachar directamente o enviar a pickers primero.</p>
+                            <p className="text-[12px] text-slate-500">Puede despachar directamente o enviar a pickers primero.</p>
                           </div>
-                          <button onClick={handleSendToPicking} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shrink-0 flex items-center gap-1 transition-colors">
+                          <button onClick={handleSendToPicking} className="bg-violet-600 hover:bg-violet-700 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest shrink-0 flex items-center gap-1 transition-colors">
                             <ClipboardList size={12}/> Enviar a Picking
                           </button>
                         </div>
                       );
                     })()}
 
-                    <button disabled={activeDoc.items.length === 0} onClick={openTransportReq} className="w-full bg-white border-2 border-cyan-500 text-cyan-700 hover:bg-cyan-50 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">
+                    <button disabled={activeDoc.items.length === 0} onClick={openTransportReq} className="w-full bg-white border-2 border-cyan-500 text-cyan-700 hover:bg-cyan-50 font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">
                       <Truck size={16} className="mr-2"/> Solicitar Transporte
                     </button>
 
-                    <button disabled={activeDoc.items.length === 0} onClick={openDispatchConfirm} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">
+                    <button disabled={activeDoc.items.length === 0} onClick={openDispatchConfirm} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[12px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center">
                       <ArrowUpRight size={16} className="mr-2"/> Proceder a Confirmación de Salida
                     </button>
                   </div>
@@ -4782,18 +4781,18 @@ export default function App() {
                 <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col animate-in zoom-in-95 max-h-[90vh]">
                   <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-blue-50 shrink-0">
                     <div>
-                      <h2 className="text-xl font-black text-blue-900 uppercase tracking-tighter flex items-center"><Truck className="w-6 h-6 mr-2"/> Confirmar Salida Física</h2>
-                      <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mt-1">Ajuste las cantidades si es un despacho parcial</p>
+                      <h2 className="text-xl font-black text-blue-900 tracking-tighter flex items-center"><Truck className="w-6 h-6 mr-2"/> Confirmar Salida Física</h2>
+                      <p className="text-[12px] font-bold text-blue-600 uppercase tracking-widest mt-1">Ajuste las cantidades si es un despacho parcial</p>
                     </div>
-                    <button onClick={() => { setShowDispatchConfirm(false); setShipQtys({}); }} className="bg-white p-2 rounded-full text-slate-400 hover:text-slate-600 shadow-sm"><X size={16}/></button>
+                    <button onClick={() => { setShowDispatchConfirm(false); setShipQtys({}); }} className="bg-white p-2 rounded-full text-slate-500 hover:text-slate-600 shadow-sm"><X size={16}/></button>
                   </div>
                   <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left">
                       <thead className="bg-slate-100 border-b border-slate-200">
                         <tr>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-4">LPN / SKU</th>
-                          <th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">En Carro</th>
-                          <th className="p-3 text-center text-[9px] font-black text-blue-600 uppercase pr-4">A Despachar</th>
+                          <th className="p-3 text-[12px] font-black text-slate-500 uppercase pl-4">LPN / SKU</th>
+                          <th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">En Carro</th>
+                          <th className="p-3 text-center text-[12px] font-black text-blue-600 uppercase pr-4">A Despachar</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -4802,17 +4801,17 @@ export default function App() {
                             {it.isKit ? (
                               <>
                                 <td className="p-3 pl-4">
-                                  <p className="text-xs font-black text-slate-800">{it.sku} <span className="ml-1 bg-violet-100 text-violet-700 px-1.5 rounded font-black text-[9px] uppercase">KIT</span></p>
-                                  <p className="text-[9px] text-slate-500">{it._compSummary}</p>
+                                  <p className="text-xs font-black text-slate-800">{it.sku} <span className="ml-1 bg-violet-100 text-violet-700 px-1.5 rounded font-black text-[12px] uppercase">KIT</span></p>
+                                  <p className="text-[12px] text-slate-500">{it._compSummary}</p>
                                 </td>
                                 <td className="p-3 text-center text-sm font-black text-slate-500">{it.qtyKits} kit{it.qtyKits>1?'s':''}</td>
-                                <td className="p-3 text-center pr-4"><span className="text-[9px] font-black text-violet-600 uppercase">Completo</span></td>
+                                <td className="p-3 text-center pr-4"><span className="text-[12px] font-black text-violet-600 uppercase">Completo</span></td>
                               </>
                             ) : (
                               <>
                                 <td className="p-3 pl-4">
                                   <p className="text-xs font-black text-slate-800">{it.sku}</p>
-                                  <p className="text-[9px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}{!it.serial && skus.find(s=>s.sku===it.sku)?.requires_serial && <span className="ml-1 bg-amber-100 text-amber-700 px-1 rounded font-bold">⚠ Sin serie — stock anterior</span>}</p>
+                                  <p className="text-[12px] font-mono text-slate-500">LPN: {it.lpnId} {it.serial && <span className="ml-1 bg-indigo-100 text-indigo-700 px-1 rounded font-bold">SN: {it.serial}</span>}{!it.serial && skus.find(s=>s.sku===it.sku)?.requires_serial && <span className="ml-1 bg-amber-100 text-amber-700 px-1 rounded font-bold">⚠ Sin serie — stock anterior</span>}</p>
                                 </td>
                                 <td className="p-3 text-center text-sm font-black text-slate-500">{it.qtyToPick}</td>
                                 <td className="p-3 text-center pr-4">
@@ -4833,18 +4832,18 @@ export default function App() {
                         ))}
                       </tbody>
                     </table>
-                    <p className="text-[10px] text-slate-400 italic text-center mt-6">Las cantidades que no despache se mantendrán en el documento para un envío posterior.</p>
+                    <p className="text-[12px] text-slate-500 italic text-center mt-6">Las cantidades que no despache se mantendrán en el documento para un envío posterior.</p>
                   </div>
                   <div className="p-6 border-t border-slate-100 bg-slate-50 space-y-3 shrink-0">
                     {usePickConf && (
                       <div className="bg-violet-50 border border-violet-200 rounded-xl px-4 py-2 flex items-center gap-2">
                         <CheckCheck size={14} className="text-violet-600 shrink-0"/>
-                        <p className="text-[9px] font-black text-violet-700 uppercase tracking-widest">Usando cantidades confirmadas por el picker</p>
+                        <p className="text-[12px] font-black text-violet-700 uppercase tracking-widest">Usando cantidades confirmadas por el picker</p>
                       </div>
                     )}
                     <div className="flex gap-4">
-                      <button onClick={() => { setShowDispatchConfirm(false); setShipQtys({}); }} className="w-1/3 bg-white border border-slate-200 text-slate-600 font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-slate-100 transition-colors">Volver</button>
-                      <button disabled={isCommitting} onClick={handleCommitDispatchPartial} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center">{isCommitting ? <><Loader2 size={16} className="mr-2 animate-spin"/> Procesando...</> : <><CheckCircle2 size={16} className="mr-2"/> Confirmar y Descontar Stock</>}</button>
+                      <button onClick={() => { setShowDispatchConfirm(false); setShipQtys({}); }} className="w-1/3 bg-white border border-slate-200 text-slate-600 font-black py-4 rounded-2xl uppercase text-[12px] tracking-widest hover:bg-slate-100 transition-colors">Volver</button>
+                      <button disabled={isCommitting} onClick={handleCommitDispatchPartial} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[12px] tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center">{isCommitting ? <><Loader2 size={16} className="mr-2 animate-spin"/> Procesando...</> : <><CheckCircle2 size={16} className="mr-2"/> Confirmar y Descontar Stock</>}</button>
                     </div>
                   </div>
                 </div>
@@ -4857,43 +4856,43 @@ export default function App() {
                 <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col animate-in zoom-in-95 max-h-[90vh]">
                   <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center bg-cyan-50 shrink-0">
                     <div>
-                      <h2 className="text-xl font-black text-cyan-900 uppercase tracking-tighter flex items-center"><Truck className="w-6 h-6 mr-2"/> Solicitar Transporte</h2>
-                      <p className="text-[10px] font-bold text-cyan-600 uppercase tracking-widest mt-1">Despacho {activeDoc.docNum} · {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client || 'sin cliente'}</p>
+                      <h2 className="text-xl font-black text-cyan-900 tracking-tighter flex items-center"><Truck className="w-6 h-6 mr-2"/> Solicitar Transporte</h2>
+                      <p className="text-[12px] font-bold text-cyan-600 uppercase tracking-widest mt-1">Despacho {activeDoc.docNum} · {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client || 'sin cliente'}</p>
                     </div>
-                    <button onClick={() => { setShowTransportReq(false); setTransportReqResult(null); }} className="bg-white p-2 rounded-full text-slate-400 hover:text-slate-600 shadow-sm"><X size={16}/></button>
+                    <button onClick={() => { setShowTransportReq(false); setTransportReqResult(null); }} className="bg-white p-2 rounded-full text-slate-500 hover:text-slate-600 shadow-sm"><X size={16}/></button>
                   </div>
                   <div className="p-8 flex-1 overflow-y-auto custom-scrollbar space-y-5">
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Líneas del carrito (peso/volumen los calcula el sistema)</p>
+                      <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2">Líneas del carrito (peso/volumen los calcula el sistema)</p>
                       <div className="space-y-1 max-h-40 overflow-y-auto">
                         {activeDoc.items.map((it, idx) => (
                           <div key={idx} className="flex items-center justify-between text-xs">
-                            <span className="font-mono font-black text-slate-700">{it.sku}{it.isKit && <span className="ml-1 bg-violet-100 text-violet-700 px-1 rounded text-[8px] uppercase">KIT</span>}</span>
+                            <span className="font-mono font-black text-slate-700">{it.sku}{it.isKit && <span className="ml-1 bg-violet-100 text-violet-700 px-1 rounded text-[11px] uppercase">KIT</span>}</span>
                             <span className="font-black text-slate-500">{it.isKit ? `${it.qtyKits} kit${it.qtyKits>1?'s':''}` : it.qtyToPick}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div className="md:col-span-2"><label className="text-[9px] font-black text-slate-400 uppercase">Destino</label><input value={transportReqForm.destino} onChange={e => setTransportReqForm({ ...transportReqForm, destino: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500" placeholder="Dirección / lugar de entrega"/></div>
-                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Sentido</label><select value={transportReqForm.sentido} onChange={e => setTransportReqForm({ ...transportReqForm, sentido: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white"><option value="SALIDA">Salida</option><option value="REGRESO">Regreso</option></select></div>
-                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Tipo vehículo sugerido</label><select value={transportReqForm.tipo_vehiculo_sugerido} onChange={e => setTransportReqForm({ ...transportReqForm, tipo_vehiculo_sugerido: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white"><option value="">—</option>{transportTipos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}</select></div>
-                      <div><label className="text-[9px] font-black text-slate-400 uppercase">N° cajas</label><input type="number" value={transportReqForm.n_cajas} onChange={e => setTransportReqForm({ ...transportReqForm, n_cajas: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
-                      <div><label className="text-[9px] font-black text-slate-400 uppercase">N° cajones</label><input type="number" value={transportReqForm.n_cajones} onChange={e => setTransportReqForm({ ...transportReqForm, n_cajones: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
-                      <div><label className="text-[9px] font-black text-slate-400 uppercase">N° pallets</label><input type="number" value={transportReqForm.n_pallets} onChange={e => setTransportReqForm({ ...transportReqForm, n_pallets: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
-                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Hora carga habilitada</label><input type="datetime-local" value={transportReqForm.hora_carga_habilitada} onChange={e => setTransportReqForm({ ...transportReqForm, hora_carga_habilitada: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
-                      <div><label className="text-[9px] font-black text-slate-400 uppercase">Recepción en destino</label><input type="datetime-local" value={transportReqForm.fecha_hora_recepcion_destino} onChange={e => setTransportReqForm({ ...transportReqForm, fecha_hora_recepcion_destino: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div className="md:col-span-2"><label className="text-[12px] font-black text-slate-500 uppercase">Destino</label><input value={transportReqForm.destino} onChange={e => setTransportReqForm({ ...transportReqForm, destino: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500" placeholder="Dirección / lugar de entrega"/></div>
+                      <div><label className="text-[12px] font-black text-slate-500 uppercase">Sentido</label><select value={transportReqForm.sentido} onChange={e => setTransportReqForm({ ...transportReqForm, sentido: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white"><option value="SALIDA">Salida</option><option value="REGRESO">Regreso</option></select></div>
+                      <div><label className="text-[12px] font-black text-slate-500 uppercase">Tipo vehículo sugerido</label><select value={transportReqForm.tipo_vehiculo_sugerido} onChange={e => setTransportReqForm({ ...transportReqForm, tipo_vehiculo_sugerido: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500 bg-white"><option value="">—</option>{transportTipos.map(t => <option key={t.id} value={t.nombre}>{t.nombre}</option>)}</select></div>
+                      <div><label className="text-[12px] font-black text-slate-500 uppercase">N° cajas</label><input type="number" value={transportReqForm.n_cajas} onChange={e => setTransportReqForm({ ...transportReqForm, n_cajas: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[12px] font-black text-slate-500 uppercase">N° cajones</label><input type="number" value={transportReqForm.n_cajones} onChange={e => setTransportReqForm({ ...transportReqForm, n_cajones: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[12px] font-black text-slate-500 uppercase">N° pallets</label><input type="number" value={transportReqForm.n_pallets} onChange={e => setTransportReqForm({ ...transportReqForm, n_pallets: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[12px] font-black text-slate-500 uppercase">Hora carga habilitada</label><input type="datetime-local" value={transportReqForm.hora_carga_habilitada} onChange={e => setTransportReqForm({ ...transportReqForm, hora_carga_habilitada: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
+                      <div><label className="text-[12px] font-black text-slate-500 uppercase">Recepción en destino</label><input type="datetime-local" value={transportReqForm.fecha_hora_recepcion_destino} onChange={e => setTransportReqForm({ ...transportReqForm, fecha_hora_recepcion_destino: e.target.value })} className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-cyan-500"/></div>
                     </div>
                     {transportReqResult && (
                       <div className={`rounded-xl p-3 ${transportReqResult.dims_incompletas ? 'bg-amber-50 border border-amber-300' : 'bg-emerald-50 border border-emerald-200'}`}>
-                        <div className="text-[11px] font-bold text-slate-700">Calculado — Peso: <b>{(Number(transportReqResult.peso_total)||0).toLocaleString('es-CL')} kg</b> · Volumen: <b>{(Number(transportReqResult.volumen_total)||0).toLocaleString('es-CL')} m³</b></div>
-                        {transportReqResult.aviso && <div className="flex items-center gap-1.5 text-amber-700 text-[11px] font-bold mt-1"><AlertTriangle size={13}/> {transportReqResult.aviso}</div>}
+                        <div className="text-[13px] font-bold text-slate-700">Calculado — Peso: <b>{(Number(transportReqResult.peso_total)||0).toLocaleString('es-CL')} kg</b> · Volumen: <b>{(Number(transportReqResult.volumen_total)||0).toLocaleString('es-CL')} m³</b></div>
+                        {transportReqResult.aviso && <div className="flex items-center gap-1.5 text-amber-700 text-[13px] font-bold mt-1"><AlertTriangle size={13}/> {transportReqResult.aviso}</div>}
                       </div>
                     )}
                   </div>
                   <div className="p-6 border-t border-slate-100 bg-slate-50 flex gap-4 shrink-0">
-                    <button onClick={() => { setShowTransportReq(false); setTransportReqResult(null); }} className="w-1/3 bg-white border border-slate-200 text-slate-600 font-black py-4 rounded-2xl uppercase text-[10px] tracking-widest hover:bg-slate-100 transition-colors">{transportReqResult ? 'Cerrar' : 'Cancelar'}</button>
-                    <button disabled={transportReqBusy} onClick={submitTransportReq} className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center">{transportReqBusy ? <><Loader2 size={16} className="mr-2 animate-spin"/> Enviando...</> : <><Send size={16} className="mr-2"/> Enviar Solicitud</>}</button>
+                    <button onClick={() => { setShowTransportReq(false); setTransportReqResult(null); }} className="w-1/3 bg-white border border-slate-200 text-slate-600 font-black py-4 rounded-2xl uppercase text-[12px] tracking-widest hover:bg-slate-100 transition-colors">{transportReqResult ? 'Cerrar' : 'Cancelar'}</button>
+                    <button disabled={transportReqBusy} onClick={submitTransportReq} className="flex-1 bg-cyan-600 hover:bg-cyan-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[12px] tracking-widest transition-colors disabled:opacity-60 flex justify-center items-center">{transportReqBusy ? <><Loader2 size={16} className="mr-2 animate-spin"/> Enviando...</> : <><Send size={16} className="mr-2"/> Enviar Solicitud</>}</button>
                   </div>
                 </div>
               </div>
@@ -4916,23 +4915,23 @@ export default function App() {
                     <div className="px-5 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between">
                       <p className="text-sm font-black text-amber-800 uppercase tracking-tighter flex items-center gap-2">
                         <ClipboardList size={15}/> {['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) ? 'Solicitudes de Ajuste Pendientes' : 'Mis Solicitudes de Ajuste'}
-                        {adjustRequests.filter(r=>r.status==='PENDIENTE').length > 0 && <span className="bg-amber-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black">{adjustRequests.filter(r=>r.status==='PENDIENTE').length}</span>}
+                        {adjustRequests.filter(r=>r.status==='PENDIENTE').length > 0 && <span className="bg-amber-500 text-white text-[12px] px-2 py-0.5 rounded-full font-black">{adjustRequests.filter(r=>r.status==='PENDIENTE').length}</span>}
                       </p>
-                      <button onClick={async()=>{ const r=await apiFetch(`${host}/api/adjust-requests`); if(r.ok) setAdjustRequests(await r.json()); }} className="text-[9px] text-slate-400 hover:text-slate-700 font-black uppercase flex items-center gap-1"><RefreshCcw size={10}/> Actualizar</button>
+                      <button onClick={async()=>{ const r=await apiFetch(`${host}/api/adjust-requests`); if(r.ok) setAdjustRequests(await r.json()); }} className="text-[12px] text-slate-500 hover:text-slate-700 font-black uppercase flex items-center gap-1"><RefreshCcw size={10}/> Actualizar</button>
                     </div>
                     <div className="divide-y divide-slate-100">
                       {adjustRequests.map(req => (
                         <div key={req.id} className="p-4 flex items-start justify-between gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase ${req.status==='PENDIENTE'?'bg-amber-100 text-amber-700':req.status==='APROBADA'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{req.status}</span>
-                              <span className="text-[9px] font-black text-slate-500">Doc: <span className="text-slate-800 font-mono">{req.doc_num}</span></span>
-                              <span className="text-[9px] text-slate-400">{new Date(req.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</span>
+                              <span className={`text-[12px] font-black px-2 py-0.5 rounded-full uppercase ${req.status==='PENDIENTE'?'bg-amber-100 text-amber-700':req.status==='APROBADA'?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{req.status}</span>
+                              <span className="text-[12px] font-black text-slate-500">Doc: <span className="text-slate-800 font-mono">{req.doc_num}</span></span>
+                              <span className="text-[12px] text-slate-500">{new Date(req.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</span>
                             </div>
-                            {req.glosa && <p className="text-[10px] text-slate-500">Glosa: {req.glosa}</p>}
-                            <p className="text-[10px] text-slate-400">Solicitado por <strong>{req.requested_by}</strong> · {Array.isArray(req.items) ? req.items.length : JSON.parse(req.items||'[]').length} línea(s)</p>
-                            {req.reject_reason && <p className="text-[10px] text-red-500 mt-1">Rechazo: "{req.reject_reason}"</p>}
-                            {req.authorized_by && <p className="text-[10px] text-slate-400">Procesado por <strong>{req.authorized_by}</strong></p>}
+                            {req.glosa && <p className="text-[12px] text-slate-500">Glosa: {req.glosa}</p>}
+                            <p className="text-[12px] text-slate-500">Solicitado por <strong>{req.requested_by}</strong> · {Array.isArray(req.items) ? req.items.length : JSON.parse(req.items||'[]').length} línea(s)</p>
+                            {req.reject_reason && <p className="text-[12px] text-red-500 mt-1">Rechazo: "{req.reject_reason}"</p>}
+                            {req.authorized_by && <p className="text-[12px] text-slate-500">Procesado por <strong>{req.authorized_by}</strong></p>}
                           </div>
                           {req.status === 'PENDIENTE' && ['JEFE_BODEGA','ADMIN','SUPERADMIN'].includes(currentUser?.role) && (
                             <div className="flex gap-2 shrink-0">
@@ -4941,7 +4940,7 @@ export default function App() {
                                 const r=await apiFetch(`${host}/api/adjust-requests/${req.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
                                 if(r.ok){showMsg('✅ Cantidad corregida correctamente');const d=await apiFetch(`${host}/api/adjust-requests?status=PENDIENTE`);if(d.ok)setAdjustRequests(await d.json());fetchData();}
                                 else{const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                              }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1 transition-colors">
+                              }} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-[12px] font-black uppercase flex items-center gap-1 transition-colors">
                                 <CheckCircle2 size={11}/> Aprobar
                               </button>
                               <button onClick={async()=>{
@@ -4950,7 +4949,7 @@ export default function App() {
                                 const r=await apiFetch(`${host}/api/adjust-requests/${req.id}/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reject_reason:motivo})});
                                 if(r.ok){showMsg('Solicitud rechazada');const d=await apiFetch(`${host}/api/adjust-requests?status=PENDIENTE`);if(d.ok)setAdjustRequests(await d.json());}
                                 else{const e=await r.json();showMsg(`⛔ ${e.error}`,true);}
-                              }} className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-xl text-[9px] font-black uppercase flex items-center gap-1 border border-red-200 transition-colors">
+                              }} className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-xl text-[12px] font-black uppercase flex items-center gap-1 border border-red-200 transition-colors">
                                 <X size={11}/> Rechazar
                               </button>
                             </div>
@@ -4969,9 +4968,9 @@ export default function App() {
                     <div className="flex items-center gap-4">
                       <button onClick={() => setActiveDocId(null)} className="p-2 bg-white rounded-full shadow-sm hover:bg-slate-100 transition-colors"><ArrowLeft size={16} className="text-amber-700"/></button>
                       <div>
-                        <h2 className="text-lg font-black text-amber-900 uppercase tracking-tighter flex items-center">Doc: {activeDoc.docNum}</h2>
-                        {activeDoc.client && <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
-                        <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">Agregando diferencias de inventario...</p>
+                        <h2 className="text-lg font-black text-amber-900 tracking-tighter flex items-center">Doc: {activeDoc.docNum}</h2>
+                        {activeDoc.client && <p className="text-[12px] font-black text-indigo-600 uppercase tracking-widest mt-0.5 flex items-center gap-1"><Building2 size={11}/> {clients.find(c=>c.id===activeDoc.client)?.name || activeDoc.client}</p>}
+                        <p className="text-[12px] font-bold text-amber-600 uppercase tracking-widest mt-0.5">Agregando diferencias de inventario...</p>
                       </div>
                     </div>
                   </div>
@@ -4979,18 +4978,18 @@ export default function App() {
                     <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-4 mb-6">
                       
                       <div className="flex bg-slate-100 p-1 rounded-xl mb-4">
-                        <button onClick={() => setLineItem({...lineItem, action: 'ADD', sku: '', location_id: 'PISO-RECEPCION'})} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-lg transition-colors ${lineItem.action === 'ADD' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>Sobrante (+)</button>
-                        <button onClick={() => setLineItem({...lineItem, action: 'SUBTRACT', sku: '', location_id: ''})} className={`flex-1 py-3 text-[10px] font-black uppercase rounded-lg transition-colors ${lineItem.action === 'SUBTRACT' ? 'bg-red-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>Merma (-)</button>
+                        <button onClick={() => setLineItem({...lineItem, action: 'ADD', sku: '', location_id: 'PISO-RECEPCION'})} className={`flex-1 py-3 text-[12px] font-black uppercase rounded-lg transition-colors ${lineItem.action === 'ADD' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>Sobrante (+)</button>
+                        <button onClick={() => setLineItem({...lineItem, action: 'SUBTRACT', sku: '', location_id: ''})} className={`flex-1 py-3 text-[12px] font-black uppercase rounded-lg transition-colors ${lineItem.action === 'SUBTRACT' ? 'bg-red-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}>Merma (-)</button>
                       </div>
 
-                      <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Producto (SKU) *</label>
+                      <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Producto (SKU) *</label>
                         <div className="flex gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl mb-2">
                           <Scan size={16} className="text-amber-600 shrink-0 mt-2"/>
                           <div className="flex-1">
-                            <p className="text-[9px] font-black text-amber-700 uppercase mb-1">Escanear Código de Barras / SKU</p>
+                            <p className="text-[12px] font-black text-amber-700 uppercase mb-1">Escanear Código de Barras / SKU</p>
                             <div className="flex gap-2">
                               <input ref={barcodeInputRef} type="text" value={barcodeInput} onChange={e=>setBarcodeInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();handleBarcodeSubmit(barcodeInput);}}} placeholder="Escanear o escribir código..." className="flex-1 border border-amber-300 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-amber-500 bg-white uppercase" disabled={isScanning} />
-                              <button onClick={()=>handleBarcodeSubmit(barcodeInput)} disabled={isScanning||!barcodeInput} className="bg-amber-600 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase flex items-center gap-1 disabled:opacity-50">{isScanning ? <Loader2 size={12} className="animate-spin"/> : <Search size={12}/>}</button>
+                              <button onClick={()=>handleBarcodeSubmit(barcodeInput)} disabled={isScanning||!barcodeInput} className="bg-amber-600 text-white px-3 py-2 rounded-lg text-[12px] font-black uppercase flex items-center gap-1 disabled:opacity-50">{isScanning ? <Loader2 size={12} className="animate-spin"/> : <Search size={12}/>}</button>
                             </div>
                           </div>
                         </div>
@@ -5006,33 +5005,33 @@ export default function App() {
                             <>
                               {selSku.requires_lot && (
                                 <div className="grid grid-cols-2 gap-4 bg-emerald-50 p-4 rounded-xl border border-emerald-200">
-                                  <div className="space-y-1"><label className="text-[9px] font-black text-emerald-800 uppercase flex items-center"><Calendar className="w-3 h-3 mr-1"/> Lote *</label><input type="text" value={lineItem.batch} onChange={e=>setLineItem({...lineItem, batch: e.target.value.toUpperCase()})} className="w-full border-2 border-emerald-200 rounded-lg px-3 py-2 text-xs font-bold outline-none uppercase" /></div>
-                                  <div className="space-y-1"><label className="text-[9px] font-black text-emerald-800 uppercase">Vencimiento</label><input type="date" value={lineItem.expDate} onChange={e=>setLineItem({...lineItem, expDate: e.target.value})} className="w-full border-2 border-emerald-200 rounded-lg px-3 py-2 text-xs font-bold outline-none bg-white" /></div>
+                                  <div className="space-y-1"><label className="text-[12px] font-black text-emerald-800 uppercase flex items-center"><Calendar className="w-3 h-3 mr-1"/> Lote *</label><input type="text" value={lineItem.batch} onChange={e=>setLineItem({...lineItem, batch: e.target.value.toUpperCase()})} className="w-full border-2 border-emerald-200 rounded-lg px-3 py-2 text-xs font-bold outline-none uppercase" /></div>
+                                  <div className="space-y-1"><label className="text-[12px] font-black text-emerald-800 uppercase">Vencimiento</label><input type="date" value={lineItem.expDate} onChange={e=>setLineItem({...lineItem, expDate: e.target.value})} className="w-full border-2 border-emerald-200 rounded-lg px-3 py-2 text-xs font-bold outline-none bg-white" /></div>
                                 </div>
                               )}
                               {selSku.requires_serial && (
                                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-200">
-                                  <label className="text-[9px] font-black text-blue-800 uppercase flex items-center"><Tag className="w-3 h-3 mr-1"/> Número de Serie (SN) *</label>
+                                  <label className="text-[12px] font-black text-blue-800 uppercase flex items-center"><Tag className="w-3 h-3 mr-1"/> Número de Serie (SN) *</label>
                                   <input type="text" value={lineItem.serial} onChange={e=>setLineItem({...lineItem, serial: e.target.value.toUpperCase()})} placeholder="ESCANEAR SERIE" className="w-full border-2 border-blue-200 rounded-lg px-3 py-3 text-lg font-black outline-none uppercase text-center mt-1" />
                                 </div>
                               )}
                               <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Destino del Sobrante *</label>
+                                <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Destino del Sobrante *</label>
                                   <select value={lineItem.location_id} onChange={e=>setLineItem({...lineItem, location_id: e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-amber-500 bg-white">
                                     <option value="PISO-RECEPCION">PISO-RECEPCION</option>
                                     {safeLocs.map(l => <option key={l.location_id} value={l.location_id}>{l.location_id}</option>)}
                                   </select>
                                 </div>
-                                <div className="space-y-1"><label className="text-[10px] font-black text-slate-500 uppercase">Cantidad *</label><input type="number" min="0.01" step="0.01" value={lineItem.qty} onChange={e=>setLineItem({...lineItem, qty: e.target.value})} disabled={selSku.requires_serial} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-xl font-black text-emerald-600 outline-none text-center ${selSku.requires_serial ? 'bg-slate-100 opacity-50' : 'focus:border-emerald-500'}`} /></div>
+                                <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Cantidad *</label><input type="number" min="0.01" step="0.01" value={lineItem.qty} onChange={e=>setLineItem({...lineItem, qty: e.target.value})} disabled={selSku.requires_serial} className={`w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-xl font-black text-emerald-600 outline-none text-center ${selSku.requires_serial ? 'bg-slate-100 opacity-50' : 'focus:border-emerald-500'}`} /></div>
                               </div>
                             </>
                           ) : (
                             <>
                               <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex justify-between items-center">
-                                <div><p className="text-[10px] font-black text-red-800 uppercase tracking-widest">{lineItem.location_id ? `Stock disponible en ${lineItem.location_id}` : 'Stock total disponible'} (mermas no distinguen estado)</p><p className="text-xl font-black text-red-600">{availMerma} <span className="text-sm">{selSku.uom || 'UN'}</span></p></div>
+                                <div><p className="text-[12px] font-black text-red-800 uppercase tracking-widest">{lineItem.location_id ? `Stock disponible en ${lineItem.location_id}` : 'Stock total disponible'} (mermas no distinguen estado)</p><p className="text-xl font-black text-red-600">{availMerma} <span className="text-sm">{selSku.uom || 'UN'}</span></p></div>
                               </div>
                               <div className="space-y-1 mt-4">
-                                <label className="text-[10px] font-black text-slate-500 uppercase">Ubicación / Origen de la Merma</label>
+                                <label className="text-[12px] font-black text-slate-500 uppercase">Ubicación / Origen de la Merma</label>
                                 <select value={lineItem.location_id} onChange={e=>setLineItem({...lineItem, location_id: e.target.value})} className="w-full border-2 border-red-100 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-red-500 bg-white">
                                   <option value="">Cualquier ubicación (FIFO)</option>
                                   <option value="PISO-RECEPCION">PISO-RECEPCION</option>
@@ -5042,12 +5041,12 @@ export default function App() {
                               {availMerma > 0 ? (
                                 selSku.requires_serial ? (
                                   <div className="space-y-1 mt-4">
-                                    <label className="text-[10px] font-black text-red-600 uppercase flex items-center"><Tag className="w-3 h-3 mr-1"/>Escanear Serie Única a Mermar</label>
+                                    <label className="text-[12px] font-black text-red-600 uppercase flex items-center"><Tag className="w-3 h-3 mr-1"/>Escanear Serie Única a Mermar</label>
                                     <input type="text" value={lineItem.serial} onChange={e=>setLineItem({...lineItem, serial: e.target.value.toUpperCase()})} className="w-full border-2 border-red-300 rounded-xl px-4 py-4 text-xl font-black text-center outline-none focus:border-red-600 text-red-700 uppercase bg-red-50" placeholder="ESCANEAR SN" />
                                   </div>
                                 ) : (
                                   <div className="space-y-1 mt-4">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase flex justify-between">¿Cuántas unidades desea RESTAR?</label>
+                                    <label className="text-[12px] font-black text-slate-500 uppercase flex justify-between">¿Cuántas unidades desea RESTAR?</label>
                                     <input type="number" min="0.01" step="0.01" max={availMerma} value={lineItem.qty} onChange={e=>setLineItem({...lineItem, qty: e.target.value})} className="w-full border-2 border-red-200 rounded-xl px-4 py-4 text-2xl font-black text-center outline-none focus:border-red-500 text-red-600" placeholder="0" />
                                   </div>
                                 )
@@ -5056,20 +5055,20 @@ export default function App() {
                               )}
                             </>
                           )}
-                          <button onClick={addAdjustLine} disabled={!lineItem.sku || (lineItem.action === 'ADD' && selSku.requires_lot && !lineItem.batch) || (lineItem.action === 'ADD' && selSku.requires_serial && !lineItem.serial) || (lineItem.action === 'SUBTRACT' && (availMerma <= 0 || parseFloat(lineItem.qty) > availMerma)) || (lineItem.action === 'SUBTRACT' && selSku.requires_serial && !lineItem.serial) || (!lineItem.qty && !(lineItem.action === 'SUBTRACT' && selSku.requires_serial))} className="w-full bg-amber-100 text-amber-800 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest hover:bg-amber-200 transition-colors flex justify-center items-center disabled:opacity-50"><Plus size={14} className="mr-1"/> Agregar Ajuste a la Hoja</button>
+                          <button onClick={addAdjustLine} disabled={!lineItem.sku || (lineItem.action === 'ADD' && selSku.requires_lot && !lineItem.batch) || (lineItem.action === 'ADD' && selSku.requires_serial && !lineItem.serial) || (lineItem.action === 'SUBTRACT' && (availMerma <= 0 || parseFloat(lineItem.qty) > availMerma)) || (lineItem.action === 'SUBTRACT' && selSku.requires_serial && !lineItem.serial) || (!lineItem.qty && !(lineItem.action === 'SUBTRACT' && selSku.requires_serial))} className="w-full bg-amber-100 text-amber-800 font-black py-3 rounded-xl uppercase text-[12px] tracking-widest hover:bg-amber-200 transition-colors flex justify-center items-center disabled:opacity-50"><Plus size={14} className="mr-1"/> Agregar Ajuste a la Hoja</button>
                         </div>
                       )}
                     </div>
 
                     {activeDoc.items.length > 0 && (
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-                        <div className="bg-slate-50 border-b border-slate-200 p-4"><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Ajustes Registrados ({activeDoc.items.length})</h3></div>
+                        <div className="bg-slate-50 border-b border-slate-200 p-4"><h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Ajustes Registrados ({activeDoc.items.length})</h3></div>
                         <table className="w-full text-left">
-                          <thead className="bg-slate-100 border-b border-slate-200"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">SKU / Detalle</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Diferencia</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Borrar</th></tr></thead>
+                          <thead className="bg-slate-100 border-b border-slate-200"><tr><th className="p-3 text-[12px] font-black text-slate-500 uppercase pl-5">SKU / Detalle</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Diferencia</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Borrar</th></tr></thead>
                           <tbody className="divide-y divide-slate-100">
                             {activeDoc.items.map((it, idx) => (
                               <tr key={idx} className="hover:bg-slate-50">
-                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[9px] text-slate-500">{it.batch ? `LT: ${it.batch}` : ''} {it.serial ? `SN: ${it.serial}` : ''} {it.action === 'ADD' ? `-> ${it.location_id}` : ''}</p></td>
+                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{it.sku}</p><p className="text-[12px] text-slate-500">{it.batch ? `LT: ${it.batch}` : ''} {it.serial ? `SN: ${it.serial}` : ''} {it.action === 'ADD' ? `-> ${it.location_id}` : ''}</p></td>
                                 <td className={`p-3 text-center text-lg font-black ${it.action === 'ADD' ? 'text-emerald-600' : 'text-red-600'}`}>{it.action === 'ADD' ? '+' : '-'}{it.qty}</td>
                                 <td className="p-3 text-center"><button onClick={() => removeLineFromDoc(idx)} className="text-red-400 hover:text-red-600"><MinusCircle size={16}/></button></td>
                               </tr>
@@ -5082,12 +5081,12 @@ export default function App() {
                       <div className="space-y-2">
                         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2">
                           <AlertTriangle size={14} className="text-amber-600 shrink-0 mt-0.5"/>
-                          <p className="text-[10px] font-bold text-amber-700">Como Ejecutivo de Cuenta, los ajustes requieren aprobación de un administrador antes de aplicarse al stock.</p>
+                          <p className="text-[12px] font-bold text-amber-700">Como Ejecutivo de Cuenta, los ajustes requieren aprobación de un administrador antes de aplicarse al stock.</p>
                         </div>
-                        <button disabled={activeDoc.items.length === 0} onClick={handleAdjustRequest} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center"><Send size={16} className="mr-2"/> Enviar Solicitud de Ajuste</button>
+                        <button disabled={activeDoc.items.length === 0} onClick={handleAdjustRequest} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[12px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center"><Send size={16} className="mr-2"/> Enviar Solicitud de Ajuste</button>
                       </div>
                     ) : (
-                      <button disabled={activeDoc.items.length === 0} onClick={() => handleCommitAPI('adjust_batch', 'adjust')} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center"><Database size={16} className="mr-2"/> Procesar Hoja de Ajustes</button>
+                      <button disabled={activeDoc.items.length === 0} onClick={() => handleCommitAPI('adjust_batch', 'adjust')} className="w-full bg-slate-900 hover:bg-black text-white font-black py-4 rounded-2xl shadow-lg uppercase text-[12px] tracking-widest transition-colors disabled:opacity-50 flex justify-center items-center"><Database size={16} className="mr-2"/> Procesar Hoja de Ajustes</button>
                     )}
                   </div>
                 </div>
@@ -5130,7 +5129,7 @@ export default function App() {
                     <div className="px-5 py-3 bg-amber-100 border-b border-amber-200 flex items-center justify-between">
                       <p className="text-sm font-black text-amber-800 uppercase tracking-tighter flex items-center gap-2">
                         <AlertTriangle size={16}/> Solicitudes Pendientes de Autorización
-                        <span className="bg-amber-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black">{pendingRelocReqs.length}</span>
+                        <span className="bg-amber-500 text-white text-[12px] px-2 py-0.5 rounded-full font-black">{pendingRelocReqs.length}</span>
                       </p>
                     </div>
                     <div className="divide-y divide-amber-100">
@@ -5142,20 +5141,20 @@ export default function App() {
                               <span className="font-black text-xs text-slate-800 uppercase">{r.sku}</span>
                               <span className="text-xs font-bold text-amber-700">×{r.qty}</span>
                             </div>
-                            <div className="flex items-center gap-2 text-[10px] font-bold">
+                            <div className="flex items-center gap-2 text-[12px] font-bold">
                               <span className="font-mono bg-slate-100 px-2 py-0.5 rounded text-slate-600">{r.location_from}</span>
                               <ChevronRight size={10} className="text-amber-400"/>
                               <span className="font-mono bg-purple-100 px-2 py-0.5 rounded text-purple-700">{r.location_to}</span>
                             </div>
-                            {r.glosa && <p className="text-[10px] text-slate-500 italic">"{r.glosa}"</p>}
-                            <p className="text-[9px] text-slate-400">Solicitado por <strong>{r.requested_by}</strong> · {new Date(r.requested_at).toLocaleString('es-CL')}</p>
+                            {r.glosa && <p className="text-[12px] text-slate-500 italic">"{r.glosa}"</p>}
+                            <p className="text-[12px] text-slate-500">Solicitado por <strong>{r.requested_by}</strong> · {new Date(r.requested_at).toLocaleString('es-CL')}</p>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <button onClick={async()=>{
                               const res = await apiFetch(`${host}/api/relocate-requests/${r.id}/approve`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({})});
                               if(res.ok){showMsg('✅ Producto movido correctamente');fetchData();}
                               else{const e=await res.json();showMsg(`⛔ ${e.error}`,true);}
-                            }} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase transition-colors flex items-center gap-1">
+                            }} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-black px-4 py-2 rounded-xl uppercase transition-colors flex items-center gap-1">
                               <CheckCircle2 size={13}/> Aprobar
                             </button>
                             <button onClick={async()=>{
@@ -5164,7 +5163,7 @@ export default function App() {
                               const res = await apiFetch(`${host}/api/relocate-requests/${r.id}/reject`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason})});
                               if(res.ok){showMsg('Solicitud rechazada');fetchData();}
                               else{const e=await res.json();showMsg(`⛔ ${e.error}`,true);}
-                            }} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[10px] font-black px-3 py-2 rounded-xl uppercase transition-colors flex items-center gap-1">
+                            }} className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[12px] font-black px-3 py-2 rounded-xl uppercase transition-colors flex items-center gap-1">
                               <X size={13}/> Rechazar
                             </button>
                           </div>
@@ -5176,7 +5175,7 @@ export default function App() {
 
                 {/* ── Encabezado + selector de modo ───────────────────── */}
                 <div className="flex justify-between items-center flex-wrap gap-3">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                  <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
                     <ArrowRightLeft className="text-purple-500"/>
                     {currentUser?.role === 'PICKER' ? 'Solicitar Reubicación' : 'Trasladar Stock'}
                   </h1>
@@ -5190,7 +5189,7 @@ export default function App() {
                       ].map(m => (
                         <button key={m.id}
                           onClick={() => { setRelMassMode(m.id); setMassSelected([]); setMassDest({bodega:'',zona:'',pasillo:'',columna:'',fila:''}); setMassDestMap({}); setRelSelectedId(null); }}
-                          className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${relMassMode===m.id ? 'bg-purple-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}
+                          className={`px-3 py-1.5 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all ${relMassMode===m.id ? 'bg-purple-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}
                         >{m.icon} {m.label}</button>
                       ))}
                     </div>
@@ -5206,19 +5205,19 @@ export default function App() {
                     )}
                     {/* Filtros individuales combinables */}
                     <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
-                      <Search size={14} className="text-slate-400 mr-2"/>
+                      <Search size={14} className="text-slate-500 mr-2"/>
                       <input type="text" placeholder="LPN..." value={relLpnFilter} onChange={e=>setRelLpnFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
                     </div>
                     <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
-                      <Search size={14} className="text-slate-400 mr-2"/>
+                      <Search size={14} className="text-slate-500 mr-2"/>
                       <input type="text" placeholder="SKU / producto..." value={relSkuFilter} onChange={e=>setRelSkuFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
                     </div>
                     <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
-                      <Search size={14} className="text-slate-400 mr-2"/>
+                      <Search size={14} className="text-slate-500 mr-2"/>
                       <input type="text" placeholder="Ubicación..." value={relLocFilter} onChange={e=>setRelLocFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
                     </div>
-                    {(relLpnFilter||relSkuFilter||relLocFilter) && <button onClick={()=>{setRelLpnFilter('');setRelSkuFilter('');setRelLocFilter('');}} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
-                    <span className="text-[10px] font-black text-slate-400 uppercase">{filteredRelData.length} LPNs</span>
+                    {(relLpnFilter||relSkuFilter||relLocFilter) && <button onClick={()=>{setRelLpnFilter('');setRelSkuFilter('');setRelLocFilter('');}} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[12px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
+                    <span className="text-[12px] font-black text-slate-500 uppercase">{filteredRelData.length} LPNs</span>
                   </div>
                 </div>
 
@@ -5228,7 +5227,7 @@ export default function App() {
                     {/* Lista LPNs */}
                     <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                       <div className="px-5 py-3 border-b border-slate-100 bg-slate-50">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selecciona un LPN para reubicar</p>
+                        <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Selecciona un LPN para reubicar</p>
                       </div>
                       <div className="overflow-y-auto flex-1 custom-scrollbar" style={{maxHeight:'520px'}}>
                         {filteredRelData.map(i => {
@@ -5243,19 +5242,19 @@ export default function App() {
                                 {isSel && <span className="w-2 h-2 bg-white rounded-full block"/>}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <p className="font-mono text-[9px] text-slate-400 truncate">{i.id}</p>
+                                <p className="font-mono text-[12px] text-slate-500 truncate">{i.id}</p>
                                 <p className="font-black text-xs text-slate-800 uppercase truncate mt-0.5">{i.sku}</p>
                                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                                  <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[9px] font-bold text-slate-600">{i.location_id || 'PISO-RECEPCION'}</span>
-                                  <span className="text-[9px] font-bold text-slate-500">{i.qty} un.</span>
-                                  {hasDestino && <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[8px] font-black uppercase flex items-center gap-0.5"><ArrowRightLeft size={8}/> {destinations[i.id]}</span>}
+                                  <span className="bg-slate-100 px-1.5 py-0.5 rounded font-mono text-[12px] font-bold text-slate-600">{i.location_id || 'PISO-RECEPCION'}</span>
+                                  <span className="text-[12px] font-bold text-slate-500">{i.qty} un.</span>
+                                  {hasDestino && <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded text-[11px] font-black uppercase flex items-center gap-0.5"><ArrowRightLeft size={8}/> {destinations[i.id]}</span>}
                                 </div>
                               </div>
                             </button>
                           );
                         })}
                         {filteredRelData.length === 0 && (
-                          <div className="p-8 text-center text-slate-400"><Package className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="text-[10px] font-bold uppercase">Sin stock disponible</p></div>
+                          <div className="p-8 text-center text-slate-500"><Package className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="text-[12px] font-bold uppercase">Sin stock disponible</p></div>
                         )}
                       </div>
                     </div>
@@ -5265,39 +5264,39 @@ export default function App() {
                       {!sel && (
                         <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-12 flex flex-col items-center justify-center text-center">
                           <ArrowRightLeft className="w-12 h-12 text-slate-200 mb-4"/>
-                          <p className="font-black text-slate-400 uppercase tracking-tighter">Selecciona un LPN</p>
-                          <p className="text-xs text-slate-400 mt-1">Haz clic en cualquier LPN de la lista para configurar su reubicación</p>
+                          <p className="font-black text-slate-500 uppercase tracking-tighter">Selecciona un LPN</p>
+                          <p className="text-xs text-slate-500 mt-1">Haz clic en cualquier LPN de la lista para configurar su reubicación</p>
                         </div>
                       )}
                       {sel && (
                         <div className="space-y-3 animate-in fade-in">
                           {/* Bloque 1 */}
                           <div className="bg-purple-50 border-2 border-purple-200 rounded-3xl p-5">
-                            <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-1"><span className="w-4 h-4 bg-purple-500 text-white rounded-full flex items-center justify-center text-[8px] font-black">1</span> LPN Seleccionado</p>
+                            <p className="text-[12px] font-black text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-1"><span className="w-4 h-4 bg-purple-500 text-white rounded-full flex items-center justify-center text-[11px] font-black">1</span> LPN Seleccionado</p>
                             <div className="flex items-start justify-between gap-3">
                               <div>
-                                <p className="font-mono text-[10px] text-purple-500">{sel.id}</p>
+                                <p className="font-mono text-[12px] text-purple-500">{sel.id}</p>
                                 <p className="font-black text-base text-purple-900 uppercase mt-0.5">{sel.sku}</p>
-                                {sel.batch_number && <p className="text-[10px] text-purple-600 mt-0.5">Lote: {sel.batch_number}</p>}
+                                {sel.batch_number && <p className="text-[12px] text-purple-600 mt-0.5">Lote: {sel.batch_number}</p>}
                               </div>
                               <div className="text-right shrink-0">
-                                <p className="text-[9px] font-black text-purple-400 uppercase">Stock Total</p>
+                                <p className="text-[12px] font-black text-purple-400 uppercase">Stock Total</p>
                                 <p className="text-2xl font-black text-purple-700">{sel.qty}</p>
-                                <p className="text-[9px] text-purple-500">{sel.uom || 'un.'}</p>
+                                <p className="text-[12px] text-purple-500">{sel.uom || 'un.'}</p>
                               </div>
                             </div>
                           </div>
                           {/* Bloque 2 */}
                           <div className="bg-white border-2 border-slate-200 rounded-3xl p-5">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1"><span className="w-4 h-4 bg-slate-400 text-white rounded-full flex items-center justify-center text-[8px] font-black">2</span> Ubicación Actual</p>
+                            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><span className="w-4 h-4 bg-slate-400 text-white rounded-full flex items-center justify-center text-[11px] font-black">2</span> Ubicación Actual</p>
                             <div className="flex items-center gap-3">
                               <span className="bg-slate-100 border border-slate-200 rounded-xl px-4 py-2 font-mono text-sm font-black text-slate-700">{sel.location_id || 'PISO-RECEPCION'}</span>
-                              <span className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase border ${getStatusBadge(sel.status)}`}>{sel.status || 'DISPONIBLE'}</span>
+                              <span className={`px-3 py-1.5 rounded-xl text-[12px] font-black uppercase border ${getStatusBadge(sel.status)}`}>{sel.status || 'DISPONIBLE'}</span>
                             </div>
                           </div>
                           {/* Bloque 3 */}
                           <div className="bg-white border-2 border-slate-200 rounded-3xl p-5">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1"><span className="w-4 h-4 bg-slate-400 text-white rounded-full flex items-center justify-center text-[8px] font-black">3</span> Cantidad a Mover</p>
+                            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1"><span className="w-4 h-4 bg-slate-400 text-white rounded-full flex items-center justify-center text-[11px] font-black">3</span> Cantidad a Mover</p>
                             <div className="flex items-center gap-4">
                               <div className="flex-1">
                                 <input type="number" min="0.01" step="0.01" max={sel.qty}
@@ -5307,14 +5306,14 @@ export default function App() {
                                   placeholder={`Máximo: ${sel.qty}`}
                                   className="w-full border-2 border-purple-200 focus:border-purple-500 rounded-2xl px-4 py-3 text-xl font-black text-center outline-none transition-colors"
                                 />
-                                {sel.serial_number && <p className="text-[9px] text-amber-600 font-bold mt-1 text-center">Serializado — se mueve completo</p>}
+                                {sel.serial_number && <p className="text-[12px] text-amber-600 font-bold mt-1 text-center">Serializado — se mueve completo</p>}
                               </div>
                               <div className="text-center shrink-0">
-                                <p className="text-[9px] font-black text-slate-400 uppercase">de {sel.qty}</p>
+                                <p className="text-[12px] font-black text-slate-500 uppercase">de {sel.qty}</p>
                                 {!sel.serial_number && (
                                   <div className="flex gap-2 mt-2">
-                                    <button onClick={()=>setRelocateQtys({...relocateQtys,[sel.id]:sel.qty})} className="text-[8px] font-black bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-lg uppercase transition-colors">Todo</button>
-                                    <button onClick={()=>setRelocateQtys({...relocateQtys,[sel.id]:Math.floor(parseFloat(sel.qty)/2)||1})} className="text-[8px] font-black bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-lg uppercase transition-colors">½</button>
+                                    <button onClick={()=>setRelocateQtys({...relocateQtys,[sel.id]:sel.qty})} className="text-[11px] font-black bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-lg uppercase transition-colors">Todo</button>
+                                    <button onClick={()=>setRelocateQtys({...relocateQtys,[sel.id]:Math.floor(parseFloat(sel.qty)/2)||1})} className="text-[11px] font-black bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-lg uppercase transition-colors">½</button>
                                   </div>
                                 )}
                               </div>
@@ -5322,14 +5321,14 @@ export default function App() {
                             {!sel.serial_number && selQty > 0 && selQty < parseFloat(sel.qty) && (
                               <div className="mt-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 flex items-center gap-2">
                                 <Split size={12} className="text-amber-600 shrink-0"/>
-                                <p className="text-[10px] font-bold text-amber-700">Reubicación <strong>parcial</strong> — se separará el LPN en dos ({selQty} / {parseFloat(sel.qty) - selQty} un.)</p>
+                                <p className="text-[12px] font-bold text-amber-700">Reubicación <strong>parcial</strong> — se separará el LPN en dos ({selQty} / {parseFloat(sel.qty) - selQty} un.)</p>
                               </div>
                             )}
                           </div>
                           {/* Bloque 4 — Destino */}
                           <div className={`bg-white border-2 rounded-3xl p-5 transition-colors ${destinations[sel.id] && destinations[sel.id]!==(sel.location_id||'PISO-RECEPCION') ? 'border-purple-300' : 'border-slate-200'}`}>
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1">
-                              <span className="w-4 h-4 bg-slate-400 text-white rounded-full flex items-center justify-center text-[8px] font-black">4</span>
+                            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1">
+                              <span className="w-4 h-4 bg-slate-400 text-white rounded-full flex items-center justify-center text-[11px] font-black">4</span>
                               Ubicación Destino
                             </p>
                             <LocPicker
@@ -5338,7 +5337,7 @@ export default function App() {
                               safeLocs={safeLocs}
                             />
                             {destinations[sel.id] && destinations[sel.id]!==(sel.location_id||'PISO-RECEPCION') && (
-                              <div className="mt-3 flex items-center gap-2 text-[10px] font-bold text-slate-500">
+                              <div className="mt-3 flex items-center gap-2 text-[12px] font-bold text-slate-500">
                                 <span className="font-mono bg-slate-100 px-2 py-1 rounded">{sel.location_id||'PISO-RECEPCION'}</span>
                                 <ChevronRight size={10} className="text-purple-400"/>
                                 <span className="font-mono font-black text-purple-700">{destinations[sel.id]}</span>
@@ -5347,9 +5346,9 @@ export default function App() {
                           </div>
                           {/* Bloque 5 — Glosa */}
                           <div className="bg-white border-2 border-slate-200 rounded-3xl p-5">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1">
-                              <span className="w-4 h-4 bg-slate-300 text-white rounded-full flex items-center justify-center text-[8px] font-black">5</span>
-                              Glosa / Motivo <span className="ml-1 text-[8px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">Opcional</span>
+                            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-1">
+                              <span className="w-4 h-4 bg-slate-300 text-white rounded-full flex items-center justify-center text-[11px] font-black">5</span>
+                              Glosa / Motivo <span className="ml-1 text-[11px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">Opcional</span>
                             </p>
                             <input type="text" placeholder="Ej: Reorganización de zona, pedido prioritario, etc."
                               value={glosas[sel.id]||''} onChange={e=>setGlosas({...glosas,[sel.id]:e.target.value})}
@@ -5378,8 +5377,8 @@ export default function App() {
                       {queue.length > 0 && (
                         <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden animate-in fade-in">
                           <div className="px-5 py-3 bg-purple-50 border-b border-purple-100 flex items-center justify-between">
-                            <p className="text-[10px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-2"><ArrowRightLeft size={12}/> Cola de Reubicación <span className="bg-purple-600 text-white text-[8px] px-1.5 py-0.5 rounded-full font-black">{queue.length}</span></p>
-                            <p className="text-[9px] text-purple-400 font-bold">Pendientes de confirmar</p>
+                            <p className="text-[12px] font-black text-purple-700 uppercase tracking-widest flex items-center gap-2"><ArrowRightLeft size={12}/> Cola de Reubicación <span className="bg-purple-600 text-white text-[11px] px-1.5 py-0.5 rounded-full font-black">{queue.length}</span></p>
+                            <p className="text-[12px] text-purple-400 font-bold">Pendientes de confirmar</p>
                           </div>
                           <div className="divide-y divide-slate-100">
                             {queue.map(i => {
@@ -5390,15 +5389,15 @@ export default function App() {
                                   <div className="flex-1 min-w-0">
                                     <p className="text-xs font-black text-slate-700 uppercase truncate">{i.sku}</p>
                                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                      <span className="font-mono text-[9px] text-slate-400">{i.location_id||'PISO'}</span>
+                                      <span className="font-mono text-[12px] text-slate-500">{i.location_id||'PISO'}</span>
                                       <ChevronRight size={9} className="text-purple-400"/>
-                                      <span className="font-mono text-[9px] font-black text-purple-700">{destinations[i.id]}</span>
-                                      <span className="text-[9px] font-bold text-slate-500">{mq} un.</span>
-                                      {partial && <span className="text-[8px] bg-amber-100 text-amber-700 px-1 rounded font-black">parcial</span>}
+                                      <span className="font-mono text-[12px] font-black text-purple-700">{destinations[i.id]}</span>
+                                      <span className="text-[12px] font-bold text-slate-500">{mq} un.</span>
+                                      {partial && <span className="text-[11px] bg-amber-100 text-amber-700 px-1 rounded font-black">parcial</span>}
                                     </div>
                                   </div>
                                   <div className="flex items-center gap-1 shrink-0">
-                                    <button onClick={()=>{handleRelocate(i.id,i.location_id,i.qty);if(relSelectedId===i.id)setRelSelectedId(null);}} className={`text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase transition-colors ${currentUser?.role==='PICKER'?'bg-amber-500 hover:bg-amber-600':'bg-purple-600 hover:bg-purple-700'}`}>{currentUser?.role==='PICKER'?'Solicitar':'Mover'}</button>
+                                    <button onClick={()=>{handleRelocate(i.id,i.location_id,i.qty);if(relSelectedId===i.id)setRelSelectedId(null);}} className={`text-white text-[12px] font-black px-3 py-1.5 rounded-xl uppercase transition-colors ${currentUser?.role==='PICKER'?'bg-amber-500 hover:bg-amber-600':'bg-purple-600 hover:bg-purple-700'}`}>{currentUser?.role==='PICKER'?'Solicitar':'Mover'}</button>
                                     <button onClick={()=>{setDestinations(p=>({...p,[i.id]:''}));setRelocateQtys(p=>({...p,[i.id]:''}));setGlosas(p=>({...p,[i.id]:''}));}} className="text-slate-300 hover:text-red-400 transition-colors p-1"><X size={14}/></button>
                                   </div>
                                 </div>
@@ -5408,7 +5407,7 @@ export default function App() {
                           {queue.length > 1 && (
                             <div className="px-5 py-3 border-t border-slate-100 bg-slate-50">
                               <button onClick={async()=>{for(const i of queue){await handleRelocate(i.id,i.location_id,i.qty);}setRelSelectedId(null);}}
-                                className="w-full bg-slate-800 hover:bg-slate-900 text-white text-[10px] font-black py-3 rounded-xl uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                                className="w-full bg-slate-800 hover:bg-slate-900 text-white text-[12px] font-black py-3 rounded-xl uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
                               ><ArrowRightLeft size={14}/> Confirmar Todo ({queue.length} movimientos)</button>
                             </div>
                           )}
@@ -5424,12 +5423,12 @@ export default function App() {
                     {/* Lista con checkboxes */}
                     <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                       <div className="px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">
                           {massSelected.length > 0 ? `${massSelected.length} LPNs seleccionados` : 'Selecciona LPNs'}
                         </p>
                         <div className="flex gap-1">
-                          <button onClick={()=>setMassSelected(filteredRelData.map(i=>i.id))} className="text-[8px] font-black bg-purple-100 text-purple-700 px-2 py-1 rounded-lg uppercase hover:bg-purple-200 transition-colors">Todos</button>
-                          <button onClick={()=>setMassSelected([])} className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded-lg uppercase hover:bg-slate-200 transition-colors">Ninguno</button>
+                          <button onClick={()=>setMassSelected(filteredRelData.map(i=>i.id))} className="text-[11px] font-black bg-purple-100 text-purple-700 px-2 py-1 rounded-lg uppercase hover:bg-purple-200 transition-colors">Todos</button>
+                          <button onClick={()=>setMassSelected([])} className="text-[11px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded-lg uppercase hover:bg-slate-200 transition-colors">Ninguno</button>
                         </div>
                       </div>
                       <div className="overflow-y-auto flex-1 custom-scrollbar" style={{maxHeight:'520px'}}>
@@ -5445,14 +5444,14 @@ export default function App() {
                               <div className="flex-1 min-w-0">
                                 <p className="font-black text-xs text-slate-800 uppercase truncate">{i.sku}</p>
                                 <div className="flex items-center gap-2 mt-0.5">
-                                  <span className="font-mono text-[9px] text-slate-400">{i.location_id||'PISO-RECEPCION'}</span>
-                                  <span className="text-[9px] font-bold text-slate-500">{i.qty} un.</span>
+                                  <span className="font-mono text-[12px] text-slate-500">{i.location_id||'PISO-RECEPCION'}</span>
+                                  <span className="text-[12px] font-bold text-slate-500">{i.qty} un.</span>
                                 </div>
                               </div>
                             </button>
                           );
                         })}
-                        {filteredRelData.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="text-[10px] font-bold uppercase">Sin stock disponible</p></div>}
+                        {filteredRelData.length === 0 && <div className="p-8 text-center text-slate-500"><Package className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="text-[12px] font-bold uppercase">Sin stock disponible</p></div>}
                       </div>
                     </div>
 
@@ -5461,20 +5460,20 @@ export default function App() {
                       {massSelected.length === 0 ? (
                         <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-12 flex flex-col items-center justify-center text-center">
                           <ArrowRightLeft className="w-12 h-12 text-slate-200 mb-4"/>
-                          <p className="font-black text-slate-400 uppercase tracking-tighter">Selecciona LPNs</p>
-                          <p className="text-xs text-slate-400 mt-1">Marca los LPNs que deseas mover al mismo destino</p>
+                          <p className="font-black text-slate-500 uppercase tracking-tighter">Selecciona LPNs</p>
+                          <p className="text-xs text-slate-500 mt-1">Marca los LPNs que deseas mover al mismo destino</p>
                         </div>
                       ) : (
                         <div className="space-y-4 animate-in fade-in">
                           {/* Resumen selección */}
                           <div className="bg-purple-50 border-2 border-purple-200 rounded-3xl p-5">
-                            <p className="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-3">{massSelected.length} LPNs en cola masiva</p>
+                            <p className="text-[12px] font-black text-purple-400 uppercase tracking-widest mb-3">{massSelected.length} LPNs en cola masiva</p>
                             <div className="flex flex-wrap gap-2">
                               {massSelectedItems.map(i => (
                                 <div key={i.id} className="bg-white border border-purple-200 rounded-xl px-3 py-1.5 flex items-center gap-2">
                                   <span className="font-black text-xs text-purple-900 uppercase">{i.sku}</span>
-                                  <span className="text-[9px] text-purple-500 font-mono">{i.location_id||'PISO'}</span>
-                                  <span className="text-[9px] font-bold text-purple-600">{i.qty}u</span>
+                                  <span className="text-[12px] text-purple-500 font-mono">{i.location_id||'PISO'}</span>
+                                  <span className="text-[12px] font-bold text-purple-600">{i.qty}u</span>
                                   <button onClick={()=>setMassSelected(prev=>prev.filter(x=>x!==i.id))} className="text-slate-300 hover:text-red-400 transition-colors"><X size={10}/></button>
                                 </div>
                               ))}
@@ -5483,7 +5482,7 @@ export default function App() {
 
                           {/* Destino único */}
                           <div className="bg-white border-2 border-slate-200 rounded-3xl p-5">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">Destino único para todos los LPNs seleccionados</p>
+                            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-4">Destino único para todos los LPNs seleccionados</p>
                             <LocPicker
                               value={massSingleDest}
                               onChange={v => setMassSingleDest(v)}
@@ -5493,7 +5492,7 @@ export default function App() {
 
                           {/* Glosa masiva */}
                           <div className="bg-white border-2 border-slate-200 rounded-3xl p-5">
-                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-3">Glosa / Motivo <span className="ml-1 text-[8px] bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">Opcional</span></p>
+                            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3">Glosa / Motivo <span className="ml-1 text-[11px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full">Opcional</span></p>
                             <input type="text" placeholder="Ej: Reorganización masiva de zona A"
                               value={glosas['__mass__']||''} onChange={e=>setGlosas(p=>({...p,'__mass__':e.target.value}))}
                               className="w-full border-2 border-slate-200 focus:border-purple-400 rounded-2xl px-4 py-3 text-sm font-medium outline-none transition-colors"
@@ -5534,12 +5533,12 @@ export default function App() {
                     {/* Lista con checkboxes */}
                     <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
                       <div className="px-5 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">
                           {massSelected.length > 0 ? `${massSelected.length} LPNs seleccionados` : 'Selecciona LPNs'}
                         </p>
                         <div className="flex gap-1">
-                          <button onClick={()=>setMassSelected(filteredRelData.map(i=>i.id))} className="text-[8px] font-black bg-purple-100 text-purple-700 px-2 py-1 rounded-lg uppercase hover:bg-purple-200 transition-colors">Todos</button>
-                          <button onClick={()=>setMassSelected([])} className="text-[8px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded-lg uppercase hover:bg-slate-200 transition-colors">Ninguno</button>
+                          <button onClick={()=>setMassSelected(filteredRelData.map(i=>i.id))} className="text-[11px] font-black bg-purple-100 text-purple-700 px-2 py-1 rounded-lg uppercase hover:bg-purple-200 transition-colors">Todos</button>
+                          <button onClick={()=>setMassSelected([])} className="text-[11px] font-black bg-slate-100 text-slate-500 px-2 py-1 rounded-lg uppercase hover:bg-slate-200 transition-colors">Ninguno</button>
                         </div>
                       </div>
                       <div className="overflow-y-auto flex-1 custom-scrollbar" style={{maxHeight:'520px'}}>
@@ -5556,15 +5555,15 @@ export default function App() {
                               <div className="flex-1 min-w-0">
                                 <p className="font-black text-xs text-slate-800 uppercase truncate">{i.sku}</p>
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                                  <span className="font-mono text-[9px] text-slate-400">{i.location_id||'PISO'}</span>
-                                  <span className="text-[9px] font-bold text-slate-500">{i.qty}u</span>
-                                  {dc && <span className="bg-purple-100 text-purple-700 px-1 py-0.5 rounded text-[8px] font-black flex items-center gap-0.5"><ArrowRightLeft size={7}/>{dc}</span>}
+                                  <span className="font-mono text-[12px] text-slate-500">{i.location_id||'PISO'}</span>
+                                  <span className="text-[12px] font-bold text-slate-500">{i.qty}u</span>
+                                  {dc && <span className="bg-purple-100 text-purple-700 px-1 py-0.5 rounded text-[11px] font-black flex items-center gap-0.5"><ArrowRightLeft size={7}/>{dc}</span>}
                                 </div>
                               </div>
                             </button>
                           );
                         })}
-                        {filteredRelData.length === 0 && <div className="p-8 text-center text-slate-400"><Package className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="text-[10px] font-bold uppercase">Sin stock disponible</p></div>}
+                        {filteredRelData.length === 0 && <div className="p-8 text-center text-slate-500"><Package className="w-10 h-10 mx-auto mb-2 opacity-40"/><p className="text-[12px] font-bold uppercase">Sin stock disponible</p></div>}
                       </div>
                     </div>
 
@@ -5573,13 +5572,13 @@ export default function App() {
                       {massSelected.length === 0 ? (
                         <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-12 flex flex-col items-center justify-center text-center">
                           <ArrowRightLeft className="w-12 h-12 text-slate-200 mb-4"/>
-                          <p className="font-black text-slate-400 uppercase tracking-tighter">Selecciona LPNs</p>
-                          <p className="text-xs text-slate-400 mt-1">Marca los LPNs y asigna un destino distinto a cada uno</p>
+                          <p className="font-black text-slate-500 uppercase tracking-tighter">Selecciona LPNs</p>
+                          <p className="text-xs text-slate-500 mt-1">Marca los LPNs y asigna un destino distinto a cada uno</p>
                         </div>
                       ) : (
                         <div className="space-y-3 animate-in fade-in">
                           <div className="flex items-center justify-between">
-                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{massSelected.length} LPNs — Destinos individuales</p>
+                            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">{massSelected.length} LPNs — Destinos individuales</p>
                             <button
                               onClick={() => {
                                 const first = massDestMap[massSelected[0]];
@@ -5589,7 +5588,7 @@ export default function App() {
                                   setMassDestMap(p => ({...p, ...upd}));
                                 }
                               }}
-                              className="text-[8px] font-black bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 py-1.5 rounded-xl uppercase transition-colors"
+                              className="text-[11px] font-black bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 py-1.5 rounded-xl uppercase transition-colors"
                             >Copiar 1º a todos</button>
                           </div>
 
@@ -5603,15 +5602,15 @@ export default function App() {
                                   {/* Encabezado LPN */}
                                   <div className="flex items-center justify-between mb-3">
                                     <div className="flex items-center gap-2">
-                                      <span className="w-5 h-5 bg-purple-600 text-white rounded-full flex items-center justify-center text-[8px] font-black shrink-0">{idx+1}</span>
+                                      <span className="w-5 h-5 bg-purple-600 text-white rounded-full flex items-center justify-center text-[11px] font-black shrink-0">{idx+1}</span>
                                       <div>
                                         <p className="font-black text-xs text-slate-800 uppercase">{i.sku}</p>
-                                        <p className="font-mono text-[9px] text-slate-400">{i.location_id||'PISO-RECEPCION'} · {i.qty} un.</p>
+                                        <p className="font-mono text-[12px] text-slate-500">{i.location_id||'PISO-RECEPCION'} · {i.qty} un.</p>
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-2">
                                       {dc && (
-                                        <span className={`font-mono text-[9px] font-black px-2 py-1 rounded-lg ${dcSame?'bg-amber-100 text-amber-700':dcExists?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{dc}</span>
+                                        <span className={`font-mono text-[12px] font-black px-2 py-1 rounded-lg ${dcSame?'bg-amber-100 text-amber-700':dcExists?'bg-emerald-100 text-emerald-700':'bg-red-100 text-red-700'}`}>{dc}</span>
                                       )}
                                       <button onClick={()=>setMassSelected(prev=>prev.filter(x=>x!==i.id))} className="text-slate-200 hover:text-red-400 transition-colors"><X size={14}/></button>
                                     </div>
@@ -5704,12 +5703,12 @@ export default function App() {
                 {/* Cabecera + tabs */}
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
-                    <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Building2 className="text-blue-500"/> Facturación 3PL</h1>
-                    <p className="text-[10px] font-bold text-blue-600 uppercase">Cobros por almacenaje, movimientos y servicios de valor agregado</p>
+                    <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2"><Building2 className="text-blue-500"/> Facturación 3PL</h1>
+                    <p className="text-[12px] font-bold text-blue-600 uppercase">Cobros por almacenaje, movimientos y servicios de valor agregado</p>
                   </div>
                   <div className="flex gap-2">
                     {[['generate','Generar Cobro',FileText],['invoices','Facturas',ClipboardList],['summary','Resumen Período',BarChart3],['tariffs','Tarifas',Tag]].map(([t,label,Icon])=>(
-                      <button key={t} onClick={()=>setBillingTab(t)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 transition-colors ${billingTab===t?'bg-blue-600 text-white shadow':'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}><Icon size={12}/>{label}</button>
+                      <button key={t} onClick={()=>setBillingTab(t)} className={`px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 transition-colors ${billingTab===t?'bg-blue-600 text-white shadow':'bg-blue-50 text-blue-700 hover:bg-blue-100'}`}><Icon size={12}/>{label}</button>
                     ))}
                   </div>
                 </div>
@@ -5718,23 +5717,23 @@ export default function App() {
                 {billingTab === 'generate' && (
                   <div className="space-y-5">
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                      <h3 className="text-sm font-black text-slate-700 uppercase mb-4">Parámetros del Cobro</h3>
+                      <h3 className="text-sm font-black text-slate-700 mb-4">Parámetros del Cobro</h3>
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-4 items-end">
                         <div className="md:col-span-2 space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Cliente</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Cliente</label>
                           <select value={billingClientId} onChange={e=>{setBillingClientId(e.target.value);setBillingReport(null);}} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-blue-500 bg-white">
                             <option value="">-- Seleccionar cliente --</option>
                             {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Mes</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Mes</label>
                           <select value={billingMonth} onChange={e=>setBillingMonth(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-blue-500 bg-white">
                             {[['01','Enero'],['02','Febrero'],['03','Marzo'],['04','Abril'],['05','Mayo'],['06','Junio'],['07','Julio'],['08','Agosto'],['09','Septiembre'],['10','Octubre'],['11','Noviembre'],['12','Diciembre']].map(([v,l])=><option key={v} value={v}>{l}</option>)}
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Año</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Año</label>
                           <input type="number" value={billingYear} onChange={e=>setBillingYear(e.target.value)} min="2020" max="2030" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-black outline-none focus:border-blue-500"/>
                         </div>
                         <button disabled={!billingClientId} onClick={async()=>{
@@ -5742,7 +5741,7 @@ export default function App() {
                           const d=await r.json(); setBillingReport(d);
                           const r2=await apiFetch(`${host}/api/client-tariffs/${billingClientId}`);
                           setClientTariffs(Array.isArray(await r2.json())?await (await apiFetch(`${host}/api/client-tariffs/${billingClientId}`)).json():[]);
-                        }} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-black py-2.5 rounded-xl shadow text-[10px] uppercase flex items-center justify-center gap-2"><RefreshCcw size={12}/> Calcular</button>
+                        }} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white font-black py-2.5 rounded-xl shadow text-[12px] uppercase flex items-center justify-center gap-2"><RefreshCcw size={12}/> Calcular</button>
                       </div>
                     </div>
 
@@ -5757,21 +5756,21 @@ export default function App() {
                           <div className="bg-gradient-to-br from-blue-700 to-blue-800 rounded-3xl p-7 text-white shadow-xl">
                             <div className="flex justify-between items-start flex-wrap gap-4">
                               <div>
-                                <p className="text-[9px] font-black uppercase opacity-60 tracking-widest">Cobro 3PL · {br.period}</p>
-                                <h2 className="text-3xl font-black uppercase mt-1">{cliName}</h2>
+                                <p className="text-[12px] font-black uppercase opacity-60 tracking-widest">Cobro 3PL · {br.period}</p>
+                                <h2 className="text-3xl font-black mt-1">{cliName}</h2>
                                 <p className="text-blue-200 text-xs font-bold mt-1">{br.days_in_month} días · {br.stock.lpn_count} LPNs activos · {br.movements.receives} recepciones · {br.movements.dispatches} despachos</p>
-                                {br.minimo_aplicado && <span className="inline-block mt-2 bg-yellow-400/20 border border-yellow-300/30 text-yellow-200 text-[9px] font-black px-2 py-1 rounded-lg uppercase">Mínimo mensual aplicado: {br.currency} {fmtN(br.minimo_mensual)}</span>}
+                                {br.minimo_aplicado && <span className="inline-block mt-2 bg-yellow-400/20 border border-yellow-300/30 text-yellow-200 text-[12px] font-black px-2 py-1 rounded-lg uppercase">Mínimo mensual aplicado: {br.currency} {fmtN(br.minimo_mensual)}</span>}
                               </div>
                               <div className="text-right">
-                                {br.tax_rate > 0 && <p className="text-[9px] opacity-60 uppercase">Neto: {br.currency} {fmtN(br.subtotal)}</p>}
-                                {br.tax_rate > 0 && <p className="text-[9px] opacity-60 uppercase">IVA {br.tax_rate}%: {br.currency} {fmtN(br.tax_amount)}</p>}
-                                <p className="text-[10px] font-black opacity-70 uppercase mt-1">Total a Cobrar</p>
+                                {br.tax_rate > 0 && <p className="text-[12px] opacity-60 uppercase">Neto: {br.currency} {fmtN(br.subtotal)}</p>}
+                                {br.tax_rate > 0 && <p className="text-[12px] opacity-60 uppercase">IVA {br.tax_rate}%: {br.currency} {fmtN(br.tax_amount)}</p>}
+                                <p className="text-[12px] font-black opacity-70 uppercase mt-1">Total a Cobrar</p>
                                 <p className="text-4xl font-black">{br.currency} {fmtN(br.total)}</p>
                                 <div className="flex gap-2 mt-3 justify-end">
                                   <button onClick={()=>{
                                     const csv='Concepto,Unidades,Días,Precio Unit.,Subtotal\n'+br.charges.map(c=>`${c.label},${c.units},${c.days||1},${c.unit_price},${c.subtotal}`).join('\n')+`\n,,,,\nSubtotal,,,, ${br.subtotal}\nIVA ${br.tax_rate}%,,,, ${br.tax_amount}\nTOTAL,,,, ${br.total}`;
                                     const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=`cobro_${br.client_id}_${br.period.replace('/','_')}.csv`;a.click();
-                                  }} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
+                                  }} className="bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg text-[12px] font-black uppercase flex items-center gap-1"><Download size={10}/> CSV</button>
                                 </div>
                               </div>
                             </div>
@@ -5779,24 +5778,24 @@ export default function App() {
 
                           {/* Detalle de cargos */}
                           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="p-5 border-b border-slate-100"><h3 className="text-sm font-black text-slate-700 uppercase flex items-center gap-2"><FileText size={15}/> Detalle de Cargos</h3></div>
+                            <div className="p-5 border-b border-slate-100"><h3 className="text-sm font-black text-slate-700 flex items-center gap-2"><FileText size={15}/> Detalle de Cargos</h3></div>
                             <table className="w-full text-left">
                               <thead className="bg-slate-50 border-b"><tr>
-                                <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Concepto</th>
-                                <th className="p-4 text-right text-[9px] font-black text-slate-400 uppercase">Unidades</th>
-                                <th className="p-4 text-right text-[9px] font-black text-slate-400 uppercase">Días</th>
-                                <th className="p-4 text-right text-[9px] font-black text-slate-400 uppercase">Precio Unitario</th>
-                                <th className="p-4 text-right text-[9px] font-black text-slate-400 uppercase">Subtotal</th>
+                                <th className="p-4 text-[12px] font-black text-slate-500 uppercase">Concepto</th>
+                                <th className="p-4 text-right text-[12px] font-black text-slate-500 uppercase">Unidades</th>
+                                <th className="p-4 text-right text-[12px] font-black text-slate-500 uppercase">Días</th>
+                                <th className="p-4 text-right text-[12px] font-black text-slate-500 uppercase">Precio Unitario</th>
+                                <th className="p-4 text-right text-[12px] font-black text-slate-500 uppercase">Subtotal</th>
                               </tr></thead>
                               <tbody className="divide-y divide-slate-100">
                                 {br.charges.map((c,i)=>(
                                   <tr key={i} className="hover:bg-slate-50">
                                     <td className="p-4">
                                       <p className="text-xs font-black text-slate-800">{c.label}</p>
-                                      {c.detail && <p className="text-[9px] text-slate-400 mt-0.5">{c.detail}</p>}
+                                      {c.detail && <p className="text-[12px] text-slate-500 mt-0.5">{c.detail}</p>}
                                     </td>
                                     <td className="p-4 text-right text-xs font-bold text-slate-600">{Number(c.units).toLocaleString('es-CL',{maximumFractionDigits:2})}</td>
-                                    <td className="p-4 text-right text-xs text-slate-400">{c.days||'—'}</td>
+                                    <td className="p-4 text-right text-xs text-slate-500">{c.days||'—'}</td>
                                     <td className="p-4 text-right text-xs font-bold text-slate-600">{br.currency} {Number(c.unit_price).toLocaleString('es-CL',{maximumFractionDigits:4})}</td>
                                     <td className="p-4 text-right text-sm font-black text-blue-700">{br.currency} {fmtN(c.subtotal)}</td>
                                   </tr>
@@ -5807,7 +5806,7 @@ export default function App() {
                                     <td className="p-4 text-right text-sm font-black text-slate-700">{br.currency} {fmtN(br.subtotal)}</td>
                                   </tr>
                                   <tr className="bg-slate-50">
-                                    <td colSpan="4" className="p-4 text-right text-xs font-bold text-slate-400 uppercase">IVA {br.tax_rate}%:</td>
+                                    <td colSpan="4" className="p-4 text-right text-xs font-bold text-slate-500 uppercase">IVA {br.tax_rate}%:</td>
                                     <td className="p-4 text-right text-xs font-bold text-slate-500">{br.currency} {fmtN(br.tax_amount)}</td>
                                   </tr>
                                 </>}
@@ -5828,21 +5827,21 @@ export default function App() {
                             ].map(([l,v,bg,tc])=>(
                               <div key={l} className={`${bg} border rounded-2xl p-4 text-center`}>
                                 <p className="text-2xl font-black ${tc}">{v}</p>
-                                <p className="text-[9px] font-black text-slate-400 uppercase mt-1">{l}</p>
+                                <p className="text-[12px] font-black text-slate-500 uppercase mt-1">{l}</p>
                               </div>
                             ))}
                           </div>
 
                           {/* Acción: guardar como factura */}
                           <div className="bg-white rounded-3xl border-2 border-blue-200 shadow-sm p-6">
-                            <h3 className="text-sm font-black text-blue-800 uppercase mb-4 flex items-center gap-2"><ClipboardList size={15}/> Emitir Factura</h3>
+                            <h3 className="text-sm font-black text-blue-800 mb-4 flex items-center gap-2"><ClipboardList size={15}/> Emitir Factura</h3>
                             <div className="flex gap-3 flex-wrap items-end">
                               <div className="flex-1 min-w-[200px]">
-                                <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Fecha Vencimiento</label>
+                                <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Fecha Vencimiento</label>
                                 <input type="date" value={billingDueDate} onChange={e=>setBillingDueDate(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500"/>
                               </div>
                               <div className="flex-[2] min-w-[200px]">
-                                <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Notas / Referencia</label>
+                                <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Notas / Referencia</label>
                                 <input type="text" value={billingNotes} onChange={e=>setBillingNotes(e.target.value)} placeholder="Ej: N° OC-2024-012, condiciones especiales..." className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500"/>
                               </div>
                               <button onClick={async()=>{
@@ -5851,7 +5850,7 @@ export default function App() {
                                 if(r.ok){showMsg('Factura emitida y guardada');setBillingNotes('');setBillingDueDate('');setBillingTab('invoices');
                                   const inv=await apiFetch(`${host}/api/billing/invoices`);setBillingInvoices(Array.isArray(await inv.json())?await (await apiFetch(`${host}/api/billing/invoices`)).json():[]);
                                 }else{const e=await r.json();showMsg(e.error||'Error',true);}
-                              }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-[10px] font-black uppercase shadow flex items-center gap-2"><CheckCircle2 size={14}/> Emitir Factura</button>
+                              }} className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-xl text-[12px] font-black uppercase shadow flex items-center gap-2"><CheckCircle2 size={14}/> Emitir Factura</button>
                             </div>
                           </div>
                         </div>
@@ -5859,7 +5858,7 @@ export default function App() {
                     })()}
 
                     {!billingReport && (
-                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400">
+                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-500">
                         <Building2 className="w-12 h-12 mx-auto mb-3 opacity-40"/>
                         <p className="font-black uppercase tracking-widest text-xs">Selecciona cliente y período para calcular el cobro</p>
                       </div>
@@ -5872,21 +5871,21 @@ export default function App() {
                   <div className="space-y-5">
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex gap-3 flex-wrap items-end">
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Cliente</label>
+                        <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Cliente</label>
                         <select value={billingClientId} onChange={e=>setBillingClientId(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 bg-white">
                           <option value="">Todos</option>
                           {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Mes</label>
+                        <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Mes</label>
                         <select value={billingMonth} onChange={e=>setBillingMonth(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 bg-white">
                           <option value="">Todos</option>
                           {['01','02','03','04','05','06','07','08','09','10','11','12'].map(m=><option key={m} value={m}>{m}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Año</label>
+                        <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Año</label>
                         <input type="number" value={billingYear} onChange={e=>setBillingYear(e.target.value)} className="w-24 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-blue-500"/>
                       </div>
                       <button onClick={async()=>{
@@ -5895,21 +5894,21 @@ export default function App() {
                         if(billingMonth) url+=`&month=${billingMonth}`;
                         const r=await apiFetch(url); const d=await r.json();
                         setBillingInvoices(Array.isArray(d)?d:[]);
-                      }} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow"><Search size={12}/> Buscar</button>
+                      }} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 shadow"><Search size={12}/> Buscar</button>
                     </div>
 
                     {billingInvoices.length > 0 ? (
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                         <table className="w-full text-left">
                           <thead className="bg-slate-50 border-b"><tr>
-                            <th className="p-4 text-[9px] font-black text-slate-400 uppercase">ID Factura</th>
-                            <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Cliente</th>
-                            <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Período</th>
-                            <th className="p-4 text-right text-[9px] font-black text-slate-400 uppercase">Total</th>
-                            <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Estado</th>
-                            <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Emitida</th>
-                            <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Vence</th>
-                            <th className="p-4 text-[9px] font-black text-slate-400 uppercase">Acciones</th>
+                            <th className="p-4 text-[12px] font-black text-slate-500 uppercase">ID Factura</th>
+                            <th className="p-4 text-[12px] font-black text-slate-500 uppercase">Cliente</th>
+                            <th className="p-4 text-[12px] font-black text-slate-500 uppercase">Período</th>
+                            <th className="p-4 text-right text-[12px] font-black text-slate-500 uppercase">Total</th>
+                            <th className="p-4 text-[12px] font-black text-slate-500 uppercase">Estado</th>
+                            <th className="p-4 text-[12px] font-black text-slate-500 uppercase">Emitida</th>
+                            <th className="p-4 text-[12px] font-black text-slate-500 uppercase">Vence</th>
+                            <th className="p-4 text-[12px] font-black text-slate-500 uppercase">Acciones</th>
                           </tr></thead>
                           <tbody className="divide-y divide-slate-100">
                             {billingInvoices.map(inv=>{
@@ -5917,13 +5916,13 @@ export default function App() {
                               const cliName=clients.find(c=>c.id===inv.client_id)?.name||inv.client_id;
                               return (
                                 <tr key={inv.id} className="hover:bg-slate-50">
-                                  <td className="p-4 text-[10px] font-mono text-slate-500">{inv.id}</td>
+                                  <td className="p-4 text-[12px] font-mono text-slate-500">{inv.id}</td>
                                   <td className="p-4 text-xs font-black text-slate-800 uppercase">{cliName}</td>
                                   <td className="p-4 text-xs font-bold text-slate-600">{inv.period}</td>
                                   <td className="p-4 text-right font-black text-slate-800">{inv.currency} {Number(inv.total).toLocaleString('es-CL')}</td>
-                                  <td className="p-4"><span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase ${stColors[inv.status]||'bg-slate-100 text-slate-600'}`}>{inv.status}</span></td>
-                                  <td className="p-4 text-[10px] text-slate-500">{inv.issued_at ? new Date(inv.issued_at).toLocaleDateString('es-CL') : '—'}</td>
-                                  <td className="p-4 text-[10px] text-slate-500">{inv.due_date ? new Date(inv.due_date).toLocaleDateString('es-CL') : '—'}</td>
+                                  <td className="p-4"><span className={`px-2 py-1 rounded-lg text-[12px] font-black uppercase ${stColors[inv.status]||'bg-slate-100 text-slate-600'}`}>{inv.status}</span></td>
+                                  <td className="p-4 text-[12px] text-slate-500">{inv.issued_at ? new Date(inv.issued_at).toLocaleDateString('es-CL') : '—'}</td>
+                                  <td className="p-4 text-[12px] text-slate-500">{inv.due_date ? new Date(inv.due_date).toLocaleDateString('es-CL') : '—'}</td>
                                   <td className="p-4">
                                     <div className="flex gap-1">
                                       {inv.status==='EMITIDA' && <>
@@ -5931,13 +5930,13 @@ export default function App() {
                                           await apiFetch(`${host}/api/billing/invoices/${inv.id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'PAGADA'})});
                                           setBillingInvoices(prev=>prev.map(x=>x.id===inv.id?{...x,status:'PAGADA',paid_at:new Date().toISOString()}:x));
                                           showMsg('Factura marcada como pagada');
-                                        }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase">Pagada</button>
+                                        }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-2 py-1 rounded-lg text-[12px] font-black uppercase">Pagada</button>
                                         <button onClick={async()=>{
                                           if(!(await confirm({ message: '¿Anular esta factura?', danger: true }))) return;
                                           await apiFetch(`${host}/api/billing/invoices/${inv.id}/status`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'ANULADA'})});
                                           setBillingInvoices(prev=>prev.map(x=>x.id===inv.id?{...x,status:'ANULADA'}:x));
                                           showMsg('Factura anulada');
-                                        }} className="bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded-lg text-[9px] font-black uppercase">Anular</button>
+                                        }} className="bg-red-100 hover:bg-red-200 text-red-600 px-2 py-1 rounded-lg text-[12px] font-black uppercase">Anular</button>
                                       </>}
                                       <button onClick={()=>{
                                         const charges = JSON.parse(inv.charges_json||'[]');
@@ -5946,7 +5945,7 @@ export default function App() {
                                           `\n\nTotal,,,, ${inv.total}`;
                                         const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
                                         a.download=`factura_${inv.id}.csv`;a.click();
-                                      }} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-lg text-[9px] font-black uppercase flex items-center gap-1"><Download size={10}/></button>
+                                      }} className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-lg text-[12px] font-black uppercase flex items-center gap-1"><Download size={10}/></button>
                                     </div>
                                   </td>
                                 </tr>
@@ -5956,7 +5955,7 @@ export default function App() {
                         </table>
                       </div>
                     ) : (
-                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400">
+                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-500">
                         <ClipboardList className="w-12 h-12 mx-auto mb-3 opacity-40"/>
                         <p className="font-black uppercase tracking-widest text-xs">Presiona Buscar para ver facturas</p>
                       </div>
@@ -5969,23 +5968,23 @@ export default function App() {
                   <div className="space-y-5">
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex gap-3 flex-wrap items-end">
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Mes</label>
+                        <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Mes</label>
                         <select value={billingMonth} onChange={e=>setBillingMonth(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-blue-500 bg-white">
                           {[['01','Enero'],['02','Febrero'],['03','Marzo'],['04','Abril'],['05','Mayo'],['06','Junio'],['07','Julio'],['08','Agosto'],['09','Septiembre'],['10','Octubre'],['11','Noviembre'],['12','Diciembre']].map(([v,l])=><option key={v} value={v}>{l}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Año</label>
+                        <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Año</label>
                         <input type="number" value={billingYear} onChange={e=>setBillingYear(e.target.value)} className="w-24 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-blue-500"/>
                       </div>
                       <button onClick={async()=>{
                         setBillingSummaryLoading(true);
                         const r=await apiFetch(`${host}/api/billing/summary?month=${billingMonth}&year=${billingYear}`);
                         const d=await r.json(); setBillingSummary(Array.isArray(d)?d:[]); setBillingSummaryLoading(false);
-                      }} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow"><RefreshCcw size={12}/> Cargar</button>
+                      }} className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 shadow"><RefreshCcw size={12}/> Cargar</button>
                     </div>
 
-                    {billingSummaryLoading && <div className="text-center py-12 text-slate-400 font-black uppercase text-xs animate-pulse">Calculando cobros para todos los clientes...</div>}
+                    {billingSummaryLoading && <div className="text-center py-12 text-slate-500 font-black uppercase text-xs animate-pulse">Calculando cobros para todos los clientes...</div>}
 
                     {billingSummary.length > 0 && !billingSummaryLoading && (
                       <div className="space-y-4">
@@ -5996,10 +5995,10 @@ export default function App() {
                           const pagado = billingSummary.filter(c=>c.invoice?.status==='PAGADA').reduce((a,c)=>a+parseFloat(c.invoice.total||0),0);
                           return (
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-blue-800">{billingSummary.length}</p><p className="text-[9px] font-black text-blue-500 uppercase">Clientes</p></div>
-                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center"><p className="text-xl font-black text-slate-800">$ {Number(total).toLocaleString('es-CL',{maximumFractionDigits:0})}</p><p className="text-[9px] font-black text-slate-400 uppercase">Total a Cobrar</p></div>
-                              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 text-center"><p className="text-xl font-black text-orange-700">$ {Number(pendiente).toLocaleString('es-CL',{maximumFractionDigits:0})}</p><p className="text-[9px] font-black text-orange-500 uppercase">Sin Facturar</p></div>
-                              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center"><p className="text-xl font-black text-emerald-700">$ {Number(pagado).toLocaleString('es-CL',{maximumFractionDigits:0})}</p><p className="text-[9px] font-black text-emerald-500 uppercase">Cobrado / Pagado</p></div>
+                              <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-blue-800">{billingSummary.length}</p><p className="text-[12px] font-black text-blue-500 uppercase">Clientes</p></div>
+                              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center"><p className="text-xl font-black text-slate-800">$ {Number(total).toLocaleString('es-CL',{maximumFractionDigits:0})}</p><p className="text-[12px] font-black text-slate-500 uppercase">Total a Cobrar</p></div>
+                              <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 text-center"><p className="text-xl font-black text-orange-700">$ {Number(pendiente).toLocaleString('es-CL',{maximumFractionDigits:0})}</p><p className="text-[12px] font-black text-orange-500 uppercase">Sin Facturar</p></div>
+                              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center"><p className="text-xl font-black text-emerald-700">$ {Number(pagado).toLocaleString('es-CL',{maximumFractionDigits:0})}</p><p className="text-[12px] font-black text-emerald-500 uppercase">Cobrado / Pagado</p></div>
                             </div>
                           );
                         })()}
@@ -6015,19 +6014,19 @@ export default function App() {
                                 <div className="flex justify-between items-start mb-3">
                                   <div>
                                     <p className="text-xs font-black text-slate-800 uppercase">{c.client_name}</p>
-                                    <p className="text-[9px] text-slate-400 font-bold uppercase">{c.client_id}</p>
+                                    <p className="text-[12px] text-slate-500 font-bold uppercase">{c.client_id}</p>
                                   </div>
-                                  {invSt ? <span className={`px-2 py-1 rounded-lg text-[9px] font-black uppercase border ${stColors[invSt]||'bg-slate-100 text-slate-600 border-slate-200'}`}>{invSt}</span>
-                                    : <span className="px-2 py-1 rounded-lg text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">Sin factura</span>}
+                                  {invSt ? <span className={`px-2 py-1 rounded-lg text-[12px] font-black uppercase border ${stColors[invSt]||'bg-slate-100 text-slate-600 border-slate-200'}`}>{invSt}</span>
+                                    : <span className="px-2 py-1 rounded-lg text-[12px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">Sin factura</span>}
                                 </div>
                                 <p className="text-2xl font-black text-slate-800 mb-2">{c.currency} {Number(c.total).toLocaleString('es-CL',{maximumFractionDigits:0})}</p>
-                                <div className="flex gap-3 text-[9px] text-slate-400 font-bold uppercase">
+                                <div className="flex gap-3 text-[12px] text-slate-500 font-bold uppercase">
                                   <span>{c.lpn_count} LPNs</span>
                                   <span>{c.receives} Rec.</span>
                                   <span>{c.dispatches} Desp.</span>
                                 </div>
                                 {!invSt && (
-                                  <button onClick={()=>{setBillingClientId(c.client_id);setBillingTab('generate');}} className="mt-3 w-full bg-blue-50 hover:bg-blue-100 text-blue-700 text-[9px] font-black uppercase py-1.5 rounded-xl border border-blue-200 transition-colors">Ver cobro</button>
+                                  <button onClick={()=>{setBillingClientId(c.client_id);setBillingTab('generate');}} className="mt-3 w-full bg-blue-50 hover:bg-blue-100 text-blue-700 text-[12px] font-black uppercase py-1.5 rounded-xl border border-blue-200 transition-colors">Ver cobro</button>
                                 )}
                               </div>
                             );
@@ -6037,7 +6036,7 @@ export default function App() {
                     )}
 
                     {billingSummary.length === 0 && !billingSummaryLoading && (
-                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400">
+                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-500">
                         <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-40"/>
                         <p className="font-black uppercase tracking-widest text-xs">Selecciona el período y presiona Cargar</p>
                       </div>
@@ -6049,7 +6048,7 @@ export default function App() {
                 {billingTab === 'tariffs' && (
                   <div className="space-y-5">
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                      <h3 className="text-sm font-black text-slate-700 uppercase mb-2">Seleccionar Cliente</h3>
+                      <h3 className="text-sm font-black text-slate-700 mb-2">Seleccionar Cliente</h3>
                       <select value={billingClientId} onChange={async e=>{setBillingClientId(e.target.value);if(e.target.value){const r=await apiFetch(`${host}/api/client-tariffs/${e.target.value}`);const d=await r.json();setClientTariffs(Array.isArray(d)?d:[]);}}} className="border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-blue-500 bg-white min-w-[280px]">
                         <option value="">-- Seleccionar --</option>
                         {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
@@ -6060,7 +6059,7 @@ export default function App() {
                       <>
                         {/* Tipos de tarifa predefinidos */}
                         <div className="bg-blue-50 border border-blue-200 rounded-3xl p-6">
-                          <h3 className="text-sm font-black text-blue-800 uppercase mb-4 flex items-center gap-2"><Tag size={15}/> Configurar Tarifas — {clients.find(c=>c.id===billingClientId)?.name||billingClientId}</h3>
+                          <h3 className="text-sm font-black text-blue-800 mb-4 flex items-center gap-2"><Tag size={15}/> Configurar Tarifas — {clients.find(c=>c.id===billingClientId)?.name||billingClientId}</h3>
                           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             {[
                               {type:'ALMACENAJE_LPN_DIA', label:'Almacenaje por LPN × Día', placeholder:'500', hint:'Cobra por cada LPN activo por día del mes'},
@@ -6077,10 +6076,10 @@ export default function App() {
                                 <div key={type} className="bg-white rounded-2xl border border-blue-100 p-4">
                                   <div className="flex justify-between items-start mb-2">
                                     <div>
-                                      <p className="text-[10px] font-black text-slate-700 uppercase">{label}</p>
-                                      <p className="text-[9px] text-slate-400 mt-0.5">{hint}</p>
+                                      <p className="text-[12px] font-black text-slate-700 uppercase">{label}</p>
+                                      <p className="text-[12px] text-slate-500 mt-0.5">{hint}</p>
                                     </div>
-                                    {existing && <span className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">Configurado</span>}
+                                    {existing && <span className="text-[12px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg">Configurado</span>}
                                   </div>
                                   <div className="flex gap-2">
                                     <input type="number" defaultValue={existing?.unit_price||''} placeholder={placeholder}
@@ -6099,7 +6098,7 @@ export default function App() {
                                         body:JSON.stringify({client_id:billingClientId,tariff_type:type,unit_price:inp.value,description:desc?.value||label})});
                                       if(r.ok){showMsg('Tarifa guardada');const r2=await apiFetch(`${host}/api/client-tariffs/${billingClientId}`);setClientTariffs(Array.isArray(await r2.json())?await (await apiFetch(`${host}/api/client-tariffs/${billingClientId}`)).json():[]);}
                                       else showMsg('Error',true);
-                                    }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-[9px] font-black uppercase">Guardar</button>
+                                    }} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-xl text-[12px] font-black uppercase">Guardar</button>
                                   </div>
                                 </div>
                               );
@@ -6109,14 +6108,14 @@ export default function App() {
 
                         {/* Cargos adicionales (ajustes) */}
                         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                          <h3 className="text-sm font-black text-slate-700 uppercase mb-4 flex items-center gap-2"><Plus size={15}/> Cargo / Crédito Adicional (AJUSTE)</h3>
+                          <h3 className="text-sm font-black text-slate-700 mb-4 flex items-center gap-2"><Plus size={15}/> Cargo / Crédito Adicional (AJUSTE)</h3>
                           <div className="flex gap-3 flex-wrap items-end">
                             <div className="flex-[2] min-w-[180px]">
-                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Descripción</label>
+                              <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Descripción</label>
                               <input type="text" placeholder="Ej: Seguro mercancía, Manipulación especial" value={newTariff.description} onChange={e=>setNewTariff(p=>({...p,description:e.target.value}))} className="w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-blue-500"/>
                             </div>
                             <div>
-                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Monto (neg. = crédito)</label>
+                              <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Monto (neg. = crédito)</label>
                               <input type="number" placeholder="15000" value={newTariff.unit_price} onChange={e=>setNewTariff(p=>({...p,unit_price:e.target.value}))} className="w-36 border border-slate-200 rounded-xl px-3 py-2 text-xs font-black outline-none text-right focus:border-blue-500"/>
                             </div>
                             <button onClick={async()=>{
@@ -6124,7 +6123,7 @@ export default function App() {
                               const id=`AJUSTE_${Date.now()}`;
                               const r=await apiFetch(`${host}/api/client-tariffs`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...newTariff,tariff_type:id,client_id:billingClientId})});
                               if(r.ok){showMsg('Cargo adicional guardado');setNewTariff({tariff_type:'',unit_price:'',description:''});const r2=await apiFetch(`${host}/api/client-tariffs/${billingClientId}`);setClientTariffs(await r2.json());}
-                            }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1"><Plus size={12}/> Agregar</button>
+                            }} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-1"><Plus size={12}/> Agregar</button>
                           </div>
                           {clientTariffs.filter(t=>t.tariff_type.startsWith('AJUSTE')).length > 0 && (
                             <div className="mt-4 space-y-2">
@@ -6164,12 +6163,12 @@ export default function App() {
               <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
-                    <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><HardHat className="text-amber-500"/> Uso de Materiales y HH</h1>
-                    <p className="text-[10px] font-bold text-amber-600 uppercase">Recursos por SKU · Reporte de Consumo por Despacho</p>
+                    <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2"><HardHat className="text-amber-500"/> Uso de Materiales y HH</h1>
+                    <p className="text-[12px] font-bold text-amber-600 uppercase">Recursos por SKU · Reporte de Consumo por Despacho</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => setResTab('config')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 ${resTab==='config'?'bg-amber-600 text-white shadow':'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}><Wrench size={12}/> Configurar SKUs</button>
-                    <button onClick={() => setResTab('report')} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 ${resTab==='report'?'bg-amber-600 text-white shadow':'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}><BarChart3 size={12}/> Reporte Consumo</button>
+                    <button onClick={() => setResTab('config')} className={`px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 ${resTab==='config'?'bg-amber-600 text-white shadow':'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}><Wrench size={12}/> Configurar SKUs</button>
+                    <button onClick={() => setResTab('report')} className={`px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 ${resTab==='report'?'bg-amber-600 text-white shadow':'bg-amber-100 text-amber-700 hover:bg-amber-200'}`}><BarChart3 size={12}/> Reporte Consumo</button>
                   </div>
                 </div>
 
@@ -6177,24 +6176,24 @@ export default function App() {
                   <div className="space-y-5">
                     {/* Selector de SKU con buscador */}
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                      <h3 className="text-sm font-black text-slate-700 uppercase mb-4 flex items-center gap-2"><Package size={16}/> Buscar y Seleccionar SKU</h3>
+                      <h3 className="text-sm font-black text-slate-700 mb-4 flex items-center gap-2"><Package size={16}/> Buscar y Seleccionar SKU</h3>
                       <div className="flex gap-3 flex-wrap items-start">
                         <div className="flex-1 min-w-[260px] space-y-2">
                           <div className="grid grid-cols-3 gap-2">
                             <div className="relative">
-                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
                               <input type="text" placeholder="SKU..." value={resSkuFilter} onChange={e => setResSkuFilter(e.target.value)} className="w-full pl-7 pr-2 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500 uppercase"/>
                             </div>
                             <div className="relative">
-                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
                               <input type="text" placeholder="Descripción..." value={resDescFilter} onChange={e => setResDescFilter(e.target.value)} className="w-full pl-7 pr-2 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500"/>
                             </div>
                             <div className="relative">
-                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
+                              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none"/>
                               <input type="text" placeholder="Cliente..." value={resCliFilter} onChange={e => setResCliFilter(e.target.value)} className="w-full pl-7 pr-2 py-2.5 border-2 border-amber-200 rounded-xl text-xs font-bold outline-none bg-amber-50 focus:border-amber-500 uppercase"/>
                             </div>
                           </div>
-                          {(resSkuFilter||resDescFilter||resCliFilter) && <button onClick={()=>{setResSkuFilter('');setResDescFilter('');setResCliFilter('');}} className="mt-1 text-[9px] font-black text-red-500 uppercase flex items-center gap-1 hover:text-red-600"><X size={10}/> Limpiar filtros</button>}
+                          {(resSkuFilter||resDescFilter||resCliFilter) && <button onClick={()=>{setResSkuFilter('');setResDescFilter('');setResCliFilter('');}} className="mt-1 text-[12px] font-black text-red-500 uppercase flex items-center gap-1 hover:text-red-600"><X size={10}/> Limpiar filtros</button>}
                           {(() => {
                             const filtered = safeSkus.filter(s =>
                               (!resSkuFilter || s.sku.toLowerCase().includes(resSkuFilter.toLowerCase())) &&
@@ -6202,10 +6201,10 @@ export default function App() {
                               (!resCliFilter || (s.client_id||'').toLowerCase().includes(resCliFilter.toLowerCase()))
                             );
                             if (!resSkuFilter && !resDescFilter && !resCliFilter && !resSku) return (
-                              <p className="text-[10px] text-slate-400 font-bold px-1">Escribe para filtrar los {safeSkus.length} SKUs disponibles</p>
+                              <p className="text-[12px] text-slate-500 font-bold px-1">Escribe para filtrar los {safeSkus.length} SKUs disponibles</p>
                             );
                             if (filtered.length === 0) return (
-                              <p className="text-[10px] text-red-400 font-bold px-1">Sin resultados para los filtros aplicados</p>
+                              <p className="text-[12px] text-red-400 font-bold px-1">Sin resultados para los filtros aplicados</p>
                             );
                             return (
                               <div className="border-2 border-amber-200 rounded-xl overflow-hidden max-h-52 overflow-y-auto custom-scrollbar bg-white shadow-sm">
@@ -6219,12 +6218,12 @@ export default function App() {
                                   }} className={`w-full flex items-center justify-between px-3 py-2 text-left hover:bg-amber-50 transition-colors border-b border-slate-100 last:border-0 ${resSku===s.sku&&resClientId===s.client_id?'bg-amber-100':''}`}>
                                     <span className="text-xs font-black text-slate-800 uppercase">{s.sku}</span>
                                     <div className="text-right">
-                                      <span className="text-[9px] font-bold text-slate-400 block uppercase">{s.client_id||'-'}</span>
-                                      <span className="text-[9px] text-slate-400">{(s.desc||'').slice(0,28)}</span>
+                                      <span className="text-[12px] font-bold text-slate-500 block uppercase">{s.client_id||'-'}</span>
+                                      <span className="text-[12px] text-slate-500">{(s.desc||'').slice(0,28)}</span>
                                     </div>
                                   </button>
                                 ))}
-                                {filtered.length > 80 && <p className="text-[9px] text-center text-slate-400 py-2 font-bold">… y {filtered.length-80} más — refina la búsqueda</p>}
+                                {filtered.length > 80 && <p className="text-[12px] text-center text-slate-500 py-2 font-bold">… y {filtered.length-80} más — refina la búsqueda</p>}
                               </div>
                             );
                           })()}
@@ -6232,11 +6231,11 @@ export default function App() {
                         {resSku && (
                           <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-xs font-bold flex items-center gap-3">
                             <div>
-                              <p className="text-[9px] text-amber-600 uppercase font-black">SKU seleccionado</p>
+                              <p className="text-[12px] text-amber-600 uppercase font-black">SKU seleccionado</p>
                               <p className="text-sm font-black text-slate-800 uppercase">{resSku}</p>
-                              <p className="text-[10px] text-amber-700">Cliente: {resClientId||'-'}</p>
+                              <p className="text-[12px] text-amber-700">Cliente: {resClientId||'-'}</p>
                             </div>
-                            <button onClick={()=>{setResSku('');setResClientId('');setResResources('');}} className="text-slate-400 hover:text-red-400"><X size={14}/></button>
+                            <button onClick={()=>{setResSku('');setResClientId('');setResResources('');}} className="text-slate-500 hover:text-red-400"><X size={14}/></button>
                           </div>
                         )}
                       </div>
@@ -6246,21 +6245,21 @@ export default function App() {
                       <>
                         {/* Formulario agregar recurso */}
                         <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6">
-                          <h3 className="text-sm font-black text-amber-800 uppercase mb-4 flex items-center gap-2"><Plus size={16}/> Agregar Recurso a {resSku}</h3>
+                          <h3 className="text-sm font-black text-amber-800 mb-4 flex items-center gap-2"><Plus size={16}/> Agregar Recurso a {resSku}</h3>
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                             <div>
-                              <label className="block text-[9px] font-black text-amber-700 uppercase mb-1">Tipo</label>
+                              <label className="block text-[12px] font-black text-amber-700 uppercase mb-1">Tipo</label>
                               <select value={resForm.resource_type} onChange={e=>setResForm({...resForm,resource_type:e.target.value})} className="w-full border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white">
                                 <option value="MATERIAL">Material</option>
                                 <option value="HH">HH (Horas Hombre)</option>
                               </select>
                             </div>
                             <div>
-                              <label className="block text-[9px] font-black text-amber-700 uppercase mb-1">Nombre del Recurso</label>
+                              <label className="block text-[12px] font-black text-amber-700 uppercase mb-1">Nombre del Recurso</label>
                               <input type="text" placeholder={resForm.resource_type==='HH'?'ej: Operario Almacén':'ej: Caja de Cartón'} value={resForm.resource_name} onChange={e=>setResForm({...resForm,resource_name:e.target.value})} className="w-full border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white"/>
                             </div>
                             <div>
-                              <label className="block text-[9px] font-black text-amber-700 uppercase mb-1">
+                              <label className="block text-[12px] font-black text-amber-700 uppercase mb-1">
                                 {resForm.resource_type==='HH' ? `Tiempo por unidad despachada` : 'Cantidad por unidad'}
                               </label>
                               <div className="flex gap-1">
@@ -6277,19 +6276,19 @@ export default function App() {
                             </div>
                             {resForm.resource_type==='HH' ? (
                               <div>
-                                <label className="block text-[9px] font-black text-amber-700 uppercase mb-1">N° Personal</label>
+                                <label className="block text-[12px] font-black text-amber-700 uppercase mb-1">N° Personal</label>
                                 <input type="number" min="1" step="1" placeholder="1" value={resForm.personnel_count} onChange={e=>setResForm({...resForm,personnel_count:e.target.value})} className="w-full border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white"/>
                               </div>
                             ) : (
                               <div>
-                                <label className="block text-[9px] font-black text-amber-700 uppercase mb-1">Notas</label>
+                                <label className="block text-[12px] font-black text-amber-700 uppercase mb-1">Notas</label>
                                 <input type="text" placeholder="Opcional..." value={resForm.notes} onChange={e=>setResForm({...resForm,notes:e.target.value})} className="w-full border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white"/>
                               </div>
                             )}
                           </div>
                           {resForm.resource_type==='HH' && (
                             <div className="mb-3">
-                              <label className="block text-[9px] font-black text-amber-700 uppercase mb-1">Notas / Rol</label>
+                              <label className="block text-[12px] font-black text-amber-700 uppercase mb-1">Notas / Rol</label>
                               <input type="text" placeholder="ej: Operario de picking, turno día" value={resForm.notes} onChange={e=>setResForm({...resForm,notes:e.target.value})} className="w-full border border-amber-300 rounded-xl px-3 py-2 text-xs font-bold outline-none bg-white"/>
                             </div>
                           )}
@@ -6314,34 +6313,34 @@ export default function App() {
                               const r2 = await apiFetch(`${host}/api/sku-resources?sku=${encodeURIComponent(resSku)}&client_id=${encodeURIComponent(resClientId)}`);
                               const d = await r2.json(); setResResources(Array.isArray(d)?d:[]);
                             } else { const err = await r.json(); showMsg(err.error||'Error al guardar', true); }
-                          }} className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-6 py-2 text-[10px] font-black uppercase flex items-center gap-2 shadow"><Plus size={12}/> Guardar Recurso</button>
+                          }} className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-6 py-2 text-[12px] font-black uppercase flex items-center gap-2 shadow"><Plus size={12}/> Guardar Recurso</button>
                         </div>
 
                         {/* Lista de recursos del SKU */}
                         {resResources.length > 0 ? (
                           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="bg-slate-50 border-b p-4"><h3 className="text-sm font-black text-slate-700 uppercase">Recursos definidos para {resSku} — {resResources.length} registros</h3></div>
+                            <div className="bg-slate-50 border-b p-4"><h3 className="text-sm font-black text-slate-700">Recursos definidos para {resSku} — {resResources.length} registros</h3></div>
                             <table className="w-full text-left">
                               <thead className="bg-slate-50 border-b"><tr>
-                                <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Tipo</th>
-                                <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Recurso</th>
-                                <th className="p-3 text-right text-[9px] font-black text-slate-400 uppercase">Cant/UN</th>
-                                <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Unidad</th>
-                                <th className="p-3 text-right text-[9px] font-black text-slate-400 uppercase">Hrs/UN</th>
-                                <th className="p-3 text-right text-[9px] font-black text-slate-400 uppercase">Personal</th>
-                                <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Notas</th>
+                                <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Tipo</th>
+                                <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Recurso</th>
+                                <th className="p-3 text-right text-[12px] font-black text-slate-500 uppercase">Cant/UN</th>
+                                <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Unidad</th>
+                                <th className="p-3 text-right text-[12px] font-black text-slate-500 uppercase">Hrs/UN</th>
+                                <th className="p-3 text-right text-[12px] font-black text-slate-500 uppercase">Personal</th>
+                                <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Notas</th>
                                 <th className="p-3"></th>
                               </tr></thead>
                               <tbody className="divide-y divide-slate-100">
                                 {resResources.map(r => (
                                   <tr key={r.id} className="hover:bg-slate-50">
-                                    <td className="p-3"><span className={`px-2 py-1 rounded text-[9px] font-black uppercase ${r.resource_type==='HH'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{r.resource_type==='HH'?<><Timer size={10} className="inline mr-1"/>HH</>:<><Wrench size={10} className="inline mr-1"/>Material</>}</span></td>
+                                    <td className="p-3"><span className={`px-2 py-1 rounded text-[12px] font-black uppercase ${r.resource_type==='HH'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{r.resource_type==='HH'?<><Timer size={10} className="inline mr-1"/>HH</>:<><Wrench size={10} className="inline mr-1"/>Material</>}</span></td>
                                     <td className="p-3 text-xs font-bold text-slate-800">{r.resource_name}</td>
                                     <td className="p-3 text-right text-xs font-black text-slate-700">{Number(r.qty_per_unit).toLocaleString('es-CL',{maximumFractionDigits:4})}</td>
                                     <td className="p-3 text-xs text-slate-500 font-bold uppercase">{r.resource_type==='HH'?(r.time_unit==='MINUTOS'?'min':'hrs'):r.unit}</td>
-                                    <td className="p-3 text-right text-xs text-blue-700 font-bold">{r.resource_type==='HH'?<span>{Number(r.hours_per_unit).toFixed(2)} <span className="text-[9px] text-slate-400">{r.time_unit==='MINUTOS'?'min':'hrs'}</span></span>:'-'}</td>
+                                    <td className="p-3 text-right text-xs text-blue-700 font-bold">{r.resource_type==='HH'?<span>{Number(r.hours_per_unit).toFixed(2)} <span className="text-[12px] text-slate-500">{r.time_unit==='MINUTOS'?'min':'hrs'}</span></span>:'-'}</td>
                                     <td className="p-3 text-right text-xs font-bold text-slate-600">{r.resource_type==='HH'?r.personnel_count:'-'}</td>
-                                    <td className="p-3 text-[10px] text-slate-400">{r.notes||'-'}</td>
+                                    <td className="p-3 text-[12px] text-slate-500">{r.notes||'-'}</td>
                                     <td className="p-3"><button onClick={async () => { if (!(await confirm({ message: '¿Eliminar este recurso?', danger: true }))) return; const del = await apiFetch(`${host}/api/sku-resources/${r.id}`,{method:'DELETE'}); if (del.ok) { showMsg('Recurso eliminado'); setResResources(prev=>prev.filter(x=>x.id!==r.id)); } else showMsg('Error al eliminar',true); }} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={14}/></button></td>
                                   </tr>
                                 ))}
@@ -6349,16 +6348,16 @@ export default function App() {
                             </table>
                           </div>
                         ) : (
-                          <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-10 text-center text-slate-400">
+                          <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-10 text-center text-slate-500">
                             <Wrench className="w-10 h-10 mx-auto mb-2 opacity-40"/>
                             <p className="font-black uppercase tracking-widest text-xs">Este SKU no tiene recursos definidos</p>
-                            <p className="text-[10px] mt-1">Agrega materiales o HH con el formulario de arriba</p>
+                            <p className="text-[12px] mt-1">Agrega materiales o HH con el formulario de arriba</p>
                           </div>
                         )}
                       </>
                     )}
                     {!resSku && (
-                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400">
+                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-500">
                         <HardHat className="w-12 h-12 mx-auto mb-3 opacity-40"/>
                         <p className="font-black uppercase tracking-widest text-xs">Selecciona un SKU para configurar sus recursos</p>
                       </div>
@@ -6370,18 +6369,18 @@ export default function App() {
                   <div className="space-y-5">
                     {/* Filtros */}
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
-                      <h3 className="text-sm font-black text-slate-700 uppercase mb-4 flex items-center gap-2"><BarChart3 size={16}/> Filtros del Reporte</h3>
+                      <h3 className="text-sm font-black text-slate-700 mb-4 flex items-center gap-2"><BarChart3 size={16}/> Filtros del Reporte</h3>
                       <div className="flex gap-3 flex-wrap items-end">
                         <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Desde</label>
+                          <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Desde</label>
                           <input type="date" value={resDateFrom} onChange={e=>setResDateFrom(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-amber-500"/>
                         </div>
                         <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Hasta</label>
+                          <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Hasta</label>
                           <input type="date" value={resDateTo} onChange={e=>setResDateTo(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-amber-500"/>
                         </div>
                         <div>
-                          <label className="block text-[9px] font-black text-slate-400 uppercase mb-1">Cliente (opcional)</label>
+                          <label className="block text-[12px] font-black text-slate-500 uppercase mb-1">Cliente (opcional)</label>
                           <select value={resReportClient} onChange={e=>setResReportClient(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:border-amber-500 bg-white">
                             <option value="">Todos los clientes</option>
                             {(Array.isArray(clients)?clients:[]).map(c=><option key={c.id} value={c.id}>{c.name||c.id}</option>)}
@@ -6394,7 +6393,7 @@ export default function App() {
                           const d = await r.json();
                           setResReportData(Array.isArray(d)?d:[]);
                           if (Array.isArray(d) && d.length === 0) showMsg('Sin datos para ese período');
-                        }} className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow"><RefreshCcw size={12}/> Generar</button>
+                        }} className="bg-amber-600 hover:bg-amber-700 text-white px-5 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 shadow"><RefreshCcw size={12}/> Generar</button>
                         {resReportData.length > 0 && (
                           <button onClick={() => {
                             const header = 'cliente,despacho,tipo_doc,fecha,sku,tipo_recurso,recurso,unidad,qty_despachada,total_recurso,tiempo_por_un,unidad_tiempo,personal,total_horas,total_minutos\n';
@@ -6404,7 +6403,7 @@ export default function App() {
                             const blob = new Blob([header+rows],{type:'text/csv'});
                             const a=document.createElement('a'); a.href=URL.createObjectURL(blob);
                             a.download=`consumo_mat_hh_${resDateFrom}_${resDateTo}.csv`; a.click();
-                          }} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 shadow"><Download size={12}/> Exportar CSV</button>
+                          }} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 shadow"><Download size={12}/> Exportar CSV</button>
                         )}
                       </div>
                     </div>
@@ -6429,21 +6428,21 @@ export default function App() {
                           {/* Tarjetas resumen global */}
                           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center">
-                              <p className="text-[9px] font-black text-slate-400 uppercase">Clientes</p>
+                              <p className="text-[12px] font-black text-slate-500 uppercase">Clientes</p>
                               <p className="text-2xl font-black text-slate-700">{clientIds.length}</p>
                             </div>
                             <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center">
-                              <p className="text-[9px] font-black text-slate-400 uppercase">Despachos</p>
+                              <p className="text-[12px] font-black text-slate-500 uppercase">Despachos</p>
                               <p className="text-2xl font-black text-slate-700">{totalDispatches}</p>
                             </div>
                             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
-                              <p className="text-[9px] font-black text-amber-600 uppercase">Registros Mat.</p>
+                              <p className="text-[12px] font-black text-amber-600 uppercase">Registros Mat.</p>
                               <p className="text-2xl font-black text-amber-800">{resReportData.filter(r=>r.resource_type==='MATERIAL').length}</p>
                             </div>
                             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 text-center">
-                              <p className="text-[9px] font-black text-blue-600 uppercase">Total HH Global</p>
+                              <p className="text-[12px] font-black text-blue-600 uppercase">Total HH Global</p>
                               <p className="text-lg font-black text-blue-800">{totalHoursAll.toFixed(2)} hrs</p>
-                              <p className="text-[10px] font-bold text-blue-500">{Math.round(totalHoursAll*60)} min</p>
+                              <p className="text-[12px] font-bold text-blue-500">{Math.round(totalHoursAll*60)} min</p>
                             </div>
                           </div>
 
@@ -6460,13 +6459,13 @@ export default function App() {
                                   <div className="flex items-center gap-3">
                                     <div className="bg-amber-400 rounded-xl p-2"><Building2 size={16} className="text-slate-900"/></div>
                                     <div>
-                                      <p className="text-[9px] font-black text-slate-400 uppercase">Cliente</p>
+                                      <p className="text-[12px] font-black text-slate-500 uppercase">Cliente</p>
                                       <p className="text-sm font-black text-white uppercase">{cliName}</p>
                                     </div>
                                   </div>
                                   <div className="flex gap-4 text-right">
-                                    <div><p className="text-[9px] font-black text-slate-400 uppercase">Despachos</p><p className="text-lg font-black text-white">{dispKeys.length}</p></div>
-                                    <div><p className="text-[9px] font-black text-slate-400 uppercase">HH Total</p><p className="text-lg font-black text-blue-300">{cliHours.toFixed(2)} hrs</p></div>
+                                    <div><p className="text-[12px] font-black text-slate-500 uppercase">Despachos</p><p className="text-lg font-black text-white">{dispKeys.length}</p></div>
+                                    <div><p className="text-[12px] font-black text-slate-500 uppercase">HH Total</p><p className="text-lg font-black text-blue-300">{cliHours.toFixed(2)} hrs</p></div>
                                   </div>
                                 </div>
 
@@ -6485,12 +6484,12 @@ export default function App() {
                                             <FileText size={12} className="text-indigo-600"/>
                                             <span className="text-xs font-black text-indigo-800 uppercase">{disp.doc_num}</span>
                                           </div>
-                                          <span className="text-[10px] font-bold text-slate-500 bg-slate-100 rounded-lg px-2 py-1 uppercase">{disp.doc_type||'N/A'}</span>
-                                          <span className="text-[10px] font-bold text-slate-500 flex items-center gap-1"><Calendar size={10}/>{disp.dispatch_date}</span>
-                                          {disp.glosa && <span className="text-[10px] text-slate-400 italic">"{disp.glosa}"</span>}
+                                          <span className="text-[12px] font-bold text-slate-500 bg-slate-100 rounded-lg px-2 py-1 uppercase">{disp.doc_type||'N/A'}</span>
+                                          <span className="text-[12px] font-bold text-slate-500 flex items-center gap-1"><Calendar size={10}/>{disp.dispatch_date}</span>
+                                          {disp.glosa && <span className="text-[12px] text-slate-500 italic">"{disp.glosa}"</span>}
                                           <div className="ml-auto flex gap-3">
-                                            {dMat.length>0 && <span className="text-[9px] font-black text-amber-700 bg-amber-100 rounded-lg px-2 py-1 uppercase">{dMat.length} materiales</span>}
-                                            {dHH.length>0 && <span className="text-[9px] font-black text-blue-700 bg-blue-100 rounded-lg px-2 py-1 uppercase">{dHours.toFixed(2)} hrs / {Math.round(dHours*60)} min</span>}
+                                            {dMat.length>0 && <span className="text-[12px] font-black text-amber-700 bg-amber-100 rounded-lg px-2 py-1 uppercase">{dMat.length} materiales</span>}
+                                            {dHH.length>0 && <span className="text-[12px] font-black text-blue-700 bg-blue-100 rounded-lg px-2 py-1 uppercase">{dHours.toFixed(2)} hrs / {Math.round(dHours*60)} min</span>}
                                           </div>
                                         </div>
 
@@ -6498,24 +6497,24 @@ export default function App() {
                                         {dMat.length > 0 && (
                                           <div className="rounded-2xl border border-amber-200 overflow-hidden">
                                             <div className="bg-amber-50 px-3 py-2 flex items-center gap-2 border-b border-amber-200">
-                                              <Wrench size={12} className="text-amber-600"/><span className="text-[9px] font-black text-amber-700 uppercase">Materiales</span>
+                                              <Wrench size={12} className="text-amber-600"/><span className="text-[12px] font-black text-amber-700 uppercase">Materiales</span>
                                             </div>
                                             <table className="w-full text-left">
                                               <thead className="bg-slate-50"><tr>
-                                                <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase">Material</th>
-                                                <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase">SKU</th>
-                                                <th className="px-3 py-2 text-right text-[8px] font-black text-slate-400 uppercase">UN Desp.</th>
-                                                <th className="px-3 py-2 text-right text-[8px] font-black text-slate-400 uppercase">Total</th>
-                                                <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase">UN</th>
+                                                <th className="px-3 py-2 text-[11px] font-black text-slate-500 uppercase">Material</th>
+                                                <th className="px-3 py-2 text-[11px] font-black text-slate-500 uppercase">SKU</th>
+                                                <th className="px-3 py-2 text-right text-[11px] font-black text-slate-500 uppercase">UN Desp.</th>
+                                                <th className="px-3 py-2 text-right text-[11px] font-black text-slate-500 uppercase">Total</th>
+                                                <th className="px-3 py-2 text-[11px] font-black text-slate-500 uppercase">UN</th>
                                               </tr></thead>
                                               <tbody className="divide-y divide-slate-100">
                                                 {dMat.map((r,i)=>(
                                                   <tr key={i} className="hover:bg-amber-50/50">
                                                     <td className="px-3 py-2 text-xs font-bold text-slate-800">{r.resource_name}</td>
-                                                    <td className="px-3 py-2"><span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[9px] font-black uppercase">{r.sku}</span></td>
+                                                    <td className="px-3 py-2"><span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[12px] font-black uppercase">{r.sku}</span></td>
                                                     <td className="px-3 py-2 text-right text-xs font-black text-slate-700">{Number(r.dispatched_qty).toLocaleString('es-CL',{maximumFractionDigits:2})}</td>
                                                     <td className="px-3 py-2 text-right text-xs font-black text-amber-700">{Number(r.total_resource_qty||0).toLocaleString('es-CL',{maximumFractionDigits:3})}</td>
-                                                    <td className="px-3 py-2 text-[9px] font-bold text-slate-400 uppercase">{r.unit}</td>
+                                                    <td className="px-3 py-2 text-[12px] font-bold text-slate-500 uppercase">{r.unit}</td>
                                                   </tr>
                                                 ))}
                                               </tbody>
@@ -6527,27 +6526,27 @@ export default function App() {
                                         {dHH.length > 0 && (
                                           <div className="rounded-2xl border border-blue-200 overflow-hidden">
                                             <div className="bg-blue-50 px-3 py-2 flex items-center gap-2 border-b border-blue-200">
-                                              <Timer size={12} className="text-blue-600"/><span className="text-[9px] font-black text-blue-700 uppercase">Horas Hombre</span>
+                                              <Timer size={12} className="text-blue-600"/><span className="text-[12px] font-black text-blue-700 uppercase">Horas Hombre</span>
                                             </div>
                                             <table className="w-full text-left">
                                               <thead className="bg-slate-50"><tr>
-                                                <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase">Rol</th>
-                                                <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase">SKU</th>
-                                                <th className="px-3 py-2 text-right text-[8px] font-black text-slate-400 uppercase">UN Desp.</th>
-                                                <th className="px-3 py-2 text-right text-[8px] font-black text-slate-400 uppercase">T/UN</th>
-                                                <th className="px-3 py-2 text-[8px] font-black text-slate-400 uppercase">UT</th>
-                                                <th className="px-3 py-2 text-right text-[8px] font-black text-slate-400 uppercase">Pers.</th>
-                                                <th className="px-3 py-2 text-right text-[8px] font-black text-slate-400 uppercase">Horas</th>
-                                                <th className="px-3 py-2 text-right text-[8px] font-black text-slate-400 uppercase">Min</th>
+                                                <th className="px-3 py-2 text-[11px] font-black text-slate-500 uppercase">Rol</th>
+                                                <th className="px-3 py-2 text-[11px] font-black text-slate-500 uppercase">SKU</th>
+                                                <th className="px-3 py-2 text-right text-[11px] font-black text-slate-500 uppercase">UN Desp.</th>
+                                                <th className="px-3 py-2 text-right text-[11px] font-black text-slate-500 uppercase">T/UN</th>
+                                                <th className="px-3 py-2 text-[11px] font-black text-slate-500 uppercase">UT</th>
+                                                <th className="px-3 py-2 text-right text-[11px] font-black text-slate-500 uppercase">Pers.</th>
+                                                <th className="px-3 py-2 text-right text-[11px] font-black text-slate-500 uppercase">Horas</th>
+                                                <th className="px-3 py-2 text-right text-[11px] font-black text-slate-500 uppercase">Min</th>
                                               </tr></thead>
                                               <tbody className="divide-y divide-slate-100">
                                                 {dHH.map((r,i)=>(
                                                   <tr key={i} className="hover:bg-blue-50/50">
                                                     <td className="px-3 py-2 text-xs font-bold text-slate-800">{r.resource_name}</td>
-                                                    <td className="px-3 py-2"><span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[9px] font-black uppercase">{r.sku}</span></td>
+                                                    <td className="px-3 py-2"><span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[12px] font-black uppercase">{r.sku}</span></td>
                                                     <td className="px-3 py-2 text-right text-xs font-black text-slate-700">{Number(r.dispatched_qty).toLocaleString('es-CL',{maximumFractionDigits:2})}</td>
                                                     <td className="px-3 py-2 text-right text-xs font-bold text-blue-600">{Number(r.hours_per_unit).toFixed(2)}</td>
-                                                    <td className="px-3 py-2 text-[9px] font-bold text-slate-400 uppercase">{r.time_unit==='MINUTOS'?'min':'hrs'}</td>
+                                                    <td className="px-3 py-2 text-[12px] font-bold text-slate-500 uppercase">{r.time_unit==='MINUTOS'?'min':'hrs'}</td>
                                                     <td className="px-3 py-2 text-right text-xs font-bold text-slate-600">{r.personnel_count}</td>
                                                     <td className="px-3 py-2 text-right text-xs font-black text-blue-700">{Number(r.total_hours||0).toFixed(2)}</td>
                                                     <td className="px-3 py-2 text-right text-xs font-black text-indigo-600">{Math.round(Number(r.total_minutes||0))}</td>
@@ -6555,7 +6554,7 @@ export default function App() {
                                                 ))}
                                                 {dHH.length > 1 && (
                                                   <tr className="bg-blue-50">
-                                                    <td colSpan="6" className="px-3 py-2 text-right text-[9px] font-black text-blue-600 uppercase">Subtotal despacho:</td>
+                                                    <td colSpan="6" className="px-3 py-2 text-right text-[12px] font-black text-blue-600 uppercase">Subtotal despacho:</td>
                                                     <td className="px-3 py-2 text-right text-xs font-black text-blue-800">{dHours.toFixed(2)}</td>
                                                     <td className="px-3 py-2 text-right text-xs font-black text-indigo-700">{Math.round(dHours*60)}</td>
                                                   </tr>
@@ -6572,7 +6571,7 @@ export default function App() {
                                 {/* Total del cliente */}
                                 {cliHours > 0 && (
                                   <div className="bg-slate-50 border-t border-slate-200 px-6 py-3 flex justify-end gap-6">
-                                    <span className="text-[9px] font-black text-slate-500 uppercase self-center">Total HH {cid}:</span>
+                                    <span className="text-[12px] font-black text-slate-500 uppercase self-center">Total HH {cid}:</span>
                                     <span className="text-sm font-black text-blue-700">{cliHours.toFixed(2)} hrs</span>
                                     <span className="text-sm font-black text-indigo-600">{Math.round(cliHours*60)} min</span>
                                   </div>
@@ -6583,10 +6582,10 @@ export default function App() {
                         </div>
                       );
                     })() : (
-                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-400">
+                      <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-16 text-center text-slate-500">
                         <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50"/>
                         <p className="font-black uppercase tracking-widest text-xs">Selecciona el período y presiona Generar</p>
-                        <p className="text-[10px] mt-1">El reporte mostrará los recursos agrupados por cliente y por despacho</p>
+                        <p className="text-[12px] mt-1">El reporte mostrará los recursos agrupados por cliente y por despacho</p>
                       </div>
                     )}
                   </div>
@@ -6682,8 +6681,8 @@ export default function App() {
                   <div className="flex items-center gap-4">
                     <div className="p-3 bg-red-100 rounded-2xl"><ShieldAlert className="w-8 h-8 text-red-600"/></div>
                     <div>
-                      <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Panel SUPERADMIN</h1>
-                      <p className="text-[10px] font-bold text-red-500 uppercase tracking-widest">Acceso Restringido — Todas las acciones quedan registradas</p>
+                      <h1 className="text-2xl font-black text-slate-800 tracking-tighter">Panel SUPERADMIN</h1>
+                      <p className="text-[12px] font-bold text-red-500 uppercase tracking-widest">Acceso Restringido — Todas las acciones quedan registradas</p>
                     </div>
                   </div>
                   {/* BOTÓN MANTENIMIENTO DE EMERGENCIA */}
@@ -6701,44 +6700,44 @@ export default function App() {
                 {/* TABS INTERNOS */}
                 <div className="flex bg-white p-1 rounded-2xl border border-slate-200 shadow-sm w-fit">
                   {[['metrics','📊 Estado del servidor'],['modo-modules','🔀 Modo & Módulos'],['config','⚙️ Configuración'],['demo','🎮 Modo de prueba'],['users-sa','👥 Usuarios del sistema'],['passwords','🔑 Contraseñas'],['inventory-sa','📦 Productos en bodega'],['audit-sa','📋 Historial de movimientos'],['backups','💾 Copias de respaldo'],['feedback','💡 Mejoras']].map(([id,label])=>(
-                    <button key={id} onClick={()=>{ setSuperAdminTab(id); if(id==='demo'){ apiFetch(`${host}/api/demo/feedback`).then(r=>r.ok?r.json():[]).then(d=>setDemoFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='backups'){ apiFetch(`${host}/api/system/backups`).then(r=>r.ok?r.json():[]).then(d=>setBackupsList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='feedback'){ apiFetch(`${host}/api/feedback`).then(r=>r.ok?r.json():[]).then(d=>setFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='modo-modules'){ apiFetch(`${host}/api/system/ngrok/status`).then(r=>r.ok?r.json():null).then(d=>setNgrokStatus(d)).catch(()=>{}); } }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-colors ${superAdminTab===id?'bg-slate-800 text-white shadow-md':'text-slate-500 hover:bg-slate-100'}`}>{label}</button>
+                    <button key={id} onClick={()=>{ setSuperAdminTab(id); if(id==='demo'){ apiFetch(`${host}/api/demo/feedback`).then(r=>r.ok?r.json():[]).then(d=>setDemoFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='backups'){ apiFetch(`${host}/api/system/backups`).then(r=>r.ok?r.json():[]).then(d=>setBackupsList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='feedback'){ apiFetch(`${host}/api/feedback`).then(r=>r.ok?r.json():[]).then(d=>setFeedbackList(Array.isArray(d)?d:[])).catch(()=>{}); } if(id==='modo-modules'){ apiFetch(`${host}/api/system/ngrok/status`).then(r=>r.ok?r.json():null).then(d=>setNgrokStatus(d)).catch(()=>{}); } }} className={`px-4 py-2 rounded-xl text-[12px] font-black uppercase transition-colors ${superAdminTab===id?'bg-slate-800 text-white shadow-md':'text-slate-500 hover:bg-slate-100'}`}>{label}</button>
                   ))}
                 </div>
 
                 {/* MÉTRICAS */}
                 <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8">
                   <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Activity className="w-5 h-5 mr-2 text-indigo-500"/> Métricas del Sistema</h2>
-                    <button onClick={async () => { const res = await apiFetch(`${host}/api/system/metrics`); const d = await res.json(); setSystemMetrics(d); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
+                    <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><Activity className="w-5 h-5 mr-2 text-indigo-500"/> Métricas del Sistema</h2>
+                    <button onClick={async () => { const res = await apiFetch(`${host}/api/system/metrics`); const d = await res.json(); setSystemMetrics(d); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
                   </div>
                   {systemMetrics ? (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">LPNs Activos</p><p className="text-2xl font-black text-slate-800">{systemMetrics.inventory?.lpns || 0}</p></div>
-                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">Unidades Stock</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.inventory?.units || 0).toLocaleString()}</p></div>
-                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">Total Logs</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.auditLogs || 0).toLocaleString()}</p></div>
-                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">Usuarios</p><div className="flex flex-wrap gap-1 mt-1">{systemMetrics.usersByRole?.map(u => <span key={u.role} className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-black">{u.role}: {u.count}</span>)}</div></div>
-                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Top 5 SKUs por Stock</p>{systemMetrics.topSkus?.map(s => <div key={s.sku} className="flex justify-between text-[10px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{s.sku}</span><span className="font-black">{Number(s.total_qty).toLocaleString()}</span></div>)}</div>
-                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Actividad (Últimos 7 días)</p>{systemMetrics.recentActivity?.map(a => <div key={a.type} className="flex justify-between text-[10px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{a.type}</span><span className="font-black">{a.count} transacciones</span></div>)}</div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[12px] font-black text-slate-500 uppercase">LPNs Activos</p><p className="text-2xl font-black text-slate-800">{systemMetrics.inventory?.lpns || 0}</p></div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[12px] font-black text-slate-500 uppercase">Unidades Stock</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.inventory?.units || 0).toLocaleString()}</p></div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[12px] font-black text-slate-500 uppercase">Total Logs</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.auditLogs || 0).toLocaleString()}</p></div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[12px] font-black text-slate-500 uppercase">Usuarios</p><div className="flex flex-wrap gap-1 mt-1">{systemMetrics.usersByRole?.map(u => <span key={u.role} className="text-[12px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-black">{u.role}: {u.count}</span>)}</div></div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[12px] font-black text-slate-500 uppercase mb-2">Top 5 SKUs por Stock</p>{systemMetrics.topSkus?.map(s => <div key={s.sku} className="flex justify-between text-[12px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{s.sku}</span><span className="font-black">{Number(s.total_qty).toLocaleString()}</span></div>)}</div>
+                      <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[12px] font-black text-slate-500 uppercase mb-2">Actividad (Últimos 7 días)</p>{systemMetrics.recentActivity?.map(a => <div key={a.type} className="flex justify-between text-[12px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{a.type}</span><span className="font-black">{a.count} transacciones</span></div>)}</div>
                     </div>
-                  ) : <div className="text-center py-8 text-slate-400"><p className="text-[10px] font-black uppercase">Presiona Actualizar para cargar métricas</p></div>}
+                  ) : <div className="text-center py-8 text-slate-500"><p className="text-[12px] font-black uppercase">Presiona Actualizar para cargar métricas</p></div>}
                 </div>
 
                 {/* CONTRASEÑAS */}
                 <div className="bg-white rounded-[40px] border border-red-100 shadow-sm p-8">
                   <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Eye className="w-5 h-5 mr-2 text-red-500"/> Contraseñas de Usuarios</h2>
-                    <button onClick={async () => { if (!showPasswords) { const res = await apiFetch(`${host}/api/system/users/passwords`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({requester: currentUser.username}) }); const d = await res.json(); setSystemPasswords(Array.isArray(d) ? d : []); } setShowPasswords(!showPasswords); }} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 ${showPasswords ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>{showPasswords ? <EyeOff size={12}/> : <Eye size={12}/>} {showPasswords ? 'Ocultar' : 'Mostrar Contraseñas'}</button>
+                    <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><Eye className="w-5 h-5 mr-2 text-red-500"/> Contraseñas de Usuarios</h2>
+                    <button onClick={async () => { if (!showPasswords) { const res = await apiFetch(`${host}/api/system/users/passwords`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({requester: currentUser.username}) }); const d = await res.json(); setSystemPasswords(Array.isArray(d) ? d : []); } setShowPasswords(!showPasswords); }} className={`px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 ${showPasswords ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'}`}>{showPasswords ? <EyeOff size={12}/> : <Eye size={12}/>} {showPasswords ? 'Ocultar' : 'Mostrar Contraseñas'}</button>
                   </div>
                   {showPasswords && (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left">
-                        <thead className="bg-slate-50"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Usuario</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Nombre</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Rol</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Contraseña</th></tr></thead>
+                        <thead className="bg-slate-50"><tr><th className="p-3 text-[12px] font-black text-slate-500 uppercase">Usuario</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">Nombre</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">Rol</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">Contraseña</th></tr></thead>
                         <tbody className="divide-y divide-slate-100">
                           {systemPasswords.map(u => (
                             <tr key={u.username} className="hover:bg-red-50">
                               <td className="p-3 font-mono text-xs font-black text-slate-700">@{u.username}</td>
                               <td className="p-3 text-xs text-slate-600">{u.full_name}</td>
-                              <td className="p-3"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase ${u.role === 'SUPERADMIN' ? 'bg-red-100 text-red-700' : u.role === 'ADMIN' ? 'bg-orange-100 text-orange-700' : u.role === 'CLIENTE' ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600'}`}>{u.role}</span></td>
+                              <td className="p-3"><span className={`px-2 py-0.5 rounded text-[12px] font-black uppercase ${u.role === 'SUPERADMIN' ? 'bg-red-100 text-red-700' : u.role === 'ADMIN' ? 'bg-orange-100 text-orange-700' : u.role === 'CLIENTE' ? 'bg-cyan-100 text-cyan-700' : 'bg-slate-100 text-slate-600'}`}>{u.role}</span></td>
                               <td className="p-3 font-mono text-xs font-black text-red-700 bg-red-50 rounded">{u.password}</td>
                             </tr>
                           ))}
@@ -6751,18 +6750,18 @@ export default function App() {
                 {/* GESTIÓN DE INVENTARIO DIRECTO */}
                 <div className="bg-white rounded-[40px] border border-orange-100 shadow-sm p-8">
                   <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Database className="w-5 h-5 mr-2 text-orange-500"/> Eliminar LPNs Directamente</h2>
-                    <span className="text-[9px] bg-orange-100 text-orange-700 px-2 py-1 rounded font-black uppercase border border-orange-200">⚠️ Operación Irreversible</span>
+                    <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><Database className="w-5 h-5 mr-2 text-orange-500"/> Eliminar LPNs Directamente</h2>
+                    <span className="text-[12px] bg-orange-100 text-orange-700 px-2 py-1 rounded font-black uppercase border border-orange-200">⚠️ Operación Irreversible</span>
                   </div>
                   <div className="overflow-x-auto max-h-80 overflow-y-auto custom-scrollbar">
                     <table className="w-full text-left">
-                      <thead className="bg-slate-50 sticky top-0"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase">LPN</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">SKU</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Ubicación</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Qty</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Eliminar</th></tr></thead>
+                      <thead className="bg-slate-50 sticky top-0"><tr><th className="p-3 text-[12px] font-black text-slate-500 uppercase">LPN</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">SKU</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">Ubicación</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Qty</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Eliminar</th></tr></thead>
                       <tbody className="divide-y divide-slate-100">
                         {safeData.slice(0,50).map(i => (
                           <tr key={i.id} className="hover:bg-orange-50">
-                            <td className="p-3 font-mono text-[10px] font-black text-slate-600">{i.id}</td>
+                            <td className="p-3 font-mono text-[12px] font-black text-slate-600">{i.id}</td>
                             <td className="p-3 text-xs font-black text-slate-800 uppercase">{i.sku}</td>
-                            <td className="p-3 text-[10px] font-mono text-slate-500">{i.location_id || 'PISO-RECEPCION'}</td>
+                            <td className="p-3 text-[12px] font-mono text-slate-500">{i.location_id || 'PISO-RECEPCION'}</td>
                             <td className="p-3 text-center font-black text-slate-800">{i.qty}</td>
                             <td className="p-3 text-center">
                               <button onClick={async () => { if (!(await confirm({ message: `⚠️ ¿Eliminar LPN ${i.id} con ${i.qty} unidades de ${i.sku}? Esta acción es IRREVERSIBLE.`, danger: true }))) return; const res = await apiFetch(`${host}/api/system/inventory/${i.id}`, { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({requester: currentUser.username}) }); if (res.ok) { showMsg(`✅ LPN ${i.id} eliminado`); fetchData(); } else { const e = await res.json(); showMsg(`⛔ ${e.error}`, true); } }} className="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded-lg transition-colors"><Trash2 size={12}/></button>
@@ -6778,19 +6777,19 @@ export default function App() {
                 {superAdminTab === 'metrics' && (
                   <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8">
                     <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-                      <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Activity className="w-5 h-5 mr-2 text-indigo-500"/> Métricas del Sistema</h2>
-                      <button onClick={async () => { const res = await apiFetch(`${host}/api/system/metrics`); const d = await res.json(); setSystemMetrics(d); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
+                      <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><Activity className="w-5 h-5 mr-2 text-indigo-500"/> Métricas del Sistema</h2>
+                      <button onClick={async () => { const res = await apiFetch(`${host}/api/system/metrics`); const d = await res.json(); setSystemMetrics(d); }} className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
                     </div>
                     {systemMetrics ? (
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">LPNs Activos</p><p className="text-2xl font-black text-slate-800">{systemMetrics.inventory?.lpns || 0}</p></div>
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">Unidades Stock</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.inventory?.units || 0).toLocaleString()}</p></div>
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">Total Logs</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.auditLogs || 0).toLocaleString()}</p></div>
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[9px] font-black text-slate-400 uppercase">Usuarios</p><div className="flex flex-wrap gap-1 mt-1">{systemMetrics.usersByRole?.map(u => <span key={u.role} className="text-[9px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-black">{u.role}: {u.count}</span>)}</div></div>
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Top 5 SKUs por Stock</p>{systemMetrics.topSkus?.map(s => <div key={s.sku} className="flex justify-between text-[10px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{s.sku}</span><span className="font-black">{Number(s.total_qty).toLocaleString()}</span></div>)}</div>
-                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[9px] font-black text-slate-400 uppercase mb-2">Actividad (Últimos 7 días)</p>{systemMetrics.recentActivity?.map(a => <div key={a.type} className="flex justify-between text-[10px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{a.type}</span><span className="font-black">{a.count} transacciones</span></div>)}</div>
+                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[12px] font-black text-slate-500 uppercase">LPNs Activos</p><p className="text-2xl font-black text-slate-800">{systemMetrics.inventory?.lpns || 0}</p></div>
+                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[12px] font-black text-slate-500 uppercase">Unidades Stock</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.inventory?.units || 0).toLocaleString()}</p></div>
+                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[12px] font-black text-slate-500 uppercase">Total Logs</p><p className="text-2xl font-black text-slate-800">{Number(systemMetrics.auditLogs || 0).toLocaleString()}</p></div>
+                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200"><p className="text-[12px] font-black text-slate-500 uppercase">Usuarios</p><div className="flex flex-wrap gap-1 mt-1">{systemMetrics.usersByRole?.map(u => <span key={u.role} className="text-[12px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-black">{u.role}: {u.count}</span>)}</div></div>
+                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[12px] font-black text-slate-500 uppercase mb-2">Top 5 SKUs por Stock</p>{systemMetrics.topSkus?.map(s => <div key={s.sku} className="flex justify-between text-[12px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{s.sku}</span><span className="font-black">{Number(s.total_qty).toLocaleString()}</span></div>)}</div>
+                        <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 col-span-2"><p className="text-[12px] font-black text-slate-500 uppercase mb-2">Actividad (Últimos 7 días)</p>{systemMetrics.recentActivity?.map(a => <div key={a.type} className="flex justify-between text-[12px] font-bold text-slate-700 border-b border-slate-100 py-1 last:border-0"><span>{a.type}</span><span className="font-black">{a.count} transacciones</span></div>)}</div>
                       </div>
-                    ) : <div className="text-center py-8 text-slate-400"><p className="text-[10px] font-black uppercase">Presiona Actualizar para cargar métricas</p></div>}
+                    ) : <div className="text-center py-8 text-slate-500"><p className="text-[12px] font-black uppercase">Presiona Actualizar para cargar métricas</p></div>}
                   </div>
                 )}
 
@@ -6798,7 +6797,7 @@ export default function App() {
                 {superAdminTab === 'modo-modules' && (
                   <div className="space-y-6">
                     <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8 space-y-6">
-                      <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center border-b pb-4"><Globe className="w-5 h-5 mr-2 text-blue-500"/> Modo de Operación del Sistema</h2>
+                      <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center border-b pb-4"><Globe className="w-5 h-5 mr-2 text-blue-500"/> Modo de Operación del Sistema</h2>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         {[
                           { id:'3PL', label:'Modo 3PL', desc:'Bodega multi-cliente. Almacenas mercadería de terceros y cobras por el servicio. Se muestran todos los módulos de clientes y cobros.', color:'blue', icon:'🏭' },
@@ -6808,13 +6807,13 @@ export default function App() {
                           <div key={mode.id} onClick={async()=>{ const res=await apiFetch(`${host}/api/system/config`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requester:currentUser.username,configs:{operation_mode:mode.id}})}); if(res.ok){setOperationMode(mode.id);showMsg(`✅ Modo cambiado a ${mode.label}`);fetchData();} }} className={`cursor-pointer rounded-2xl border-2 p-6 transition-all hover:shadow-md ${operationMode===mode.id?`border-${mode.color}-500 bg-${mode.color}-50 shadow-md`:'border-slate-200 hover:border-slate-300'}`}>
                             <div className="text-3xl mb-3">{mode.icon}</div>
                             <p className={`text-sm font-black uppercase mb-2 ${operationMode===mode.id?`text-${mode.color}-700`:'text-slate-700'}`}>{mode.label}</p>
-                            <p className="text-[10px] text-slate-500 font-medium leading-relaxed">{mode.desc}</p>
-                            {operationMode===mode.id && <div className={`mt-3 text-[9px] font-black uppercase bg-${mode.color}-100 text-${mode.color}-700 px-2 py-1 rounded-lg w-fit`}>✓ Activo Actualmente</div>}
+                            <p className="text-[12px] text-slate-500 font-medium leading-relaxed">{mode.desc}</p>
+                            {operationMode===mode.id && <div className={`mt-3 text-[12px] font-black uppercase bg-${mode.color}-100 text-${mode.color}-700 px-2 py-1 rounded-lg w-fit`}>✓ Activo Actualmente</div>}
                           </div>
                         ))}
                       </div>
                       <div className="border-t border-slate-100 pt-6">
-                        <h3 className="text-sm font-black text-slate-700 uppercase mb-4">Tarifas Globales 3PL</h3>
+                        <h3 className="text-sm font-black text-slate-700 mb-4">Tarifas Globales 3PL</h3>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                           {[
                             {key:'3pl_pallet_day_price', label:'Almacenaje (LPN/día)', placeholder:'500'},
@@ -6823,7 +6822,7 @@ export default function App() {
                             {key:'3pl_currency', label:'Moneda', placeholder:'CLP', isText:true}
                           ].map(f=>(
                             <div key={f.key} className="space-y-1">
-                              <label className="text-[9px] font-black text-slate-400 uppercase">{f.label}</label>
+                              <label className="text-[12px] font-black text-slate-500 uppercase">{f.label}</label>
                               <input type={f.isText?'text':'number'} defaultValue={systemConfig[f.key]||f.placeholder} onChange={e=>setEditingConfig(p=>({...p,[f.key]:e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-blue-500"/>
                             </div>
                           ))}
@@ -6832,8 +6831,8 @@ export default function App() {
                     </div>
 
                     <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8 space-y-6">
-                      <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center border-b pb-4"><Layers className="w-5 h-5 mr-2 text-indigo-500"/> Control de Módulos — Licencia Modular</h2>
-                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[10px] font-bold text-amber-700 uppercase tracking-widest">
+                      <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center border-b pb-4"><Layers className="w-5 h-5 mr-2 text-indigo-500"/> Control de Módulos — Licencia Modular</h2>
+                      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-[12px] font-bold text-amber-700 uppercase tracking-widest">
                         ⚠️ Los cambios aquí afectan a TODOS los usuarios (excepto SUPERADMIN). Úsalo para activar/desactivar módulos según el plan contratado.
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -6846,13 +6845,13 @@ export default function App() {
                             <div key={mod.id} className={`flex items-center justify-between p-4 rounded-2xl border-2 transition-all ${isDisabledGlobal ? 'bg-red-50 border-red-200' : hiddenByMode ? 'bg-slate-50 border-slate-200' : isInLicense ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
                               <div>
                                 <p className="text-xs font-black text-slate-800 uppercase">{mod.label}</p>
-                                <p className="text-[9px] font-mono text-slate-400 mt-0.5">{mod.id}</p>
+                                <p className="text-[12px] font-mono text-slate-500 mt-0.5">{mod.id}</p>
                                 <div className="flex gap-1 mt-1 flex-wrap">
-                                  {is3PLMod && <span className="text-[8px] bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded font-black uppercase">3PL</span>}
-                                  {hiddenByMode && <span className="text-[8px] bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded font-black uppercase">Oculto — Modo Propio</span>}
-                                  {!hiddenByMode && isDisabledGlobal && <span className="text-[8px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-black uppercase">Deshabilitado</span>}
-                                  {!hiddenByMode && !isDisabledGlobal && !isInLicense && <span className="text-[8px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-black uppercase">Sin Licencia</span>}
-                                  {!hiddenByMode && !isDisabledGlobal && isInLicense && <span className="text-[8px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase">Activo</span>}
+                                  {is3PLMod && <span className="text-[11px] bg-cyan-100 text-cyan-700 px-1.5 py-0.5 rounded font-black uppercase">3PL</span>}
+                                  {hiddenByMode && <span className="text-[11px] bg-slate-300 text-slate-600 px-1.5 py-0.5 rounded font-black uppercase">Oculto — Modo Propio</span>}
+                                  {!hiddenByMode && isDisabledGlobal && <span className="text-[11px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-black uppercase">Deshabilitado</span>}
+                                  {!hiddenByMode && !isDisabledGlobal && !isInLicense && <span className="text-[11px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded font-black uppercase">Sin Licencia</span>}
+                                  {!hiddenByMode && !isDisabledGlobal && isInLicense && <span className="text-[11px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded font-black uppercase">Activo</span>}
                                 </div>
                               </div>
                               <div className="flex gap-2">
@@ -6860,14 +6859,14 @@ export default function App() {
                                   const newDisabled = isDisabledGlobal ? disabledModules.filter(m=>m!==mod.id) : [...disabledModules, mod.id];
                                   const res = await apiFetch(`${host}/api/system/config`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requester:currentUser.username,configs:{disabled_modules:JSON.stringify(newDisabled)}})});
                                   if(res.ok){setDisabledModules(newDisabled);showMsg(`${isDisabledGlobal?'✅ Módulo habilitado':'⛔ Módulo deshabilitado'}: ${mod.label}`);}
-                                }} className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase transition-colors ${isDisabledGlobal?'bg-emerald-100 hover:bg-emerald-200 text-emerald-700':'bg-red-100 hover:bg-red-200 text-red-700'}`}>
+                                }} className={`px-3 py-2 rounded-xl text-[12px] font-black uppercase transition-colors ${isDisabledGlobal?'bg-emerald-100 hover:bg-emerald-200 text-emerald-700':'bg-red-100 hover:bg-red-200 text-red-700'}`}>
                                   {isDisabledGlobal ? '✓ Habilitar' : '✗ Deshabilitar'}
                                 </button>
                                 <button onClick={async () => {
                                   const newLicense = isInLicense ? licenseModules.filter(m=>m!==mod.id) : [...licenseModules, mod.id];
                                   const res = await apiFetch(`${host}/api/system/config`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requester:currentUser.username,configs:{license_modules:JSON.stringify(newLicense)}})});
                                   if(res.ok){setLicenseModules(newLicense);showMsg(`Licencia actualizada: ${mod.label}`);}
-                                }} className={`px-3 py-2 rounded-xl text-[9px] font-black uppercase transition-colors ${isInLicense?'bg-slate-100 hover:bg-slate-200 text-slate-600':'bg-indigo-100 hover:bg-indigo-200 text-indigo-700'}`}>
+                                }} className={`px-3 py-2 rounded-xl text-[12px] font-black uppercase transition-colors ${isInLicense?'bg-slate-100 hover:bg-slate-200 text-slate-600':'bg-indigo-100 hover:bg-indigo-200 text-indigo-700'}`}>
                                   {isInLicense ? 'Quitar Licencia' : 'Licenciar'}
                                 </button>
                               </div>
@@ -6879,16 +6878,16 @@ export default function App() {
 
                     <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8 space-y-4">
                       <div className="flex items-center justify-between border-b pb-4">
-                        <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Globe className="w-5 h-5 mr-2 text-cyan-500"/> Acceso Remoto (ngrok)</h2>
-                        <button onClick={async()=>{ const res=await apiFetch(`${host}/api/system/ngrok/status`); const d=await res.json(); if(res.ok) setNgrokStatus(d); }} className="bg-cyan-100 hover:bg-cyan-200 text-cyan-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
+                        <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><Globe className="w-5 h-5 mr-2 text-cyan-500"/> Acceso Remoto (ngrok)</h2>
+                        <button onClick={async()=>{ const res=await apiFetch(`${host}/api/system/ngrok/status`); const d=await res.json(); if(res.ok) setNgrokStatus(d); }} className="bg-cyan-100 hover:bg-cyan-200 text-cyan-700 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
                       </div>
-                      <p className="text-[10px] text-slate-500 font-medium leading-relaxed">Expone esta bodega en internet mediante un túnel ngrok, para acceso remoto sin estar en la red local. Apágalo si no lo necesitas ahora mismo.</p>
+                      <p className="text-[12px] text-slate-500 font-medium leading-relaxed">Expone esta bodega en internet mediante un túnel ngrok, para acceso remoto sin estar en la red local. Apágalo si no lo necesitas ahora mismo.</p>
                       <div className="flex items-center justify-between flex-wrap gap-4">
                         <div className="flex items-center gap-3">
                           <span className={`w-3 h-3 rounded-full ${ngrokStatus?.status==='online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`}></span>
                           <div>
                             <p className="text-xs font-black uppercase text-slate-800">{ngrokStatus?.status==='online' ? 'Acceso remoto ACTIVO' : ngrokStatus?.status==='stopped' ? 'Acceso remoto APAGADO' : 'Estado desconocido — presiona Actualizar'}</p>
-                            {ngrokStatus?.public_url && <p className="text-[10px] font-mono text-slate-400">{ngrokStatus.public_url}</p>}
+                            {ngrokStatus?.public_url && <p className="text-[12px] font-mono text-slate-500">{ngrokStatus.public_url}</p>}
                           </div>
                         </div>
                         <button onClick={async()=>{
@@ -6912,26 +6911,26 @@ export default function App() {
                   const v = (key, fallback = '') => editingConfig[key] !== undefined ? editingConfig[key] : (systemConfig[key] || fallback);
                   return (
                   <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8 space-y-6">
-                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center border-b pb-4"><Settings2 className="w-5 h-5 mr-2 text-slate-500"/> Configuración Global del Sistema</h2>
+                    <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center border-b pb-4"><Settings2 className="w-5 h-5 mr-2 text-slate-500"/> Configuración Global del Sistema</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2 col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase flex items-center gap-1">🏢 Nombre de la Empresa <span className="bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded text-[8px] font-black">Se muestra en login, header y menú lateral</span></label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase flex items-center gap-1">🏢 Nombre de la Empresa <span className="bg-indigo-100 text-indigo-600 px-1.5 py-0.5 rounded text-[11px] font-black">Se muestra en login, header y menú lateral</span></label>
                         <input type="text" value={v('company_name')} onChange={e=>setEditingConfig(p=>({...p,company_name:e.target.value, system_name:e.target.value}))} className="w-full border-2 border-indigo-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-indigo-500" placeholder="Ej: Bodega Central S.A."/>
                       </div>
                       <div className="space-y-2 col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Cliente / Empresa Licenciada</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Cliente / Empresa Licenciada</label>
                         <input type="text" value={v('license_client')} onChange={e=>setEditingConfig(p=>({...p,license_client:e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500"/>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Fecha Expiración Licencia</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Fecha Expiración Licencia</label>
                         <input type="date" value={v('license_expiry','2099-12-31')} onChange={e=>setEditingConfig(p=>({...p,license_expiry:e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500 bg-white"/>
                       </div>
                       <div className="space-y-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Máximo de Usuarios</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Máximo de Usuarios</label>
                         <input type="number" value={v('license_max_users',99)} onChange={e=>setEditingConfig(p=>({...p,license_max_users:e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500"/>
                       </div>
                       <div className="space-y-2 col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Mensaje de Mantenimiento</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Mensaje de Mantenimiento</label>
                         <input type="text" value={v('maintenance_message')} onChange={e=>setEditingConfig(p=>({...p,maintenance_message:e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500" placeholder="Mensaje que verán los usuarios durante mantenimiento"/>
                       </div>
                     </div>
@@ -6949,19 +6948,19 @@ export default function App() {
                             showMsg(`⛔ ${data.error || 'No se pudo guardar (requiere rol SUPERADMIN)'}`, true);
                           }
                         } catch (e) { showMsg('⛔ Error de red al guardar', true); }
-                      }} className="bg-slate-800 hover:bg-black text-white font-black py-3 px-8 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest flex items-center gap-2"><CheckCircle2 size={14}/> Guardar Configuración</button>
+                      }} className="bg-slate-800 hover:bg-black text-white font-black py-3 px-8 rounded-2xl shadow-lg uppercase text-[12px] tracking-widest flex items-center gap-2"><CheckCircle2 size={14}/> Guardar Configuración</button>
                       {Object.keys(editingConfig).length > 0 && (
-                        <button onClick={() => setEditingConfig({})} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[10px] tracking-widest">Descartar</button>
+                        <button onClick={() => setEditingConfig({})} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-6 rounded-2xl uppercase text-[12px] tracking-widest">Descartar</button>
                       )}
-                      <span className="text-[10px] font-bold text-slate-400 ml-auto">{Object.keys(editingConfig).length > 0 ? `${Object.keys(editingConfig).length} cambio(s) sin guardar` : 'Sin cambios'}</span>
+                      <span className="text-[12px] font-bold text-slate-500 ml-auto">{Object.keys(editingConfig).length > 0 ? `${Object.keys(editingConfig).length} cambio(s) sin guardar` : 'Sin cambios'}</span>
                     </div>
                     {/* ── ZONA DE PELIGRO: formateo de fábrica ── */}
                     <div className="mt-8 border-t-2 border-red-100 pt-6">
-                      <h3 className="text-sm font-black text-red-600 uppercase tracking-tighter flex items-center gap-2 mb-2"><ShieldAlert className="w-4 h-4"/> Zona de peligro</h3>
+                      <h3 className="text-sm font-black text-red-600 tracking-tighter flex items-center gap-2 mb-2"><ShieldAlert className="w-4 h-4"/> Zona de peligro</h3>
                       <div className="bg-red-50 border border-red-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                           <p className="text-xs font-black text-red-700 uppercase">Formatear sistema (dejar de 0)</p>
-                          <p className="text-[10px] text-red-500 mt-1 max-w-md">Borra TODOS los datos (inventario, clientes, SKUs, movimientos, usuarios no-SUPERADMIN…) y deja el sistema como recién instalado. Conserva tu SUPERADMIN, la configuración/licencia y los catálogos base. Se crea un backup de seguridad automático antes. Irreversible salvo por ese backup.</p>
+                          <p className="text-[12px] text-red-500 mt-1 max-w-md">Borra TODOS los datos (inventario, clientes, SKUs, movimientos, usuarios no-SUPERADMIN…) y deja el sistema como recién instalado. Conserva tu SUPERADMIN, la configuración/licencia y los catálogos base. Se crea un backup de seguridad automático antes. Irreversible salvo por ese backup.</p>
                         </div>
                         <button onClick={async () => {
                           const ok = await confirm({ message: '⚠️ FORMATEAR EL SISTEMA borra TODOS los datos y lo deja como recién instalado. Se conservan tu SUPERADMIN, la configuración/licencia y los catálogos base, y se crea un backup de seguridad antes. ¿Continuar?', danger: true });
@@ -6974,7 +6973,7 @@ export default function App() {
                             if (res.ok) { showMsg(`✅ Sistema formateado. Backup de seguridad: ${d.backup || '(creado)'}`); fetchData(); }
                             else showMsg(`⛔ ${d.error || 'Error al formatear'}`, true);
                           } catch (e) { showMsg('⛔ Error de red al formatear', true); }
-                        }} className="bg-red-600 hover:bg-red-700 text-white font-black py-3 px-6 rounded-2xl shadow-lg uppercase text-[10px] tracking-widest flex items-center gap-2 shrink-0 whitespace-nowrap"><Trash2 size={14}/> Formatear sistema</button>
+                        }} className="bg-red-600 hover:bg-red-700 text-white font-black py-3 px-6 rounded-2xl shadow-lg uppercase text-[12px] tracking-widest flex items-center gap-2 shrink-0 whitespace-nowrap"><Trash2 size={14}/> Formatear sistema</button>
                       </div>
                     </div>
                   </div>
@@ -6986,14 +6985,14 @@ export default function App() {
                   <div className="space-y-4">
                     {/* Info del sandbox */}
                     <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8">
-                      <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2 mb-4">🎮 Sandbox Interactivo</h2>
+                      <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center gap-2 mb-4">🎮 Sandbox Interactivo</h2>
                       <p className="text-xs text-slate-500 font-medium mb-4">El sandbox permite a visitantes explorar el WMS completo sin crear cuenta. Eligen un escenario (Propio, 3PL, Híbrido) y un rol, y pueden cambiar ambos en caliente.</p>
                       <div className="grid grid-cols-3 gap-3 mb-4">
                         {Object.values(SANDBOX_SCENARIOS).map(s => (
                           <div key={s.id} className="bg-slate-50 rounded-xl p-3 border border-slate-200">
                             <span className="text-xl">{s.icon}</span>
-                            <p className="text-[10px] font-black text-slate-700 mt-1">{s.label}</p>
-                            <p className="text-[9px] text-slate-400">{s.desc}</p>
+                            <p className="text-[12px] font-black text-slate-700 mt-1">{s.label}</p>
+                            <p className="text-[12px] text-slate-500">{s.desc}</p>
                           </div>
                         ))}
                       </div>
@@ -7001,7 +7000,7 @@ export default function App() {
                         {Object.values(SANDBOX_ROLES).map(r => (
                           <div key={r.id} className="bg-slate-50 rounded-lg p-2 border border-slate-200 text-center">
                             <span className="text-lg">{r.icon}</span>
-                            <p className="text-[9px] font-black text-slate-600 mt-0.5">{r.label}</p>
+                            <p className="text-[12px] font-black text-slate-600 mt-0.5">{r.label}</p>
                           </div>
                         ))}
                       </div>
@@ -7010,29 +7009,29 @@ export default function App() {
                     {/* FEEDBACK DE USUARIOS DEMO */}
                     <div className="bg-white border-2 border-amber-100 rounded-[32px] p-6">
                       <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                        <h3 className="text-sm font-black text-slate-800 tracking-tighter flex items-center gap-2">
                           <MessageSquare size={16} className="text-amber-500"/> Comentarios de Usuarios Sandbox
                         </h3>
                         <button onClick={async () => {
                           const res = await apiFetch(`${host}/api/demo/feedback`);
                           if (res.ok) setDemoFeedbackList(await res.json());
                           else showMsg('⛔ Error al cargar comentarios', true);
-                        }} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5">
+                        }} className="bg-amber-100 hover:bg-amber-200 text-amber-700 px-3 py-1.5 rounded-xl text-[12px] font-black uppercase flex items-center gap-1.5">
                           <RefreshCcw size={11}/> Recargar
                         </button>
                       </div>
                       {demoFeedbackList.length === 0 ? (
-                        <p className="text-[10px] text-slate-400 font-bold text-center py-6 uppercase">Sin comentarios aún. Presiona "Recargar" para actualizar.</p>
+                        <p className="text-[12px] text-slate-500 font-bold text-center py-6 uppercase">Sin comentarios aún. Presiona "Recargar" para actualizar.</p>
                       ) : (
                         <div className="space-y-3 max-h-96 overflow-y-auto custom-scrollbar">
                           {demoFeedbackList.map(f => (
                             <div key={f.id} className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
                               <div className="flex items-center justify-between mb-2">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-[10px] font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">{f.persona_label || f.username}</span>
+                                  <span className="text-[12px] font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">{f.persona_label || f.username}</span>
                                   {f.rating && <span className="text-base">{['','😞','😐','🙂','😊','🤩'][Number(f.rating)]}</span>}
                                 </div>
-                                <span className="text-[9px] text-slate-400 font-bold">{new Date(f.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</span>
+                                <span className="text-[12px] text-slate-500 font-bold">{new Date(f.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</span>
                               </div>
                               <p className="text-xs text-slate-700 font-medium leading-relaxed">"{f.message}"</p>
                             </div>
@@ -7047,7 +7046,7 @@ export default function App() {
                 {superAdminTab === 'users-sa' && (
                   <div className="space-y-4">
                     <div className="bg-white rounded-[40px] border border-slate-200 shadow-sm p-8">
-                      <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center border-b pb-4 mb-6"><UserCog className="w-5 h-5 mr-2 text-indigo-500"/> Gestión de Usuarios (Vista SUPERADMIN)</h2>
+                      <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center border-b pb-4 mb-6"><UserCog className="w-5 h-5 mr-2 text-indigo-500"/> Gestión de Usuarios (Vista SUPERADMIN)</h2>
                       <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
                         {users.map(u => (
                           <div key={u.username} className={`p-4 border rounded-2xl flex flex-col hover:bg-slate-50 transition-colors shadow-sm ${u.status === 'SUSPENDED' ? 'bg-slate-50 border-slate-200 opacity-75' : 'bg-white border-slate-200'}`}>
@@ -7055,15 +7054,15 @@ export default function App() {
                               <div>
                                 <p className="text-sm font-black text-slate-800 flex items-center gap-2">
                                   {u.full_name}
-                                  {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] uppercase">Inhabilitado</span>}
+                                  {u.status === 'SUSPENDED' && <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[11px] uppercase">Inhabilitado</span>}
                                 </p>
-                                <p className="text-[10px] font-mono text-slate-500 mt-0.5">@{u.username}</p>
+                                <p className="text-[12px] font-mono text-slate-500 mt-0.5">@{u.username}</p>
                               </div>
                               <div className="flex items-center gap-2">
                                 <select defaultValue={u.role} onChange={async (e) => {
                                   const res = await apiFetch(`${host}/api/system/promote`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requester:currentUser.username,username:u.username,newRole:e.target.value})});
                                   if(res.ok){showMsg(`✅ Rol de ${u.username} cambiado a ${e.target.value}`);fetchData();}else{const err=await res.json();showMsg(`⛔ ${err.error}`,true);}
-                                }} className={`border rounded-xl px-3 py-1.5 text-[10px] font-black uppercase outline-none ${u.role==='SUPERADMIN'?'bg-red-50 text-red-700 border-red-200':u.role==='ADMIN'?'bg-orange-50 text-orange-700 border-orange-200':u.role==='EJECUTIVO_CUENTA'?'bg-teal-50 text-teal-700 border-teal-200':u.role==='AUDITOR'?'bg-blue-50 text-blue-700 border-blue-200':u.role==='CLIENTE'?'bg-cyan-50 text-cyan-700 border-cyan-200':'bg-slate-100 text-slate-600 border-slate-200'}`}>
+                                }} className={`border rounded-xl px-3 py-1.5 text-[12px] font-black uppercase outline-none ${u.role==='SUPERADMIN'?'bg-red-50 text-red-700 border-red-200':u.role==='ADMIN'?'bg-orange-50 text-orange-700 border-orange-200':u.role==='EJECUTIVO_CUENTA'?'bg-teal-50 text-teal-700 border-teal-200':u.role==='AUDITOR'?'bg-blue-50 text-blue-700 border-blue-200':u.role==='CLIENTE'?'bg-cyan-50 text-cyan-700 border-cyan-200':'bg-slate-100 text-slate-600 border-slate-200'}`}>
                                   <option value="CLIENTE">CLIENTE</option>
                                   <option value="PICKER">PICKER</option>
                                   <option value="JEFE_BODEGA">JEFE_BODEGA</option>
@@ -7073,7 +7072,7 @@ export default function App() {
                                   <option value="ADMIN">ADMIN</option>
                                   {u.username !== 'admin' && <option value="SUPERADMIN">SUPERADMIN</option>}
                                 </select>
-                                <button onClick={() => handleToggleUserStatus(u)} disabled={u.username === currentUser?.username} className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase transition-colors disabled:opacity-30 ${u.status==='SUSPENDED'?'bg-emerald-100 text-emerald-700 hover:bg-emerald-200':'bg-red-100 text-red-700 hover:bg-red-200'}`}>
+                                <button onClick={() => handleToggleUserStatus(u)} disabled={u.username === currentUser?.username} className={`px-3 py-1.5 rounded-xl text-[12px] font-black uppercase transition-colors disabled:opacity-30 ${u.status==='SUSPENDED'?'bg-emerald-100 text-emerald-700 hover:bg-emerald-200':'bg-red-100 text-red-700 hover:bg-red-200'}`}>
                                   {u.status === 'SUSPENDED' ? '✓ Activar' : '✗ Inhabilitar'}
                                 </button>
                               </div>
@@ -7090,8 +7089,8 @@ export default function App() {
                   <div className="bg-white rounded-[40px] border border-red-100 shadow-sm p-8">
                     <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
                       <div>
-                        <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Key className="w-5 h-5 mr-2 text-red-500"/> Resetear Contraseñas de Usuarios</h2>
-                        <p className="text-[10px] text-slate-400 font-bold mt-1">Las contraseñas se almacenan con bcrypt — no son visibles. Usa este panel para asignar una nueva.</p>
+                        <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><Key className="w-5 h-5 mr-2 text-red-500"/> Resetear Contraseñas de Usuarios</h2>
+                        <p className="text-[12px] text-slate-500 font-bold mt-1">Las contraseñas se almacenan con bcrypt — no son visibles. Usa este panel para asignar una nueva.</p>
                       </div>
                     </div>
                     <div className="space-y-3 max-h-[500px] overflow-y-auto custom-scrollbar">
@@ -7099,7 +7098,7 @@ export default function App() {
                         <div key={u.username} className="flex items-center gap-4 p-4 border border-slate-100 rounded-2xl hover:bg-slate-50">
                           <div className="flex-1 min-w-0">
                             <p className="text-xs font-black text-slate-800">{u.full_name}</p>
-                            <p className="text-[10px] font-mono text-slate-400">@{u.username} · <span className={u.role==='SUPERADMIN'?'text-red-600':u.role==='ADMIN'?'text-orange-600':'text-slate-500'}>{u.role}</span></p>
+                            <p className="text-[12px] font-mono text-slate-500">@{u.username} · <span className={u.role==='SUPERADMIN'?'text-red-600':u.role==='ADMIN'?'text-orange-600':'text-slate-500'}>{u.role}</span></p>
                           </div>
                           {resetPwTarget === u.username ? (
                             <div className="flex items-center gap-2">
@@ -7123,11 +7122,11 @@ export default function App() {
                                 const res = await apiFetch(`${host}/api/system/users/reset-password`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username: u.username, new_password: resetPwValue }) });
                                 if (res.ok) { showMsg(`✅ Contraseña de @${u.username} actualizada`); setResetPwTarget(null); setResetPwValue(''); }
                                 else { const err = await res.json(); showMsg(`⛔ ${err.error}`, true); }
-                              }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-2 rounded-xl text-[10px] font-black uppercase">✓ Guardar</button>
-                              <button onClick={() => { setResetPwTarget(null); setResetPwValue(''); }} className="bg-slate-100 text-slate-500 px-3 py-2 rounded-xl text-[10px] font-black">✗</button>
+                              }} className="bg-emerald-100 hover:bg-emerald-200 text-emerald-700 px-3 py-2 rounded-xl text-[12px] font-black uppercase">✓ Guardar</button>
+                              <button onClick={() => { setResetPwTarget(null); setResetPwValue(''); }} className="bg-slate-100 text-slate-500 px-3 py-2 rounded-xl text-[12px] font-black">✗</button>
                             </div>
                           ) : (
-                            <button onClick={() => { setResetPwTarget(u.username); setResetPwValue(''); }} className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-1.5 shrink-0">
+                            <button onClick={() => { setResetPwTarget(u.username); setResetPwValue(''); }} className="bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-1.5 shrink-0">
                               <Key size={11}/> Resetear
                             </button>
                           )}
@@ -7141,18 +7140,18 @@ export default function App() {
                 {superAdminTab === 'inventory-sa' && (
                   <div className="bg-white rounded-[40px] border border-orange-100 shadow-sm p-8">
                     <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-                      <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Database className="w-5 h-5 mr-2 text-orange-500"/> Eliminar LPNs Directamente</h2>
-                      <span className="text-[9px] bg-orange-100 text-orange-700 px-2 py-1 rounded font-black uppercase border border-orange-200">⚠️ Irreversible</span>
+                      <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><Database className="w-5 h-5 mr-2 text-orange-500"/> Eliminar LPNs Directamente</h2>
+                      <span className="text-[12px] bg-orange-100 text-orange-700 px-2 py-1 rounded font-black uppercase border border-orange-200">⚠️ Irreversible</span>
                     </div>
                     <div className="overflow-x-auto max-h-80 overflow-y-auto custom-scrollbar">
                       <table className="w-full text-left">
-                        <thead className="bg-slate-50 sticky top-0"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase">LPN</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">SKU</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Ubicación</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Qty</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Eliminar</th></tr></thead>
+                        <thead className="bg-slate-50 sticky top-0"><tr><th className="p-3 text-[12px] font-black text-slate-500 uppercase">LPN</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">SKU</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">Ubicación</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Qty</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Eliminar</th></tr></thead>
                         <tbody className="divide-y divide-slate-100">
                           {safeData.slice(0,50).map(i => (
                             <tr key={i.id} className="hover:bg-orange-50">
-                              <td className="p-3 font-mono text-[10px] font-black text-slate-600">{i.id}</td>
+                              <td className="p-3 font-mono text-[12px] font-black text-slate-600">{i.id}</td>
                               <td className="p-3 text-xs font-black text-slate-800 uppercase">{i.sku}</td>
-                              <td className="p-3 text-[10px] font-mono text-slate-500">{i.location_id || 'PISO-RECEPCION'}</td>
+                              <td className="p-3 text-[12px] font-mono text-slate-500">{i.location_id || 'PISO-RECEPCION'}</td>
                               <td className="p-3 text-center font-black text-slate-800">{i.qty}</td>
                               <td className="p-3 text-center">
                                 <button onClick={async () => { if (!(await confirm({ message: `⚠️ ¿Eliminar LPN ${i.id}?`, danger: true }))) return; const res = await apiFetch(`${host}/api/system/inventory/${i.id}`, { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({requester: currentUser.username}) }); if (res.ok) { showMsg(`✅ LPN eliminado`); fetchData(); } else { const e = await res.json(); showMsg(`⛔ ${e.error}`, true); } }} className="bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded-lg"><Trash2 size={12}/></button>
@@ -7169,24 +7168,24 @@ export default function App() {
                 {superAdminTab === 'audit-sa' && (
                   <div className="bg-white rounded-[40px] border border-purple-100 shadow-sm p-8">
                     <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
-                      <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><History className="w-5 h-5 mr-2 text-purple-500"/> Gestión de Logs</h2>
-                      <button onClick={async () => { if (!(await confirm({ message: '⚠️ ¿TRUNCAR TODOS LOS LOGS?', danger: true }))) return; const res = await apiFetch(`${host}/api/system/audit`, { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({requester: currentUser.username}) }); if (res.ok) { showMsg('✅ Logs eliminados'); fetchData(); } }} className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Trash2 size={12}/> Limpiar Todo</button>
+                      <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><History className="w-5 h-5 mr-2 text-purple-500"/> Gestión de Logs</h2>
+                      <button onClick={async () => { if (!(await confirm({ message: '⚠️ ¿TRUNCAR TODOS LOS LOGS?', danger: true }))) return; const res = await apiFetch(`${host}/api/system/audit`, { method: 'DELETE', headers: {'Content-Type':'application/json'}, body: JSON.stringify({requester: currentUser.username}) }); if (res.ok) { showMsg('✅ Logs eliminados'); fetchData(); } }} className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><Trash2 size={12}/> Limpiar Todo</button>
                     </div>
                     <div className="overflow-x-auto max-h-80 overflow-y-auto custom-scrollbar">
                       <table className="w-full text-left">
-                        <thead className="bg-slate-50 sticky top-0"><tr><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Fecha</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Tipo</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">SKU</th><th className="p-3 text-[9px] font-black text-slate-400 uppercase">Glosa</th><th className="p-3 text-center text-[9px] font-black text-slate-400 uppercase">Acc.</th></tr></thead>
+                        <thead className="bg-slate-50 sticky top-0"><tr><th className="p-3 text-[12px] font-black text-slate-500 uppercase">Fecha</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">Tipo</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">SKU</th><th className="p-3 text-[12px] font-black text-slate-500 uppercase">Glosa</th><th className="p-3 text-center text-[12px] font-black text-slate-500 uppercase">Acc.</th></tr></thead>
                         <tbody className="divide-y divide-slate-100">
                           {auditLogs.slice(0,50).map(log => (
                             <tr key={log.id} className="hover:bg-purple-50">
-                              <td className="p-3 text-[9px] text-slate-500">{new Date(log.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
-                              <td className="p-3"><span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${log.type==='INBOUND'||log.type==='ADJUST_IN'?'bg-emerald-100 text-emerald-700':log.type==='OUTBOUND'||log.type==='ADJUST_OUT'?'bg-red-100 text-red-700':'bg-purple-100 text-purple-700'}`}>{log.type}</span></td>
+                              <td className="p-3 text-[12px] text-slate-500">{new Date(log.created_at).toLocaleString('es-ES',{dateStyle:'short',timeStyle:'short'})}</td>
+                              <td className="p-3"><span className={`text-[12px] font-black px-1.5 py-0.5 rounded uppercase ${log.type==='INBOUND'||log.type==='ADJUST_IN'?'bg-emerald-100 text-emerald-700':log.type==='OUTBOUND'||log.type==='ADJUST_OUT'?'bg-red-100 text-red-700':'bg-purple-100 text-purple-700'}`}>{log.type}</span></td>
                               <td className="p-3 text-xs font-black text-slate-700 uppercase">{log.sku}</td>
-                              <td className="p-3 text-[10px] text-slate-500 max-w-[200px]">
+                              <td className="p-3 text-[12px] text-slate-500 max-w-[200px]">
                                 {editingAuditLog === log.id ? (
                                   <div className="flex gap-1">
-                                    <input type="text" value={editingAuditGlosa} onChange={e=>setEditingAuditGlosa(e.target.value)} className="flex-1 border border-purple-300 rounded px-2 py-1 text-[10px] outline-none"/>
-                                    <button onClick={async () => { const res = await apiFetch(`${host}/api/system/audit/${log.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({requester: currentUser.username, glosa: editingAuditGlosa}) }); if (res.ok) { showMsg('✅ Editado'); setEditingAuditLog(null); fetchData(); } }} className="bg-emerald-100 text-emerald-700 px-2 rounded text-[9px] font-black">✓</button>
-                                    <button onClick={()=>setEditingAuditLog(null)} className="bg-slate-100 text-slate-600 px-2 rounded text-[9px] font-black">✗</button>
+                                    <input type="text" value={editingAuditGlosa} onChange={e=>setEditingAuditGlosa(e.target.value)} className="flex-1 border border-purple-300 rounded px-2 py-1 text-[12px] outline-none"/>
+                                    <button onClick={async () => { const res = await apiFetch(`${host}/api/system/audit/${log.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify({requester: currentUser.username, glosa: editingAuditGlosa}) }); if (res.ok) { showMsg('✅ Editado'); setEditingAuditLog(null); fetchData(); } }} className="bg-emerald-100 text-emerald-700 px-2 rounded text-[12px] font-black">✓</button>
+                                    <button onClick={()=>setEditingAuditLog(null)} className="bg-slate-100 text-slate-600 px-2 rounded text-[12px] font-black">✗</button>
                                   </div>
                                 ) : <span className="truncate block">{log.glosa || '-'}</span>}
                               </td>
@@ -7314,19 +7313,19 @@ export default function App() {
                       )}
                       <div className="flex items-start justify-between mb-6 border-b border-slate-100 pb-4 flex-wrap gap-3">
                         <div>
-                          <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                          <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center gap-2">
                             <Database className="w-5 h-5 text-emerald-500"/> Backups del Sistema
-                            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[9px] font-black uppercase">Solo SUPERADMIN</span>
+                            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[12px] font-black uppercase">Solo SUPERADMIN</span>
                           </h2>
                           <p className="text-xs text-slate-500 mt-1">Puntos de restauración ante fallas críticas. Backup automático diario a las 3:00 AM.</p>
                         </div>
                         <div className="flex gap-2 flex-wrap">
-                          <button onClick={refreshList} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
-                          <label className={`cursor-pointer bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 ${backupBusy ? 'opacity-50 pointer-events-none' : ''}`} title="Cargar un archivo .json de backup externo">
+                          <button onClick={refreshList} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Actualizar</button>
+                          <label className={`cursor-pointer bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 ${backupBusy ? 'opacity-50 pointer-events-none' : ''}`} title="Cargar un archivo .json de backup externo">
                             <Upload size={12}/> Cargar backup externo
                             <input type="file" accept=".json,application/json" className="hidden" onChange={e => { if (e.target.files[0]) { handleUpload(e.target.files[0]); e.target.value = ''; }}}/>
                           </label>
-                          <button onClick={handleCreate} disabled={backupBusy} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 disabled:opacity-50">
+                          <button onClick={handleCreate} disabled={backupBusy} className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2 disabled:opacity-50">
                             {backupBusy ? <Loader2 size={12} className="animate-spin"/> : <Database size={12}/>}
                             {backupBusy ? 'Procesando...' : 'Crear Backup Manual'}
                           </button>
@@ -7343,17 +7342,17 @@ export default function App() {
                         <table className="w-full text-left">
                           <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
-                              <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Fecha / Hora</th>
-                              <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Tipo</th>
-                              <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Tablas</th>
-                              <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Tamaño</th>
-                              <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Creado por</th>
-                              <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Acciones</th>
+                              <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Fecha / Hora</th>
+                              <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Tipo</th>
+                              <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Tablas</th>
+                              <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Tamaño</th>
+                              <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Creado por</th>
+                              <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Acciones</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100">
                             {backupsList.length === 0 && (
-                              <tr><td colSpan="6" className="p-8 text-center text-slate-400 text-sm">No hay backups todavía. Crea uno manual o espera al próximo automático.</td></tr>
+                              <tr><td colSpan="6" className="p-8 text-center text-slate-500 text-sm">No hay backups todavía. Crea uno manual o espera al próximo automático.</td></tr>
                             )}
                             {backupsList.map(b => {
                               const tb = triggerBadge(b.trigger);
@@ -7363,9 +7362,9 @@ export default function App() {
                                 <tr key={b.id} className="hover:bg-emerald-50/40">
                                   <td className="p-3">
                                     <p className="text-xs font-black text-slate-800">{new Date(b.created_at).toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' })}</p>
-                                    <p className="text-[9px] text-slate-400 font-bold">{fmtAge(b.age_hours)}</p>
+                                    <p className="text-[12px] text-slate-500 font-bold">{fmtAge(b.age_hours)}</p>
                                   </td>
-                                  <td className="p-3"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${tb.cls}`}>{tb.label}</span></td>
+                                  <td className="p-3"><span className={`px-2 py-0.5 rounded text-[12px] font-black uppercase border ${tb.cls}`}>{tb.label}</span></td>
                                   <td className="p-3"><span title={tablesTip} className="text-xs font-bold text-slate-700 cursor-help underline decoration-dotted">{tableCount} tablas</span></td>
                                   <td className="p-3 text-xs font-mono font-bold text-slate-700">{fmtBytes(b.size_bytes)}</td>
                                   <td className="p-3 text-xs font-bold text-slate-600">@{b.created_by || '—'}</td>
@@ -7383,7 +7382,7 @@ export default function App() {
                         </table>
                       </div>
 
-                      <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100 text-[10px] font-bold text-slate-500">
+                      <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-100 text-[12px] font-bold text-slate-500">
                         <p>📅 Próximo backup automático: <strong className="text-emerald-600">hoy a las 03:00 AM</strong></p>
                         <p>{lastOk ? <>Último backup exitoso: <strong className="text-slate-700">{fmtAge(lastOk.age_hours)}</strong></> : 'Sin backups exitosos aún'}</p>
                       </div>
@@ -7430,16 +7429,16 @@ export default function App() {
                     <div className="bg-white rounded-[40px] border border-amber-100 shadow-sm p-8">
                       <div className="flex items-start justify-between mb-6 border-b border-slate-100 pb-4 flex-wrap gap-3">
                         <div>
-                          <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                          <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center gap-2">
                             <Lightbulb className="w-5 h-5 text-amber-500"/> Sugerencias del Staff
                           </h2>
                           <p className="text-xs text-slate-500 mt-1">Bugs, mejoras e ideas enviadas por usuarios ADMIN / EJECUTIVO / SUPERVISOR.</p>
                         </div>
                         <div className="flex gap-2 flex-wrap">
-                          <span className="text-[9px] font-black uppercase tracking-widest bg-slate-100 text-slate-700 px-3 py-2 rounded-xl">Total: {counters.total}</span>
-                          <span className="text-[9px] font-black uppercase tracking-widest bg-blue-100 text-blue-700 px-3 py-2 rounded-xl">Nuevos: {counters.nuevo}</span>
-                          <span className="text-[9px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 px-3 py-2 rounded-xl">En Revisión: {counters.enRev}</span>
-                          <span className="text-[9px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 px-3 py-2 rounded-xl">Resueltos: {counters.resu}</span>
+                          <span className="text-[12px] font-black uppercase tracking-widest bg-slate-100 text-slate-700 px-3 py-2 rounded-xl">Total: {counters.total}</span>
+                          <span className="text-[12px] font-black uppercase tracking-widest bg-blue-100 text-blue-700 px-3 py-2 rounded-xl">Nuevos: {counters.nuevo}</span>
+                          <span className="text-[12px] font-black uppercase tracking-widest bg-amber-100 text-amber-700 px-3 py-2 rounded-xl">En Revisión: {counters.enRev}</span>
+                          <span className="text-[12px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-700 px-3 py-2 rounded-xl">Resueltos: {counters.resu}</span>
                         </div>
                       </div>
 
@@ -7457,13 +7456,13 @@ export default function App() {
                           <option value="MEJORA">💡 Mejora</option>
                           <option value="IDEA">✨ Idea</option>
                         </select>
-                        <button onClick={()=>refreshList()} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Recargar</button>
+                        <button onClick={()=>refreshList()} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><RefreshCcw size={12}/> Recargar</button>
                       </div>
 
                       {/* Lista */}
                       <div className="space-y-3">
                         {feedbackList.length === 0 && (
-                          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm">
+                          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-8 text-center text-slate-500 text-sm">
                             Sin sugerencias por ahora.
                           </div>
                         )}
@@ -7471,22 +7470,22 @@ export default function App() {
                           <div key={f.id} className="bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-sm transition-shadow">
                             <div className="flex items-start justify-between gap-3 mb-2 flex-wrap">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${catBadge(f.category)}`}>{f.category}</span>
-                                <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${statusBadge(f.status)}`}>{f.status}</span>
-                                {f.page && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[9px] font-mono">{f.page}</span>}
-                                <span className="text-[10px] text-slate-500 font-bold">de <span className="font-mono text-indigo-700">@{f.username}</span> ({f.role})</span>
+                                <span className={`px-2 py-0.5 rounded text-[12px] font-black uppercase border ${catBadge(f.category)}`}>{f.category}</span>
+                                <span className={`px-2 py-0.5 rounded text-[12px] font-black uppercase border ${statusBadge(f.status)}`}>{f.status}</span>
+                                {f.page && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[12px] font-mono">{f.page}</span>}
+                                <span className="text-[12px] text-slate-500 font-bold">de <span className="font-mono text-indigo-700">@{f.username}</span> ({f.role})</span>
                               </div>
-                              <span className="text-[9px] font-bold text-slate-400">{new Date(f.created_at).toLocaleString('es-CL')}</span>
+                              <span className="text-[12px] font-bold text-slate-500">{new Date(f.created_at).toLocaleString('es-CL')}</span>
                             </div>
                             <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap">{f.message}</p>
                             {f.resolved_by && f.resolved_at && (
-                              <p className="text-[10px] text-emerald-600 font-bold mt-2">✓ Resuelto por @{f.resolved_by} · {new Date(f.resolved_at).toLocaleString('es-CL')}</p>
+                              <p className="text-[12px] text-emerald-600 font-bold mt-2">✓ Resuelto por @{f.resolved_by} · {new Date(f.resolved_at).toLocaleString('es-CL')}</p>
                             )}
                             <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
-                              {f.status !== 'EN_REVISION' && <button onClick={()=>handleStatusChange(f.id,'EN_REVISION')} className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-[9px] font-black px-3 py-1.5 rounded-xl uppercase">→ En Revisión</button>}
-                              {f.status !== 'RESUELTO' && <button onClick={()=>handleStatusChange(f.id,'RESUELTO')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[9px] font-black px-3 py-1.5 rounded-xl uppercase">✓ Resolver</button>}
-                              {f.status !== 'NUEVO' && <button onClick={()=>handleStatusChange(f.id,'NUEVO')} className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[9px] font-black px-3 py-1.5 rounded-xl uppercase">↺ Nuevo</button>}
-                              <button onClick={()=>handleDelete(f.id)} className="ml-auto bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[9px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1"><Trash2 size={10}/> Eliminar</button>
+                              {f.status !== 'EN_REVISION' && <button onClick={()=>handleStatusChange(f.id,'EN_REVISION')} className="bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 text-[12px] font-black px-3 py-1.5 rounded-xl uppercase">→ En Revisión</button>}
+                              {f.status !== 'RESUELTO' && <button onClick={()=>handleStatusChange(f.id,'RESUELTO')} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-[12px] font-black px-3 py-1.5 rounded-xl uppercase">✓ Resolver</button>}
+                              {f.status !== 'NUEVO' && <button onClick={()=>handleStatusChange(f.id,'NUEVO')} className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[12px] font-black px-3 py-1.5 rounded-xl uppercase">↺ Nuevo</button>}
+                              <button onClick={()=>handleDelete(f.id)} className="ml-auto bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[12px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1"><Trash2 size={10}/> Eliminar</button>
                             </div>
                           </div>
                         ))}
@@ -7606,7 +7605,7 @@ export default function App() {
                 {/* Header */}
                 <div className="flex items-center justify-between flex-wrap gap-3">
                   <div>
-                    <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                    <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2">
                       <CalendarClock className="text-teal-500"/> Programación de Salidas
                     </h1>
                     <p className="text-xs text-slate-500 mt-1">Asigna y confirma fechas de salida para documentos de despacho</p>
@@ -7614,15 +7613,15 @@ export default function App() {
                   {/* KPIs rápidos */}
                   <div className="flex gap-3 flex-wrap">
                     <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm text-center min-w-[100px]">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hoy</p>
+                      <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Hoy</p>
                       <p className="text-2xl font-black text-teal-600">{statsToday.length}</p>
                     </div>
                     <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm text-center min-w-[100px]">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Por Confirmar</p>
+                      <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Por Confirmar</p>
                       <p className="text-2xl font-black text-amber-600">{statsPending}</p>
                     </div>
                     <div className="bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm text-center min-w-[100px]">
-                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Confirmados</p>
+                      <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Confirmados</p>
                       <p className="text-2xl font-black text-emerald-600">{statsConfirmed}</p>
                     </div>
                   </div>
@@ -7633,24 +7632,24 @@ export default function App() {
                   {isSup && <div className="lg:col-span-2">
                     <div className="bg-white rounded-[32px] border border-slate-200 shadow-sm p-6 space-y-4 sticky top-4">
                       <div>
-                        <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                        <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center gap-2">
                           <CalendarClock size={16} className="text-teal-500"/>
                           {dsEditId ? 'Editar Programación' : 'Nueva Programación de Salida'}
                         </h2>
                         {dsEditId && (
-                          <p className="text-[9px] text-amber-600 font-bold uppercase mt-1">Editando — ID: {dsEditId}</p>
+                          <p className="text-[12px] text-amber-600 font-bold uppercase mt-1">Editando — ID: {dsEditId}</p>
                         )}
                       </div>
                       <form onSubmit={handleDsSave} className="space-y-3">
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1 col-span-2">
-                            <label className="text-[9px] font-black text-slate-400 uppercase">N° Documento Despacho *</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">N° Documento Despacho *</label>
                             <input required type="text" value={dsForm.doc_num} onChange={e=>setDsForm({...dsForm, doc_num: e.target.value.toUpperCase()})}
                               placeholder="Ej: DSP-2024-001"
                               className="w-full border-2 border-slate-200 focus:border-teal-400 rounded-xl px-3 py-2.5 text-sm font-black uppercase outline-none transition-colors"/>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase">Cliente</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Cliente</label>
                             {is3PLMode ? (
                               <select value={dsForm.client_id} onChange={e=>setDsForm({...dsForm, client_id: e.target.value})}
                                 className="w-full border-2 border-slate-200 focus:border-teal-400 rounded-xl px-3 py-2.5 text-xs font-bold bg-white outline-none transition-colors">
@@ -7664,7 +7663,7 @@ export default function App() {
                             )}
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black text-slate-400 uppercase">Tipo Doc</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Tipo Doc</label>
                             <select value={dsForm.doc_type} onChange={e=>setDsForm({...dsForm, doc_type: e.target.value})}
                               className="w-full border-2 border-slate-200 focus:border-teal-400 rounded-xl px-3 py-2.5 text-xs font-bold bg-white outline-none transition-colors">
                               <option value="">-- Tipo --</option>
@@ -7672,36 +7671,36 @@ export default function App() {
                             </select>
                           </div>
                           <div className="space-y-1 col-span-2">
-                            <label className="text-[9px] font-black text-slate-400 uppercase">Glosa / Descripción</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Glosa / Descripción</label>
                             <input type="text" value={dsForm.glosa} onChange={e=>setDsForm({...dsForm, glosa: e.target.value})}
                               placeholder="Ej: Entrega tienda norte"
                               className="w-full border-2 border-slate-200 focus:border-teal-400 rounded-xl px-3 py-2.5 text-sm font-bold outline-none transition-colors"/>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black text-teal-600 uppercase flex items-center gap-1"><CalendarClock size={10}/> Fecha de Salida *</label>
+                            <label className="text-[12px] font-black text-teal-600 uppercase flex items-center gap-1"><CalendarClock size={10}/> Fecha de Salida *</label>
                             <input required type="date" value={dsForm.scheduled_date} onChange={e=>setDsForm({...dsForm, scheduled_date: e.target.value})}
                               min={todayStr}
                               className="w-full border-2 border-teal-200 focus:border-teal-500 rounded-xl px-3 py-2.5 text-sm font-black outline-none transition-colors bg-teal-50"/>
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[9px] font-black text-teal-600 uppercase flex items-center gap-1"><Clock size={10}/> Hora de Salida</label>
+                            <label className="text-[12px] font-black text-teal-600 uppercase flex items-center gap-1"><Clock size={10}/> Hora de Salida</label>
                             <input type="time" value={dsForm.scheduled_time} onChange={e=>setDsForm({...dsForm, scheduled_time: e.target.value})}
                               className="w-full border-2 border-teal-200 focus:border-teal-500 rounded-xl px-3 py-2.5 text-sm font-black outline-none transition-colors bg-teal-50"/>
                           </div>
                           <div className="space-y-1 col-span-2">
-                            <label className="text-[9px] font-black text-slate-400 uppercase">Transportista / Carrier</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Transportista / Carrier</label>
                             <input type="text" value={dsForm.carrier} onChange={e=>setDsForm({...dsForm, carrier: e.target.value})}
                               placeholder="Nombre transportista o placa"
                               className="w-full border-2 border-slate-200 focus:border-teal-400 rounded-xl px-3 py-2.5 text-sm font-bold outline-none transition-colors"/>
                           </div>
                           <div className="space-y-1 col-span-2">
-                            <label className="text-[9px] font-black text-slate-400 uppercase">Destino / Dirección</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Destino / Dirección</label>
                             <input type="text" value={dsForm.destination} onChange={e=>setDsForm({...dsForm, destination: e.target.value})}
                               placeholder="Dirección o lugar de entrega"
                               className="w-full border-2 border-slate-200 focus:border-teal-400 rounded-xl px-3 py-2.5 text-sm font-bold outline-none transition-colors"/>
                           </div>
                           <div className="space-y-1 col-span-2">
-                            <label className="text-[9px] font-black text-slate-400 uppercase">Notas adicionales</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Notas adicionales</label>
                             <textarea value={dsForm.notes} onChange={e=>setDsForm({...dsForm, notes: e.target.value})}
                               placeholder="Instrucciones especiales, contacto, etc."
                               rows={2}
@@ -7731,7 +7730,7 @@ export default function App() {
                       <div className="flex gap-1 bg-slate-100 p-1 rounded-xl">
                         {[{id:'',label:'Todos'}, ...DS_STATUS].map(s=>(
                           <button key={s.id} onClick={()=>setDsStatusFilter(s.id)}
-                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all ${dsStatusFilter===s.id?'bg-white text-teal-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
+                            className={`px-3 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-widest transition-all ${dsStatusFilter===s.id?'bg-white text-teal-700 shadow-sm':'text-slate-500 hover:text-slate-700'}`}>
                             {s.label}
                           </button>
                         ))}
@@ -7741,15 +7740,15 @@ export default function App() {
                       {dsDateFilter && (
                         <button onClick={()=>setDsDateFilter('')} className="text-red-400 hover:text-red-600 transition-colors"><X size={14}/></button>
                       )}
-                      <span className="text-[10px] font-black text-slate-400 uppercase ml-auto">{filtered.length} resultado(s)</span>
+                      <span className="text-[12px] font-black text-slate-500 uppercase ml-auto">{filtered.length} resultado(s)</span>
                     </div>
 
                     {/* Tarjetas */}
                     {filtered.length === 0 ? (
                       <div className="bg-white rounded-3xl border-2 border-dashed border-slate-200 p-16 flex flex-col items-center justify-center text-center">
                         <CalendarClock className="w-14 h-14 text-slate-200 mb-4"/>
-                        <p className="font-black text-slate-400 uppercase tracking-tighter">Sin programaciones</p>
-                        <p className="text-xs text-slate-400 mt-1">Crea la primera salida usando el formulario</p>
+                        <p className="font-black text-slate-500 uppercase tracking-tighter">Sin programaciones</p>
+                        <p className="text-xs text-slate-500 mt-1">Crea la primera salida usando el formulario</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -7763,19 +7762,19 @@ export default function App() {
                               {isPast && (
                                 <div className="bg-red-500 px-4 py-1.5 flex items-center gap-2">
                                   <AlertTriangle size={12} className="text-white"/>
-                                  <p className="text-[9px] font-black text-white uppercase tracking-widest">Fecha vencida — pendiente de despacho</p>
+                                  <p className="text-[12px] font-black text-white uppercase tracking-widest">Fecha vencida — pendiente de despacho</p>
                                 </div>
                               )}
                               {isToday && d.status === 'PROGRAMADO' && (
                                 <div className="bg-teal-500 px-4 py-1.5 flex items-center gap-2">
                                   <CalendarClock size={12} className="text-white"/>
-                                  <p className="text-[9px] font-black text-white uppercase tracking-widest">Programado para HOY — pendiente confirmar</p>
+                                  <p className="text-[12px] font-black text-white uppercase tracking-widest">Programado para HOY — pendiente confirmar</p>
                                 </div>
                               )}
                               {isToday && d.status === 'CONFIRMADO' && (
                                 <div className="bg-emerald-500 px-4 py-1.5 flex items-center gap-2">
                                   <CheckCircle2 size={12} className="text-white"/>
-                                  <p className="text-[9px] font-black text-white uppercase tracking-widest">Confirmado para HOY — listo para despachar</p>
+                                  <p className="text-[12px] font-black text-white uppercase tracking-widest">Confirmado para HOY — listo para despachar</p>
                                 </div>
                               )}
                               <div className="p-4">
@@ -7783,19 +7782,19 @@ export default function App() {
                                   <div>
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="font-mono text-base font-black text-slate-800">{d.doc_num}</span>
-                                      {d.doc_type && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[9px] font-black uppercase">{d.doc_type}</span>}
-                                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${getStatusColor(d.status)}`}>{d.status}</span>
+                                      {d.doc_type && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[12px] font-black uppercase">{d.doc_type}</span>}
+                                      <span className={`px-2 py-0.5 rounded-full text-[12px] font-black uppercase border ${getStatusColor(d.status)}`}>{d.status}</span>
                                     </div>
                                     {d.glosa && <p className="text-xs text-slate-600 mt-0.5">{d.glosa}</p>}
-                                    {clientName && <p className="text-[10px] text-indigo-600 font-bold mt-0.5 flex items-center gap-1"><Building2 size={10}/>{clientName}</p>}
+                                    {clientName && <p className="text-[12px] text-indigo-600 font-bold mt-0.5 flex items-center gap-1"><Building2 size={10}/>{clientName}</p>}
                                   </div>
                                   <div className="text-right shrink-0">
-                                    <p className="text-[9px] font-black text-slate-400 uppercase">Salida</p>
+                                    <p className="text-[12px] font-black text-slate-500 uppercase">Salida</p>
                                     <p className={`text-lg font-black ${isPast ? 'text-red-600' : 'text-teal-700'}`}>
                                       {new Date(d.scheduled_date + 'T12:00:00').toLocaleDateString('es-CL', {day:'2-digit',month:'short',year:'numeric'})}
                                     </p>
                                     {d.scheduled_time && (
-                                      <p className="text-[10px] font-black text-slate-500 flex items-center justify-end gap-1">
+                                      <p className="text-[12px] font-black text-slate-500 flex items-center justify-end gap-1">
                                         <Clock size={9}/> {d.scheduled_time.slice(0,5)}
                                       </p>
                                     )}
@@ -7806,50 +7805,50 @@ export default function App() {
                                 <div className="grid grid-cols-2 gap-2 mb-3">
                                   {d.carrier && (
                                     <div className="bg-slate-50 rounded-xl px-3 py-2 flex items-center gap-2">
-                                      <Truck size={12} className="text-slate-400 shrink-0"/>
-                                      <p className="text-[10px] font-bold text-slate-600 truncate">{d.carrier}</p>
+                                      <Truck size={12} className="text-slate-500 shrink-0"/>
+                                      <p className="text-[12px] font-bold text-slate-600 truncate">{d.carrier}</p>
                                     </div>
                                   )}
                                   {d.destination && (
                                     <div className="bg-slate-50 rounded-xl px-3 py-2 flex items-center gap-2">
-                                      <MapIcon size={12} className="text-slate-400 shrink-0"/>
-                                      <p className="text-[10px] font-bold text-slate-600 truncate">{d.destination}</p>
+                                      <MapIcon size={12} className="text-slate-500 shrink-0"/>
+                                      <p className="text-[12px] font-bold text-slate-600 truncate">{d.destination}</p>
                                     </div>
                                   )}
                                 </div>
                                 {d.notes && (
                                   <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2 mb-3">
-                                    <p className="text-[10px] text-amber-700 italic">"{d.notes}"</p>
+                                    <p className="text-[12px] text-amber-700 italic">"{d.notes}"</p>
                                   </div>
                                 )}
 
                                 {/* Footer */}
                                 <div className="flex items-center justify-between border-t border-slate-100 pt-3 flex-wrap gap-2">
-                                  <div className="text-[9px] text-slate-400">
+                                  <div className="text-[12px] text-slate-500">
                                     <span>Creado por <strong className="text-slate-600">{d.created_by}</strong> · {new Date(d.created_at).toLocaleDateString('es-CL')}</span>
                                     {d.confirmed_by && <span className="ml-2">· Confirmado por <strong className="text-emerald-600">{d.confirmed_by}</strong></span>}
                                   </div>
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     {isSup && d.status === 'PROGRAMADO' && (
                                       <button onClick={()=>handleDsConfirm(d.id)}
-                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1 shadow-sm transition-colors">
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1 shadow-sm transition-colors">
                                         <CheckCircle2 size={11}/> Confirmar Fecha
                                       </button>
                                     )}
                                     {isSup && d.status === 'CONFIRMADO' && (
                                       <button onClick={()=>handleDsMarkDispatched(d.id)}
-                                        className="bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1 shadow-sm transition-colors">
+                                        className="bg-blue-600 hover:bg-blue-700 text-white text-[12px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1 shadow-sm transition-colors">
                                         <ArrowUpRight size={11}/> Marcar Despachado
                                       </button>
                                     )}
                                     {isSup && ['PROGRAMADO','CONFIRMADO'].includes(d.status) && (
                                       <>
                                         <button onClick={()=>handleDsEdit(d)}
-                                          className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[9px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1 transition-colors">
+                                          className="bg-slate-100 hover:bg-slate-200 text-slate-600 text-[12px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1 transition-colors">
                                           <Pencil size={11}/> Editar
                                         </button>
                                         <button onClick={()=>handleDsCancel(d.id)}
-                                          className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[9px] font-black px-2 py-1.5 rounded-xl uppercase flex items-center gap-1 transition-colors">
+                                          className="bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-[12px] font-black px-2 py-1.5 rounded-xl uppercase flex items-center gap-1 transition-colors">
                                           <X size={11}/> Cancelar
                                         </button>
                                       </>
@@ -7865,7 +7864,7 @@ export default function App() {
                                           setDocHistory(Array.isArray(list) ? list : []);
                                         } catch(e) {}
                                         switchTab('doc-history');
-                                      }} className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[9px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1 transition-colors">
+                                      }} className="bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 text-[12px] font-black px-3 py-1.5 rounded-xl uppercase flex items-center gap-1 transition-colors">
                                         <History size={11}/> Ver documento
                                       </button>
                                     )}
@@ -7893,7 +7892,7 @@ export default function App() {
           {activeTab === 'picking-monitor' && (
             <div className="max-w-7xl mx-auto space-y-6">
                 <div className="flex items-center justify-between">
-                  <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><ClipboardList className="w-7 h-7 mr-3 text-violet-600"/> Monitor de Picking</h1>
+                  <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center"><ClipboardList className="w-7 h-7 mr-3 text-violet-600"/> Monitor de Picking</h1>
                   <div className="flex gap-2">
                     {['board','create','stats'].map(t => (
                       <button key={t} onClick={()=>setPickMonitorTab(t)} className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-colors ${pickMonitorTab===t ? 'bg-violet-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
@@ -7913,7 +7912,7 @@ export default function App() {
                       { label:'Diferencias', val: pickStats.by_status?.find(s=>s.status==='DIFERENCIA')?.count||0, color:'bg-red-50 border-red-200 text-red-700' },
                     ].map(k=>(
                       <div key={k.label} className={`rounded-2xl border-2 p-4 ${k.color}`}>
-                        <p className="text-[9px] font-black uppercase tracking-widest opacity-70">{k.label}</p>
+                        <p className="text-[12px] font-black uppercase tracking-widest opacity-70">{k.label}</p>
                         <p className="text-3xl font-black mt-1">{k.val}</p>
                       </div>
                     ))}
@@ -7946,15 +7945,15 @@ export default function App() {
                         <option value="SALTADA">Saltada</option>
                       </select>
                       {(pickBoardModuleFilter || pickBoardStatusFilter) && (
-                        <button onClick={()=>{setPickBoardModuleFilter('');setPickBoardStatusFilter('');}} className="text-slate-400 hover:text-red-500 transition-colors flex items-center gap-1 text-xs font-black uppercase"><X size={12}/> Limpiar</button>
+                        <button onClick={()=>{setPickBoardModuleFilter('');setPickBoardStatusFilter('');}} className="text-slate-500 hover:text-red-500 transition-colors flex items-center gap-1 text-xs font-black uppercase"><X size={12}/> Limpiar</button>
                       )}
-                      <span className="ml-auto text-[10px] font-black text-slate-400 uppercase">{boardFiltered.length} de {pickTasks.length} líneas</span>
+                      <span className="ml-auto text-[12px] font-black text-slate-500 uppercase">{boardFiltered.length} de {pickTasks.length} líneas</span>
                     </div>
 
                     {/* Tabla de líneas de picking */}
                     <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                       <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-                        <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><ListTodo className="w-4 h-4 mr-2 text-violet-500"/> Líneas de Picking</h2>
+                        <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><ListTodo className="w-4 h-4 mr-2 text-violet-500"/> Líneas de Picking</h2>
                         <span className="text-xs text-slate-500 font-bold">{boardFiltered.length} líneas</span>
                       </div>
                       <div className="overflow-x-auto">
@@ -7962,7 +7961,7 @@ export default function App() {
                           <thead className="bg-slate-50 border-b border-slate-200">
                             <tr>
                               {['Documento','Módulo','SKU','Ubicación','Qty','Picker','Estado','Acción'].map(h=>(
-                                <th key={h} className="px-4 py-3 text-left text-[10px] font-black uppercase text-slate-500 tracking-widest">{h}</th>
+                                <th key={h} className="px-4 py-3 text-left text-[12px] font-black uppercase text-slate-500 tracking-widest">{h}</th>
                               ))}
                             </tr>
                           </thead>
@@ -7979,23 +7978,23 @@ export default function App() {
                                 <tr key={line.line_id} className="hover:bg-slate-50">
                                   <td className="px-4 py-3">
                                     <p className="font-black text-xs text-slate-800">{line.doc_num}</p>
-                                    <p className="text-[9px] text-slate-400 font-mono">{line.task_id}</p>
+                                    <p className="text-[12px] text-slate-500 font-mono">{line.task_id}</p>
                                   </td>
-                                  <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${line.module==='dispatch'?'bg-blue-50 text-blue-600 border-blue-200':line.module==='receive'?'bg-emerald-50 text-emerald-600 border-emerald-200':'bg-purple-50 text-purple-600 border-purple-200'}`}>{line.module}</span></td>
+                                  <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded text-[12px] font-black uppercase border ${line.module==='dispatch'?'bg-blue-50 text-blue-600 border-blue-200':line.module==='receive'?'bg-emerald-50 text-emerald-600 border-emerald-200':'bg-purple-50 text-purple-600 border-purple-200'}`}>{line.module}</span></td>
                                   <td className="px-4 py-3">
                                     <p className="font-mono text-xs font-black text-slate-800">{line.sku}</p>
-                                    <p className="text-[9px] text-slate-500">{line.sku_desc}</p>
-                                    {line.lpn_id && <p className="text-[9px] font-mono text-indigo-600">{line.lpn_id}</p>}
+                                    <p className="text-[12px] text-slate-500">{line.sku_desc}</p>
+                                    {line.lpn_id && <p className="text-[12px] font-mono text-indigo-600">{line.lpn_id}</p>}
                                   </td>
                                   <td className="px-4 py-3">
-                                    {line.location_from && <p className="text-[9px] font-mono bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-700 w-max">Desde: {line.location_from}</p>}
-                                    {line.location_to && <p className="text-[9px] font-mono bg-indigo-50 px-1.5 py-0.5 rounded font-bold text-indigo-700 w-max mt-1">Hacia: {line.location_to}</p>}
+                                    {line.location_from && <p className="text-[12px] font-mono bg-slate-100 px-1.5 py-0.5 rounded font-bold text-slate-700 w-max">Desde: {line.location_from}</p>}
+                                    {line.location_to && <p className="text-[12px] font-mono bg-indigo-50 px-1.5 py-0.5 rounded font-bold text-indigo-700 w-max mt-1">Hacia: {line.location_to}</p>}
                                   </td>
                                   <td className="px-4 py-3 text-center">
                                     <span className="font-black text-slate-800">{line.qty_requested}</span>
-                                    {line.qty_confirmed != null && <p className="text-[9px] text-emerald-600 font-bold">Conf: {line.qty_confirmed}</p>}
-                                    {line.batch_confirmed && <p className="text-[9px] text-indigo-600 font-mono">Lote: {line.batch_confirmed}</p>}
-                                    {line.serial_confirmed && <p className="text-[9px] text-indigo-600 font-mono">Serie: {line.serial_confirmed}</p>}
+                                    {line.qty_confirmed != null && <p className="text-[12px] text-emerald-600 font-bold">Conf: {line.qty_confirmed}</p>}
+                                    {line.batch_confirmed && <p className="text-[12px] text-indigo-600 font-mono">Lote: {line.batch_confirmed}</p>}
+                                    {line.serial_confirmed && <p className="text-[12px] text-indigo-600 font-mono">Serie: {line.serial_confirmed}</p>}
                                   </td>
                                   <td className="px-4 py-3">
                                     {line.assigned_to
@@ -8005,7 +8004,7 @@ export default function App() {
                                           if (!e.target.value) return;
                                           const r = await apiFetch(`${host}/api/pick-tasks/lines/${line.line_id}/assign`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ assigned_to: e.target.value }) });
                                           if (r.ok) { showMsg('✅ Picker asignado'); fetchData(); } else showMsg('Error al asignar', true);
-                                        }} className="border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-violet-500 bg-white">
+                                        }} className="border border-slate-200 rounded-lg px-2 py-1 text-[12px] font-bold outline-none focus:border-violet-500 bg-white">
                                           <option value="">Asignar picker...</option>
                                           {users.filter(u=>u.role==='PICKER').map(u=><option key={u.username} value={u.username}>{u.full_name}</option>)}
                                         </select>
@@ -8013,21 +8012,21 @@ export default function App() {
                                     }
                                   </td>
                                   <td className="px-4 py-3">
-                                    <span className={`px-2 py-1 rounded border text-[9px] font-black uppercase ${statusColor}`}>{line.line_status}</span>
-                                    {line.diff_reason && <p className="text-[9px] text-red-500 mt-1 max-w-[120px] truncate" title={line.diff_reason}>{line.diff_reason}</p>}
+                                    <span className={`px-2 py-1 rounded border text-[12px] font-black uppercase ${statusColor}`}>{line.line_status}</span>
+                                    {line.diff_reason && <p className="text-[12px] text-red-500 mt-1 max-w-[120px] truncate" title={line.diff_reason}>{line.diff_reason}</p>}
                                   </td>
                                   <td className="px-4 py-3">
                                     {['PENDIENTE','EN_PROCESO'].includes(line.line_status) && (
                                       <button onClick={async()=>{
                                         const r = await apiFetch(`${host}/api/pick-tasks/${line.task_id}/cancel`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({reason:'Cancelado por supervisor'})});
                                         if(r.ok){showMsg('Tarea cancelada');fetchData();}
-                                      }} className="text-[9px] text-red-600 hover:text-red-700 font-black uppercase flex items-center"><X size={12} className="mr-1"/>Cancelar</button>
+                                      }} className="text-[12px] text-red-600 hover:text-red-700 font-black uppercase flex items-center"><X size={12} className="mr-1"/>Cancelar</button>
                                     )}
                                   </td>
                                 </tr>
                               );
                             })}
-                            {boardFiltered.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-slate-400 font-bold">{pickTasks.length === 0 ? 'No hay líneas de picking.' : 'No hay líneas que coincidan con los filtros.'}</td></tr>}
+                            {boardFiltered.length === 0 && <tr><td colSpan="8" className="p-8 text-center text-slate-500 font-bold">{pickTasks.length === 0 ? 'No hay líneas de picking.' : 'No hay líneas que coincidan con los filtros.'}</td></tr>}
                           </tbody>
                         </table>
                       </div>
@@ -8039,14 +8038,14 @@ export default function App() {
                 {/* ── CREAR TAREA ── */}
                 {pickMonitorTab === 'create' && (
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
-                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center"><Plus className="w-4 h-4 mr-2 text-violet-500"/> Crear Tareas de Picking</h2>
+                    <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center"><Plus className="w-4 h-4 mr-2 text-violet-500"/> Crear Tareas de Picking</h2>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Número Documento *</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Número Documento *</label>
                         <input type="text" value={pickCreateForm.doc_num} onChange={e=>setPickCreateForm({...pickCreateForm,doc_num:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-500 uppercase" placeholder="Ej: GD-2024-001"/>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Módulo *</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Módulo *</label>
                         <select value={pickCreateForm.module} onChange={e=>setPickCreateForm({...pickCreateForm,module:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-500 bg-white">
                           <option value="dispatch">Despacho</option>
                           <option value="receive">Recepción</option>
@@ -8055,7 +8054,7 @@ export default function App() {
                       </div>
                       {is3PLMode && (
                         <div className="space-y-1">
-                          <label className="text-[10px] font-black text-slate-400 uppercase">Cliente</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Cliente</label>
                           <select value={pickCreateForm.client_id} onChange={e=>setPickCreateForm({...pickCreateForm,client_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-violet-500 bg-white">
                             <option value="">Todos</option>
                             {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
@@ -8066,40 +8065,40 @@ export default function App() {
 
                     {/* Agregar líneas */}
                     <div className="border-2 border-dashed border-slate-200 rounded-2xl p-4 space-y-3">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Líneas de la Tarea</p>
+                      <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Líneas de la Tarea</p>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">SKU *</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">SKU *</label>
                           <input type="text" value={pickLineForm.sku} onChange={e=>setPickLineForm({...pickLineForm,sku:e.target.value})} list="sku-list-pick" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-violet-500" placeholder="Código SKU"/>
                           <datalist id="sku-list-pick">{skus.map(s=><option key={s.sku} value={s.sku}>{s.desc}</option>)}</datalist>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">LPN</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">LPN</label>
                           <input type="text" value={pickLineForm.lpn_id} onChange={e=>setPickLineForm({...pickLineForm,lpn_id:e.target.value})} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-violet-500" placeholder="LPN-XXXX"/>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Desde (Ubicación)</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Desde (Ubicación)</label>
                           <input type="text" value={pickLineForm.location_from} onChange={e=>setPickLineForm({...pickLineForm,location_from:e.target.value})} list="loc-list-pick" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-violet-500" placeholder="RACK-A-01"/>
                           <datalist id="loc-list-pick">{locations.map(l=><option key={l.location_id} value={l.location_id}/>)}</datalist>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Hacia (Ubicación)</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Hacia (Ubicación)</label>
                           <input type="text" value={pickLineForm.location_to} onChange={e=>setPickLineForm({...pickLineForm,location_to:e.target.value})} list="loc-list-pick2" className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-violet-500" placeholder="PISO-RECEPCION"/>
                           <datalist id="loc-list-pick2">{locations.map(l=><option key={l.location_id} value={l.location_id}/>)}</datalist>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Cantidad *</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Cantidad *</label>
                           <input type="number" min="0.01" step="0.01" value={pickLineForm.qty_requested} onChange={e=>setPickLineForm({...pickLineForm,qty_requested:e.target.value})} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-black outline-none focus:border-violet-500" placeholder="0"/>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Asignar a Picker</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Asignar a Picker</label>
                           <select value={pickLineForm.assigned_to} onChange={e=>setPickLineForm({...pickLineForm,assigned_to:e.target.value})} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-violet-500 bg-white">
                             <option value="">Sin asignar</option>
                             {users.filter(u=>u.role==='PICKER').map(u=><option key={u.username} value={u.username}>{u.full_name}</option>)}
                           </select>
                         </div>
                         <div className="space-y-1">
-                          <label className="text-[9px] font-black text-slate-400 uppercase">Prioridad (1=Máx)</label>
+                          <label className="text-[12px] font-black text-slate-500 uppercase">Prioridad (1=Máx)</label>
                           <select value={pickLineForm.priority} onChange={e=>setPickLineForm({...pickLineForm,priority:parseInt(e.target.value)})} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-violet-500 bg-white">
                             {[1,2,3,4,5,6,7,8,9,10].map(n=><option key={n} value={n}>{n}</option>)}
                           </select>
@@ -8121,14 +8120,14 @@ export default function App() {
                         <div className="mt-3 space-y-2">
                           {pickCreateForm.lines.map((l,i)=>(
                             <div key={i} className="flex items-center gap-3 bg-violet-50 border border-violet-200 rounded-xl px-4 py-2">
-                              <span className="text-[9px] font-black text-violet-400 w-5">#{i+1}</span>
+                              <span className="text-[12px] font-black text-violet-400 w-5">#{i+1}</span>
                               <span className="font-mono text-xs font-black text-slate-800 flex-1">{l.sku}</span>
-                              {l.lpn_id && <span className="text-[9px] font-mono bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">{l.lpn_id}</span>}
-                              {l.location_from && <span className="text-[9px] font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Desde: {l.location_from}</span>}
-                              {l.location_to && <span className="text-[9px] font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Hacia: {l.location_to}</span>}
+                              {l.lpn_id && <span className="text-[12px] font-mono bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded">{l.lpn_id}</span>}
+                              {l.location_from && <span className="text-[12px] font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Desde: {l.location_from}</span>}
+                              {l.location_to && <span className="text-[12px] font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded">Hacia: {l.location_to}</span>}
                               <span className="font-black text-sm text-violet-700">{l.qty_requested}</span>
-                              {l.assigned_to && <span className="text-[9px] text-violet-600 font-bold flex items-center"><UserCheck size={10} className="mr-0.5"/>{l.assigned_to}</span>}
-                              <span className="text-[9px] bg-violet-200 text-violet-700 px-1.5 py-0.5 rounded font-black">P{l.priority}</span>
+                              {l.assigned_to && <span className="text-[12px] text-violet-600 font-bold flex items-center"><UserCheck size={10} className="mr-0.5"/>{l.assigned_to}</span>}
+                              <span className="text-[12px] bg-violet-200 text-violet-700 px-1.5 py-0.5 rounded font-black">P{l.priority}</span>
                               <button onClick={()=>setPickCreateForm(prev=>({...prev,lines:prev.lines.filter((_,j)=>j!==i)}))} className="text-red-400 hover:text-red-600"><X size={14}/></button>
                             </div>
                           ))}
@@ -8137,7 +8136,7 @@ export default function App() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Notas (Opcional)</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Notas (Opcional)</label>
                       <textarea value={pickCreateForm.notes} onChange={e=>setPickCreateForm({...pickCreateForm,notes:e.target.value})} rows={2} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm outline-none focus:border-violet-500 resize-none" placeholder="Instrucciones especiales para el picker..."/>
                     </div>
 
@@ -8182,11 +8181,11 @@ export default function App() {
                       <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead className="border-b border-slate-100">
-                            <tr>{['Picker','Estado','Líneas'].map(h=><th key={h} className="px-3 py-2 text-left font-black text-slate-400 uppercase text-[9px]">{h}</th>)}</tr>
+                            <tr>{['Picker','Estado','Líneas'].map(h=><th key={h} className="px-3 py-2 text-left font-black text-slate-500 uppercase text-[12px]">{h}</th>)}</tr>
                           </thead>
                           <tbody className="divide-y divide-slate-50">
                             {pickStats.by_picker?.map((row,i)=>(
-                              <tr key={i}><td className="px-3 py-2 font-mono font-black text-slate-700">{row.assigned_to}</td><td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[9px] font-black border ${{'COMPLETADA':'bg-emerald-50 text-emerald-700 border-emerald-200','DIFERENCIA':'bg-red-50 text-red-700 border-red-200','EN_PROCESO':'bg-blue-50 text-blue-700 border-blue-200'}[row.status]||'bg-slate-50 text-slate-600 border-slate-200'}`}>{row.status}</span></td><td className="px-3 py-2 font-black text-slate-800">{row.count}</td></tr>
+                              <tr key={i}><td className="px-3 py-2 font-mono font-black text-slate-700">{row.assigned_to}</td><td className="px-3 py-2"><span className={`px-2 py-0.5 rounded text-[12px] font-black border ${{'COMPLETADA':'bg-emerald-50 text-emerald-700 border-emerald-200','DIFERENCIA':'bg-red-50 text-red-700 border-red-200','EN_PROCESO':'bg-blue-50 text-blue-700 border-blue-200'}[row.status]||'bg-slate-50 text-slate-600 border-slate-200'}`}>{row.status}</span></td><td className="px-3 py-2 font-black text-slate-800">{row.count}</td></tr>
                             ))}
                           </tbody>
                         </table>
@@ -8204,12 +8203,12 @@ export default function App() {
                 <div className="bg-violet-600 rounded-2xl p-4 text-white">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] font-black uppercase tracking-widest opacity-70">Picker Activo</p>
+                      <p className="text-[12px] font-black uppercase tracking-widest opacity-70">Picker Activo</p>
                       <p className="text-lg font-black">{currentUser?.full_name}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-3xl font-black">{pickQueue.length}</p>
-                      <p className="text-[10px] font-black uppercase opacity-70">Tareas pendientes</p>
+                      <p className="text-[12px] font-black uppercase opacity-70">Tareas pendientes</p>
                     </div>
                   </div>
                 </div>
@@ -8230,10 +8229,10 @@ export default function App() {
                         <div className="p-5 space-y-3">
                           <div className="flex items-start justify-between">
                             <div>
-                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${line.module==='dispatch'?'bg-blue-50 text-blue-600 border-blue-200':line.module==='receive'?'bg-emerald-50 text-emerald-600 border-emerald-200':'bg-purple-50 text-purple-600 border-purple-200'}`}>{line.module}</span>
+                              <span className={`text-[12px] font-black uppercase px-2 py-0.5 rounded border ${line.module==='dispatch'?'bg-blue-50 text-blue-600 border-blue-200':line.module==='receive'?'bg-emerald-50 text-emerald-600 border-emerald-200':'bg-purple-50 text-purple-600 border-purple-200'}`}>{line.module}</span>
                               <p className="font-black text-slate-800 text-sm mt-1">{line.doc_num}</p>
                             </div>
-                            <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-full ${line.line_status==='EN_PROCESO'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{line.line_status}</span>
+                            <span className={`text-[12px] font-black uppercase px-2 py-1 rounded-full ${line.line_status==='EN_PROCESO'?'bg-blue-100 text-blue-700':'bg-amber-100 text-amber-700'}`}>{line.line_status}</span>
                           </div>
 
                           <div className="bg-slate-50 rounded-xl p-3 space-y-1">
@@ -8244,13 +8243,13 @@ export default function App() {
                           <div className="grid grid-cols-2 gap-2">
                             {line.location_from && (
                               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
-                                <p className="text-[9px] font-black text-amber-600 uppercase">Retirar de</p>
+                                <p className="text-[12px] font-black text-amber-600 uppercase">Retirar de</p>
                                 <p className="font-mono font-black text-amber-800 text-sm">{line.location_from}</p>
                               </div>
                             )}
                             {line.location_to && (
                               <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
-                                <p className="text-[9px] font-black text-indigo-600 uppercase">Llevar a</p>
+                                <p className="text-[12px] font-black text-indigo-600 uppercase">Llevar a</p>
                                 <p className="font-mono font-black text-indigo-800 text-sm">{line.location_to}</p>
                               </div>
                             )}
@@ -8258,15 +8257,15 @@ export default function App() {
 
                           {line.lpn_id && (
                             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
-                              <p className="text-[9px] font-black text-indigo-600 uppercase">LPN</p>
+                              <p className="text-[12px] font-black text-indigo-600 uppercase">LPN</p>
                               <p className="font-mono font-black text-indigo-800">{line.lpn_id}</p>
-                              {line.batch_number && <p className="text-[9px] text-indigo-500 mt-0.5">Lote actual: {line.batch_number}</p>}
-                              {line.serial_number && <p className="text-[9px] text-indigo-500">Serie actual: {line.serial_number}</p>}
+                              {line.batch_number && <p className="text-[12px] text-indigo-500 mt-0.5">Lote actual: {line.batch_number}</p>}
+                              {line.serial_number && <p className="text-[12px] text-indigo-500">Serie actual: {line.serial_number}</p>}
                             </div>
                           )}
 
                           <div className="flex items-center justify-between bg-violet-50 rounded-xl p-3">
-                            <p className="text-[10px] font-black text-violet-600 uppercase">Cantidad Solicitada</p>
+                            <p className="text-[12px] font-black text-violet-600 uppercase">Cantidad Solicitada</p>
                             <p className="text-3xl font-black text-violet-800">{line.qty_requested}</p>
                           </div>
 
@@ -8302,15 +8301,15 @@ export default function App() {
                     <div className="p-5 space-y-5">
                       {/* Cantidad confirmada */}
                       <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">Cantidad Real Encontrada *</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest block mb-2">Cantidad Real Encontrada *</label>
                         <input type="number" min="0" step="0.01" value={pickerConfirmForm.qty_confirmed} onChange={e=>setPickerConfirmForm({...pickerConfirmForm,qty_confirmed:e.target.value})}
                           className="w-full text-5xl font-black text-center border-4 border-slate-200 rounded-2xl py-4 outline-none focus:border-emerald-500 text-slate-800"/>
-                        <p className="text-center text-xs text-slate-400 mt-1">Solicitado: <strong>{activePickLine.qty_requested}</strong></p>
+                        <p className="text-center text-xs text-slate-500 mt-1">Solicitado: <strong>{activePickLine.qty_requested}</strong></p>
                       </div>
 
                       {/* Lote */}
                       <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                        <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest block mb-2">
                           Número de Lote {activePickLine.batch_number ? <span className="text-red-500">* (LPN tiene lote: {activePickLine.batch_number})</span> : '(opcional)'}
                         </label>
                         <input type="text" value={pickerConfirmForm.batch_confirmed} onChange={e=>setPickerConfirmForm({...pickerConfirmForm,batch_confirmed:e.target.value})}
@@ -8319,7 +8318,7 @@ export default function App() {
 
                       {/* Serie */}
                       <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                        <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest block mb-2">
                           Número de Serie {activePickLine.serial_number ? <span className="text-red-500">* (LPN tiene serie)</span> : '(opcional)'}
                         </label>
                         <input type="text" value={pickerConfirmForm.serial_confirmed} onChange={e=>setPickerConfirmForm({...pickerConfirmForm,serial_confirmed:e.target.value})}
@@ -8369,7 +8368,7 @@ export default function App() {
           {activeTab === 'suppliers' && (
             <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Building2 className="w-7 h-7 mr-3 text-cyan-600"/> Proveedores & ASN</h2>
+                <h2 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center"><Building2 className="w-7 h-7 mr-3 text-cyan-600"/> Proveedores & ASN</h2>
                 <div className="flex gap-2">
                   <button onClick={()=>setAsnView(asnView==='list'?'new':'list')} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-colors">
                     {asnView==='new'?<><X size={14}/> Cancelar</>:<><Plus size={14}/> Nueva ASN</>}
@@ -8398,7 +8397,7 @@ export default function App() {
               {/* Lista proveedores */}
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-slate-100 font-black text-sm text-slate-600 uppercase tracking-widest">Proveedores Registrados ({suppliers.length})</div>
-                {suppliers.length===0 ? <div className="p-10 text-center text-slate-400 font-bold text-sm">Sin proveedores registrados.</div> : (
+                {suppliers.length===0 ? <div className="p-10 text-center text-slate-500 font-bold text-sm">Sin proveedores registrados.</div> : (
                   <div className="divide-y divide-slate-100">
                     {suppliers.map(s=>(
                       <div key={s.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50">
@@ -8419,22 +8418,22 @@ export default function App() {
               {/* Nueva ASN */}
               {asnView==='new' && (
                 <div className="bg-white rounded-2xl border-2 border-cyan-200 shadow-sm p-6 space-y-4">
-                  <h3 className="font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Upload size={16} className="text-cyan-600"/> Nueva Nota de Embarque (ASN)</h3>
+                  <h3 className="font-black text-slate-800 tracking-tighter flex items-center gap-2"><Upload size={16} className="text-cyan-600"/> Nueva Nota de Embarque (ASN)</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Proveedor *</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Proveedor *</label>
                       <select value={asnForm.supplier_id} onChange={e=>setAsnForm({...asnForm,supplier_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 bg-white mt-1">
                         <option value="">-- Seleccionar --</option>
                         {suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Fecha Esperada *</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Fecha Esperada *</label>
                       <input type="date" value={asnForm.expected_date} onChange={e=>setAsnForm({...asnForm,expected_date:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 mt-1"/>
                     </div>
                     {is3PLMode && (
                       <div className="col-span-2">
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cliente dueño de la mercancía *</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Cliente dueño de la mercancía *</label>
                         <select value={asnForm.client_id} onChange={e=>setAsnForm({...asnForm,client_id:e.target.value,lines:[]})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 bg-white mt-1">
                           <option value="">-- Seleccionar --</option>
                           {clients.map(c=><option key={c.id} value={c.id}>{c.name || c.id}</option>)}
@@ -8442,13 +8441,13 @@ export default function App() {
                       </div>
                     )}
                     <div className="col-span-2">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Referencia / Orden Compra</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Referencia / Orden Compra</label>
                       <input value={asnForm.reference} onChange={e=>setAsnForm({...asnForm,reference:e.target.value})} placeholder="Ej: OC-2026-001" className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 mt-1"/>
                     </div>
                   </div>
                   {/* Líneas ASN */}
                   <div className="bg-slate-50 rounded-xl p-4 space-y-3">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Líneas de Producto</p>
+                    <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Líneas de Producto</p>
                     <div className="flex gap-3">
                       <select value={asnLineForm.sku} onChange={e=>setAsnLineForm({...asnLineForm,sku:e.target.value})} className="flex-1 border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-cyan-400 bg-white">
                         <option value="">-- SKU --</option>
@@ -8479,14 +8478,14 @@ export default function App() {
               {/* Lista ASN */}
               {asnView==='list' && (
                 <div className="space-y-3">
-                  <h3 className="text-sm font-black text-slate-600 uppercase tracking-widest border-b border-slate-200 pb-2">Notas de Embarque ({asns.length})</h3>
-                  {asns.length===0 ? <div className="p-10 text-center bg-white rounded-2xl border border-slate-200 text-slate-400 font-bold">Sin ASNs registradas.</div> : (
+                  <h3 className="text-sm font-black text-slate-600 tracking-widest border-b border-slate-200 pb-2">Notas de Embarque ({asns.length})</h3>
+                  {asns.length===0 ? <div className="p-10 text-center bg-white rounded-2xl border border-slate-200 text-slate-500 font-bold">Sin ASNs registradas.</div> : (
                     <div className="space-y-3">
                       {asns.map(a=>(
                         <div key={a.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                           <div className="flex items-start justify-between">
                             <div>
-                              <span className={`text-[9px] font-black uppercase px-2 py-1 rounded border ${a.status==='RECIBIDO'?'bg-emerald-50 text-emerald-600 border-emerald-200':a.status==='PARCIAL'?'bg-amber-50 text-amber-600 border-amber-200':'bg-slate-50 text-slate-500 border-slate-200'}`}>{a.status}</span>
+                              <span className={`text-[12px] font-black uppercase px-2 py-1 rounded border ${a.status==='RECIBIDO'?'bg-emerald-50 text-emerald-600 border-emerald-200':a.status==='PARCIAL'?'bg-amber-50 text-amber-600 border-amber-200':'bg-slate-50 text-slate-500 border-slate-200'}`}>{a.status}</span>
                               <p className="font-black text-slate-800 mt-1">{a.reference||`ASN-${a.id}`}</p>
                               <p className="text-xs text-slate-500">{a.supplier_name} — Esperado: {a.expected_date?.split('T')[0]}</p>
                             </div>
@@ -8508,13 +8507,13 @@ export default function App() {
               {asnView==='receive' && activeAsn && (
                 <div className="bg-white rounded-2xl border-2 border-emerald-200 shadow-sm p-6 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><ArrowDownRight size={16} className="text-emerald-600"/> Recepcionar ASN: {activeAsn.reference||`ASN-${activeAsn.id}`}</h3>
-                    <button onClick={()=>setAsnView('list')} className="text-slate-400 hover:text-slate-600"><X size={18}/></button>
+                    <h3 className="font-black text-slate-800 tracking-tighter flex items-center gap-2"><ArrowDownRight size={16} className="text-emerald-600"/> Recepcionar ASN: {activeAsn.reference||`ASN-${activeAsn.id}`}</h3>
+                    <button onClick={()=>setAsnView('list')} className="text-slate-500 hover:text-slate-600"><X size={18}/></button>
                   </div>
                   <p className="text-sm text-slate-500">Proveedor: <strong>{activeAsn.supplier_name}</strong></p>
                   {!activeAsn.client_id && is3PLMode && (
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cliente dueño de la mercancía *</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Cliente dueño de la mercancía *</label>
                       <select value={asnReceiveClient} onChange={e=>setAsnReceiveClient(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-emerald-400 bg-white mt-1">
                         <option value="">-- Seleccionar --</option>
                         {clients.map(c=><option key={c.id} value={c.id}>{c.name || c.id}</option>)}
@@ -8550,64 +8549,64 @@ export default function App() {
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-indigo-100 rounded-2xl"><HardHat className="w-7 h-7 text-indigo-600"/></div>
                   <div>
-                    <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Fabricantes</h1>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Quién produce cada SKU</p>
+                    <h1 className="text-2xl font-black text-slate-800 tracking-tighter">Fabricantes</h1>
+                    <p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest">Quién produce cada SKU</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
-                    <Search size={14} className="text-slate-400"/>
+                    <Search size={14} className="text-slate-500"/>
                     <input type="text" placeholder="Código..." value={mfrCodeFilter} onChange={e=>setMfrCodeFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
                   </div>
                   <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-44">
-                    <Search size={14} className="text-slate-400"/>
+                    <Search size={14} className="text-slate-500"/>
                     <input type="text" placeholder="Nombre..." value={mfrNameFilter} onChange={e=>setMfrNameFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
                   </div>
-                  {(mfrCodeFilter||mfrNameFilter) && <button onClick={()=>{setMfrCodeFilter('');setMfrNameFilter('');}} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
+                  {(mfrCodeFilter||mfrNameFilter) && <button onClick={()=>{setMfrCodeFilter('');setMfrNameFilter('');}} className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[12px] font-black uppercase flex items-center gap-1"><X size={10}/> Limpiar</button>}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                 <div className="lg:col-span-2">
                   <form onSubmit={handleSaveManufacturer} className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 space-y-3 sticky top-4">
-                    <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter border-b pb-3">{editingMfrId ? 'Editar fabricante' : 'Nuevo fabricante'}</h2>
+                    <h2 className="text-sm font-black text-slate-800 tracking-tighter border-b pb-3">{editingMfrId ? 'Editar fabricante' : 'Nuevo fabricante'}</h2>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1 col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Código {editingMfrId ? '*' : ''}</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Código {editingMfrId ? '*' : ''}</label>
                         <input type="text" value={manufacturerForm.code} onChange={e=>setManufacturerForm(p=>({...p, code: e.target.value.toUpperCase()}))} placeholder={editingMfrId ? '' : 'Vacío para auto-generar'} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-indigo-500 uppercase"/>
                       </div>
                       <div className="space-y-1 col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Nombre *</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Nombre *</label>
                         <input type="text" required value={manufacturerForm.name} onChange={e=>setManufacturerForm(p=>({...p, name: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-indigo-500"/>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">País</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">País</label>
                         <input type="text" value={manufacturerForm.country} onChange={e=>setManufacturerForm(p=>({...p, country: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"/>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Contacto</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Contacto</label>
                         <input type="text" value={manufacturerForm.contact} onChange={e=>setManufacturerForm(p=>({...p, contact: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"/>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Email</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Email</label>
                         <input type="email" value={manufacturerForm.email} onChange={e=>setManufacturerForm(p=>({...p, email: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"/>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Teléfono</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Teléfono</label>
                         <input type="text" value={manufacturerForm.phone} onChange={e=>setManufacturerForm(p=>({...p, phone: e.target.value}))} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"/>
                       </div>
                       <div className="space-y-1 col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Sitio web</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Sitio web</label>
                         <input type="text" value={manufacturerForm.website} onChange={e=>setManufacturerForm(p=>({...p, website: e.target.value}))} placeholder="https://…" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-500"/>
                       </div>
                       <div className="space-y-1 col-span-2">
-                        <label className="text-[10px] font-black text-slate-400 uppercase">Notas</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase">Notas</label>
                         <textarea value={manufacturerForm.notes} onChange={e=>setManufacturerForm(p=>({...p, notes: e.target.value}))} rows={3} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-xs font-bold outline-none focus:border-indigo-500 resize-none"/>
                       </div>
                     </div>
                     <div className="flex gap-2 pt-2">
-                      <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl uppercase text-[10px] tracking-widest">{editingMfrId ? 'Guardar cambios' : 'Crear fabricante'}</button>
-                      {editingMfrId && <button type="button" onClick={()=>{setEditingMfrId(null);setManufacturerForm({ code:'', name:'', country:'', contact:'', email:'', phone:'', website:'', notes:'' });}} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-4 rounded-xl uppercase text-[10px]">Cancelar</button>}
+                      <button type="submit" className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 rounded-xl uppercase text-[12px] tracking-widest">{editingMfrId ? 'Guardar cambios' : 'Crear fabricante'}</button>
+                      {editingMfrId && <button type="button" onClick={()=>{setEditingMfrId(null);setManufacturerForm({ code:'', name:'', country:'', contact:'', email:'', phone:'', website:'', notes:'' });}} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 px-4 rounded-xl uppercase text-[12px]">Cancelar</button>}
                     </div>
                   </form>
                 </div>
@@ -8617,18 +8616,18 @@ export default function App() {
                     <table className="w-full text-left">
                       <thead className="bg-slate-50 border-b">
                         <tr>
-                          <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase">Código</th>
-                          <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase">Nombre</th>
-                          <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase">País</th>
-                          <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase text-center">SKUs</th>
-                          <th className="px-4 py-3 text-[10px] font-black text-slate-400 uppercase text-center">Acciones</th>
+                          <th className="px-4 py-3 text-[12px] font-black text-slate-500 uppercase">Código</th>
+                          <th className="px-4 py-3 text-[12px] font-black text-slate-500 uppercase">Nombre</th>
+                          <th className="px-4 py-3 text-[12px] font-black text-slate-500 uppercase">País</th>
+                          <th className="px-4 py-3 text-[12px] font-black text-slate-500 uppercase text-center">SKUs</th>
+                          <th className="px-4 py-3 text-[12px] font-black text-slate-500 uppercase text-center">Acciones</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
                         {manufacturers.filter(m => (!mfrCodeFilter || m.code.toLowerCase().includes(mfrCodeFilter.toLowerCase())) && (!mfrNameFilter || m.name.toLowerCase().includes(mfrNameFilter.toLowerCase()))).map(m => (
                           <tr key={m.id} className={`hover:bg-indigo-50/30 ${!m.active ? 'opacity-50' : ''}`}>
                             <td className="px-4 py-3 font-mono text-xs font-black text-indigo-700">{m.code}</td>
-                            <td className="px-4 py-3"><button onClick={()=>handleOpenMfrDetail(m.id)} className="text-xs font-black text-slate-800 hover:text-indigo-600 text-left">{m.name}</button>{!m.active && <span className="ml-2 text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-black uppercase">Inactivo</span>}</td>
+                            <td className="px-4 py-3"><button onClick={()=>handleOpenMfrDetail(m.id)} className="text-xs font-black text-slate-800 hover:text-indigo-600 text-left">{m.name}</button>{!m.active && <span className="ml-2 text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-black uppercase">Inactivo</span>}</td>
                             <td className="px-4 py-3 text-xs font-bold text-slate-600">{m.country || '—'}</td>
                             <td className="px-4 py-3 text-center"><span className="text-xs font-black text-slate-700">{m.sku_count || 0}</span></td>
                             <td className="px-4 py-3 text-center">
@@ -8639,7 +8638,7 @@ export default function App() {
                             </td>
                           </tr>
                         ))}
-                        {manufacturers.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-400 text-sm">Sin fabricantes registrados aún.</td></tr>}
+                        {manufacturers.length === 0 && <tr><td colSpan="5" className="p-8 text-center text-slate-500 text-sm">Sin fabricantes registrados aún.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -8652,22 +8651,22 @@ export default function App() {
                   <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
                     <div className="p-5 border-b border-slate-100 flex items-center justify-between">
                       <div>
-                        <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter">{mfrDetail.name}</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">{mfrDetail.code} {mfrDetail.country && `· ${mfrDetail.country}`}</p>
+                        <h2 className="text-lg font-black text-slate-800 tracking-tighter">{mfrDetail.name}</h2>
+                        <p className="text-[12px] font-bold text-slate-500 uppercase">{mfrDetail.code} {mfrDetail.country && `· ${mfrDetail.country}`}</p>
                       </div>
-                      <button onClick={()=>setMfrDetail(null)} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} className="text-slate-400"/></button>
+                      <button onClick={()=>setMfrDetail(null)} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} className="text-slate-500"/></button>
                     </div>
                     <div className="p-5">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">SKUs vinculados ({mfrDetail.skus?.length || 0})</p>
+                      <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-3">SKUs vinculados ({mfrDetail.skus?.length || 0})</p>
                       {(mfrDetail.skus || []).length === 0
-                        ? <p className="text-sm text-slate-400 text-center py-6">Sin SKUs vinculados a este fabricante.</p>
+                        ? <p className="text-sm text-slate-500 text-center py-6">Sin SKUs vinculados a este fabricante.</p>
                         : <table className="w-full text-left text-xs">
                             <thead className="bg-slate-50"><tr>
-                              <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase">SKU</th>
-                              <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase">Descripción</th>
-                              <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase">Cód. fab.</th>
-                              <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase">Marca</th>
-                              <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase text-right">Stock</th>
+                              <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase">SKU</th>
+                              <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase">Descripción</th>
+                              <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase">Cód. fab.</th>
+                              <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase">Marca</th>
+                              <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase text-right">Stock</th>
                             </tr></thead>
                             <tbody className="divide-y divide-slate-100">
                               {mfrDetail.skus.map(s => (
@@ -8686,7 +8685,7 @@ export default function App() {
           {activeTab === 'waves' && (
             <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Layers className="w-7 h-7 mr-3 text-cyan-600"/> Olas de Picking</h2>
+                <h2 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center"><Layers className="w-7 h-7 mr-3 text-cyan-600"/> Olas de Picking</h2>
                 <button onClick={async()=>{const r=await apiFetch(`${host}/api/pick-waves/available-lines`);if(r.ok){setWaveAvailLines(await r.json());setWaveView('new');}else showMsg('⛔ Error al cargar líneas',true);}} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-colors">
                   {waveView==='new'?null:<><Plus size={14}/> Nueva Ola</>}
                   {waveView==='new'&&<><X size={14}/> Cancelar</>}
@@ -8695,14 +8694,14 @@ export default function App() {
 
               {waveView==='new' && (
                 <div className="bg-white rounded-2xl border-2 border-cyan-200 shadow-sm p-6 space-y-5">
-                  <h3 className="font-black text-slate-800 uppercase tracking-tighter">Crear Nueva Ola</h3>
+                  <h3 className="font-black text-slate-800 tracking-tighter">Crear Nueva Ola</h3>
                   <div className="grid grid-cols-3 gap-4">
                     <div className="col-span-2">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Nombre Ola *</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Nombre Ola *</label>
                       <input value={waveForm.name} onChange={e=>setWaveForm({...waveForm,name:e.target.value})} placeholder="Ej: OLA-MAÑANA-01" className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 mt-1 uppercase"/>
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estrategia</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Estrategia</label>
                       <select value={waveForm.strategy} onChange={e=>setWaveForm({...waveForm,strategy:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 bg-white mt-1">
                         <option value="FIFO">FIFO</option>
                         <option value="FEFO">FEFO</option>
@@ -8711,18 +8710,18 @@ export default function App() {
                     </div>
                   </div>
                   <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Seleccionar Líneas de Picking ({waveLineSelection.size} seleccionadas)</p>
-                    {waveAvailLines.length===0 && <p className="text-slate-400 text-sm">No hay líneas de picking disponibles sin asignar a una ola.</p>}
+                    <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Seleccionar Líneas de Picking ({waveLineSelection.size} seleccionadas)</p>
+                    {waveAvailLines.length===0 && <p className="text-slate-500 text-sm">No hay líneas de picking disponibles sin asignar a una ola.</p>}
                     <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
                       {waveAvailLines.map(ln=>(
                         <label key={ln.line_id} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-slate-200 cursor-pointer hover:bg-cyan-50 transition-colors">
                           <input type="checkbox" checked={waveLineSelection.has(ln.line_id)} onChange={e=>{const s=new Set(waveLineSelection);e.target.checked?s.add(ln.line_id):s.delete(ln.line_id);setWaveLineSelection(s);}} className="w-4 h-4 accent-cyan-600"/>
                           <div className="flex-1">
                             <span className="font-mono font-black text-sm text-slate-800">{ln.sku}</span>
-                            <span className="mx-2 text-slate-400">—</span>
+                            <span className="mx-2 text-slate-500">—</span>
                             <span className="text-xs text-slate-600">{ln.doc_num}</span>
                           </div>
-                          <span className="text-[9px] font-black text-slate-400 uppercase">{ln.module}</span>
+                          <span className="text-[12px] font-black text-slate-500 uppercase">{ln.module}</span>
                         </label>
                       ))}
                     </div>
@@ -8737,15 +8736,15 @@ export default function App() {
               )}
 
               <div className="space-y-3">
-                {waves.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin olas registradas.</div> : waves.map(w=>(
+                {waves.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-500 font-bold">Sin olas registradas.</div> : waves.map(w=>(
                   <div key={w.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-black text-slate-800 text-lg">{w.name}</p>
                         <div className="flex gap-2 mt-1">
-                          <span className={`text-[9px] font-black uppercase px-2 py-1 rounded border ${w.status==='CERRADA'?'bg-slate-100 text-slate-500 border-slate-200':w.status==='LIBERADA'?'bg-blue-50 text-blue-600 border-blue-200':w.status==='EN_PROCESO'?'bg-amber-50 text-amber-600 border-amber-200':'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>{w.status}</span>
-                          <span className="text-[9px] font-black uppercase px-2 py-1 rounded border bg-slate-50 text-slate-500 border-slate-200">{w.strategy}</span>
-                          <span className="text-[9px] font-black text-slate-400">{w.total_lines||0} líneas</span>
+                          <span className={`text-[12px] font-black uppercase px-2 py-1 rounded border ${w.status==='CERRADA'?'bg-slate-100 text-slate-500 border-slate-200':w.status==='LIBERADA'?'bg-blue-50 text-blue-600 border-blue-200':w.status==='EN_PROCESO'?'bg-amber-50 text-amber-600 border-amber-200':'bg-emerald-50 text-emerald-600 border-emerald-200'}`}>{w.status}</span>
+                          <span className="text-[12px] font-black uppercase px-2 py-1 rounded border bg-slate-50 text-slate-500 border-slate-200">{w.strategy}</span>
+                          <span className="text-[12px] font-black text-slate-500">{w.total_lines||0} líneas</span>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -8764,17 +8763,17 @@ export default function App() {
           {/* ═══════════════ DEVOLUCIONES ═══════════════ */}
           {activeTab === 'returns' && (
             <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in">
-              <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><ArrowLeft className="w-7 h-7 mr-3 text-cyan-600"/> Gestión de Devoluciones</h2>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center"><ArrowLeft className="w-7 h-7 mr-3 text-cyan-600"/> Gestión de Devoluciones</h2>
 
               {returnInspectId ? (
                 <div className="bg-white rounded-2xl border-2 border-amber-200 shadow-sm p-6 space-y-5">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-black text-slate-800 uppercase">Inspeccionar Devolución #{returnInspectId}</h3>
-                    <button onClick={()=>setReturnInspectId(null)} className="text-slate-400 hover:text-slate-600"><X size={18}/></button>
+                    <h3 className="font-black text-slate-800">Inspeccionar Devolución #{returnInspectId}</h3>
+                    <button onClick={()=>setReturnInspectId(null)} className="text-slate-500 hover:text-slate-600"><X size={18}/></button>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Disposición</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Disposición</label>
                       <select value={returnInspectForm.disposition} onChange={e=>setReturnInspectForm({...returnInspectForm,disposition:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-amber-400 bg-white mt-1">
                         <option value="RESTOCK">RESTOCK — Devolver a stock</option>
                         <option value="SCRAP">SCRAP — Dar de baja</option>
@@ -8782,17 +8781,17 @@ export default function App() {
                       </select>
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cantidad Aceptada</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Cantidad Aceptada</label>
                       <input type="number" min="0" value={returnInspectForm.qty_accepted} onChange={e=>setReturnInspectForm({...returnInspectForm,qty_accepted:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-amber-400 mt-1 text-center"/>
                     </div>
                     {returnInspectForm.disposition==='RESTOCK' && (
                       <div className="col-span-2">
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ubicación Destino (RESTOCK)</label>
+                        <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Ubicación Destino (RESTOCK)</label>
                         <LocPicker value={returnInspectForm.location_to} onChange={v=>setReturnInspectForm({...returnInspectForm,location_to:v})} safeLocs={locations}/>
                       </div>
                     )}
                     <div className="col-span-2">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Notas de Condición</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Notas de Condición</label>
                       <textarea value={returnInspectForm.condition_notes} onChange={e=>setReturnInspectForm({...returnInspectForm,condition_notes:e.target.value})} rows={3} placeholder="Describir estado del producto..." className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-amber-400 mt-1 resize-none"/>
                     </div>
                   </div>
@@ -8805,13 +8804,13 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {returns.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin devoluciones registradas.</div> : returns.map(r=>(
+                  {returns.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-500 font-bold">Sin devoluciones registradas.</div> : returns.map(r=>(
                     <div key={r.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex items-start justify-between">
                       <div>
                         <p className="font-black text-slate-800">{r.original_doc_num || `RET-${r.id}`}</p>
                         <p className="text-xs text-slate-500">{is3PLMode ? `Cliente: ${r.client_name||r.client_id} — ` : ''}SKU: {r.sku} — Qty: {r.qty_returned}</p>
-                        <p className="text-xs text-slate-400">Motivo: {r.return_reason}</p>
-                        <span className={`mt-2 inline-block text-[9px] font-black uppercase px-2 py-1 rounded border ${r.inspection_status==='INSPECCIONADO'?'bg-emerald-50 text-emerald-600 border-emerald-200':'bg-amber-50 text-amber-600 border-amber-200'}`}>{r.inspection_status||'PENDIENTE'}</span>
+                        <p className="text-xs text-slate-500">Motivo: {r.return_reason}</p>
+                        <span className={`mt-2 inline-block text-[12px] font-black uppercase px-2 py-1 rounded border ${r.inspection_status==='INSPECCIONADO'?'bg-emerald-50 text-emerald-600 border-emerald-200':'bg-amber-50 text-amber-600 border-amber-200'}`}>{r.inspection_status||'PENDIENTE'}</span>
                       </div>
                       {r.inspection_status !== 'INSPECCIONADO' && (
                         <button onClick={()=>{setReturnInspectId(r.id);setReturnInspectForm({disposition:'RESTOCK',condition_notes:'',qty_accepted:r.qty_returned,location_to:'PISO-RECEPCION'});}} className="text-xs bg-amber-50 hover:bg-amber-100 text-amber-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"><ClipboardCheck size={12}/> Inspeccionar</button>
@@ -8827,18 +8826,18 @@ export default function App() {
           {activeTab === 'insumos' && (
             <div className="max-w-6xl mx-auto space-y-6 animate-in fade-in">
               <div className="flex items-center justify-between flex-wrap gap-3">
-                <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><Layers className="text-orange-500"/> Insumos de Bodega</h1>
-                <span className="text-[10px] font-bold text-slate-400 uppercase">Materiales propios de la bodega · globales (no por cliente)</span>
+                <h1 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center gap-2"><Layers className="text-orange-500"/> Insumos de Bodega</h1>
+                <span className="text-[12px] font-bold text-slate-500 uppercase">Materiales propios de la bodega · globales (no por cliente)</span>
               </div>
               {/* Sub-pestañas (Materiales; las demás se agregan en fases siguientes) */}
               <div className="flex bg-slate-100 rounded-2xl p-1 gap-1 w-fit">
                 {[{id:'materiales',label:'Materiales'}, ...(canConsumeInsumos ? [{id:'asociar',label:'Asociar consumo'}] : []), {id:'analisis',label:'Análisis'}, {id:'reportes',label:'Reportes'}].map(t => (
-                  <button key={t.id} onClick={()=>setInsumosTab(t.id)} className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${insumosTab===t.id ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}>{t.label}{t.id==='materiales' && lowStockInsumos.length>0 && <span className="ml-1.5 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full">{lowStockInsumos.length}</span>}</button>
+                  <button key={t.id} onClick={()=>setInsumosTab(t.id)} className={`px-4 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest transition-all ${insumosTab===t.id ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}>{t.label}{t.id==='materiales' && lowStockInsumos.length>0 && <span className="ml-1.5 bg-red-500 text-white text-[11px] px-1.5 py-0.5 rounded-full">{lowStockInsumos.length}</span>}</button>
                 ))}
               </div>
               {/* Alerta de stock bajo */}
               {lowStockInsumos.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[11px] font-bold text-red-700">
+                <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-[13px] font-bold text-red-700">
                   <AlertTriangle size={14} className="shrink-0"/>
                   <span>{lowStockInsumos.length} insumo(s) bajo el mínimo: {lowStockInsumos.slice(0,5).map(i=>i.codigo).join(', ')}{lowStockInsumos.length>5?'…':''}</span>
                 </div>
@@ -8849,26 +8848,26 @@ export default function App() {
                   {/* Formulario (solo JEFE+) */}
                   {canManageInsumos && (
                     <div className="lg:col-span-1 bg-white rounded-3xl border border-slate-200 shadow-sm p-6 h-fit">
-                      <h3 className="text-sm font-black text-slate-700 uppercase tracking-tighter border-b border-slate-100 pb-3 mb-4">{isEditingInsumo ? 'Editar material' : 'Nuevo material'}</h3>
+                      <h3 className="text-sm font-black text-slate-700 tracking-tighter border-b border-slate-100 pb-3 mb-4">{isEditingInsumo ? 'Editar material' : 'Nuevo material'}</h3>
                       <form onSubmit={handleSaveInsumo} className="space-y-3">
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Código *</label><input type="text" value={insumoForm.codigo} onChange={e=>setInsumoForm({...insumoForm,codigo:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 uppercase" placeholder="EJ: CAJA-M"/></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Nombre *</label><input type="text" value={insumoForm.nombre} onChange={e=>setInsumoForm({...insumoForm,nombre:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="Caja mediana"/></div>
+                        <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Código *</label><input type="text" value={insumoForm.codigo} onChange={e=>setInsumoForm({...insumoForm,codigo:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 uppercase" placeholder="EJ: CAJA-M"/></div>
+                        <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Nombre *</label><input type="text" value={insumoForm.nombre} onChange={e=>setInsumoForm({...insumoForm,nombre:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="Caja mediana"/></div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Categoría</label>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Categoría</label>
                             <select value={insumoForm.categoria} onChange={e=>setInsumoForm({...insumoForm,categoria:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
                               {['embalaje','etiquetado','pallets','epp','otros'].map(c=><option key={c} value={c}>{c}</option>)}
                             </select>
                           </div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Unidad</label><input type="text" value={insumoForm.unidad} onChange={e=>setInsumoForm({...insumoForm,unidad:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 uppercase" placeholder="UN"/></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Unidad</label><input type="text" value={insumoForm.unidad} onChange={e=>setInsumoForm({...insumoForm,unidad:e.target.value.toUpperCase()})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 uppercase" placeholder="UN"/></div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Costo unit.</label><input type="number" min="0" step="0.01" value={insumoForm.costo_unitario} onChange={e=>setInsumoForm({...insumoForm,costo_unitario:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
-                          <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Stock mínimo</label><input type="number" min="0" step="0.001" value={insumoForm.stock_minimo} onChange={e=>setInsumoForm({...insumoForm,stock_minimo:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Costo unit.</label><input type="number" min="0" step="0.01" value={insumoForm.costo_unitario} onChange={e=>setInsumoForm({...insumoForm,costo_unitario:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
+                          <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Stock mínimo</label><input type="number" min="0" step="0.001" value={insumoForm.stock_minimo} onChange={e=>setInsumoForm({...insumoForm,stock_minimo:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="0"/></div>
                         </div>
-                        <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Tiempo de reposición (días) <span className="text-slate-300 normal-case">· opcional</span></label><input type="number" min="0" step="1" value={insumoForm.lead_time_dias} onChange={e=>setInsumoForm({...insumoForm,lead_time_dias:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="Ej: 7"/></div>
+                        <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Tiempo de reposición (días) <span className="text-slate-300 normal-case">· opcional</span></label><input type="number" min="0" step="1" value={insumoForm.lead_time_dias} onChange={e=>setInsumoForm({...insumoForm,lead_time_dias:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500" placeholder="Ej: 7"/></div>
                         <div className="flex gap-2 pt-2">
-                          <button type="submit" disabled={isSavingInsumo} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isSavingInsumo ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}{isEditingInsumo ? 'Guardar' : 'Crear'}</button>
-                          {isEditingInsumo && <button type="button" onClick={()=>{setIsEditingInsumo(false);setInsumoForm({codigo:'',nombre:'',categoria:'embalaje',unidad:'UN',costo_unitario:'',stock_minimo:'',lead_time_dias:''});}} className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black px-4 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>}
+                          <button type="submit" disabled={isSavingInsumo} className="flex-1 bg-orange-500 hover:bg-orange-600 text-white font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isSavingInsumo ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>}{isEditingInsumo ? 'Guardar' : 'Crear'}</button>
+                          {isEditingInsumo && <button type="button" onClick={()=>{setIsEditingInsumo(false);setInsumoForm({codigo:'',nombre:'',categoria:'embalaje',unidad:'UN',costo_unitario:'',stock_minimo:'',lead_time_dias:''});}} className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-black px-4 rounded-2xl uppercase text-[12px] tracking-widest">Cancelar</button>}
                         </div>
                       </form>
                     </div>
@@ -8876,41 +8875,41 @@ export default function App() {
                   {/* Tabla del maestro */}
                   <div className={`${canManageInsumos ? 'lg:col-span-2' : 'lg:col-span-3'} bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden`}>
                     <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
-                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Maestro de materiales ({insumos.length})</h3>
-                      {!canManageInsumos && <span className="text-[9px] font-bold text-slate-400 uppercase">Solo lectura</span>}
+                      <h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Maestro de materiales ({insumos.length})</h3>
+                      {!canManageInsumos && <span className="text-[12px] font-bold text-slate-500 uppercase">Solo lectura</span>}
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-left">
                         <thead className="bg-slate-100 border-b border-slate-200"><tr>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Código / Nombre</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Categoría</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Mínimo</th>
-                          <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-right">Costo</th>
-                          {(canManageInsumos || canConsumeInsumos) && <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Acciones</th>}
+                          <th className="p-3 text-[12px] font-black text-slate-500 uppercase pl-5">Código / Nombre</th>
+                          <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Categoría</th>
+                          <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Stock</th>
+                          <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Mínimo</th>
+                          <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-right">Costo</th>
+                          {(canManageInsumos || canConsumeInsumos) && <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Acciones</th>}
                         </tr></thead>
                         <tbody className="divide-y divide-slate-100">
                           {insumos.map(i => {
                             const low = parseFloat(i.stock_actual) < parseFloat(i.stock_minimo);
                             return (
                               <tr key={i.id} className={`${!i.activo ? 'opacity-50' : ''} ${low && i.activo ? 'bg-amber-50' : 'hover:bg-slate-50'}`}>
-                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{i.codigo}{!i.activo && <span className="ml-2 text-[8px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded uppercase">Inactivo</span>}</p><p className="text-[10px] text-slate-500">{i.nombre}</p></td>
-                                <td className="p-3 text-[10px] font-bold text-slate-500 uppercase">{i.categoria}</td>
-                                <td className="p-3 text-center"><span className={`text-sm font-black ${low ? 'text-amber-600' : 'text-slate-700'}`}>{parseFloat(i.stock_actual)}</span> <span className="text-[9px] text-slate-400">{i.unidad}</span>{low && i.activo && <p className="text-[8px] font-black text-amber-600 uppercase">⚠ Bajo mínimo</p>}</td>
-                                <td className="p-3 text-center text-[10px] font-bold text-slate-500">{parseFloat(i.stock_minimo)}</td>
-                                <td className="p-3 text-right text-[10px] font-bold text-slate-500">${Number(i.costo_unitario||0).toLocaleString('es-CL')}</td>
+                                <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{i.codigo}{!i.activo && <span className="ml-2 text-[11px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded uppercase">Inactivo</span>}</p><p className="text-[12px] text-slate-500">{i.nombre}</p></td>
+                                <td className="p-3 text-[12px] font-bold text-slate-500 uppercase">{i.categoria}</td>
+                                <td className="p-3 text-center"><span className={`text-sm font-black ${low ? 'text-amber-600' : 'text-slate-700'}`}>{parseFloat(i.stock_actual)}</span> <span className="text-[12px] text-slate-500">{i.unidad}</span>{low && i.activo && <p className="text-[11px] font-black text-amber-600 uppercase">⚠ Bajo mínimo</p>}</td>
+                                <td className="p-3 text-center text-[12px] font-bold text-slate-500">{parseFloat(i.stock_minimo)}</td>
+                                <td className="p-3 text-right text-[12px] font-bold text-slate-500">${Number(i.costo_unitario||0).toLocaleString('es-CL')}</td>
                                 {(canManageInsumos || canConsumeInsumos) && <td className="p-3 text-center whitespace-nowrap">
                                   {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'entrada'});setInsumoMoveQty('');setInsumoMoveFecha('');}} className="text-emerald-500 hover:text-emerald-700 mr-2 font-black text-sm" title="Entrada (+)">＋</button>}
                                   {i.activo && canConsumeInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'consumo'});setInsumoMoveQty('');}} className="text-amber-500 hover:text-amber-700 mr-2 font-black text-sm" title="Consumo (−)">－</button>}
-                                  {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'ajuste'});setInsumoMoveQty(String(parseFloat(i.stock_actual)));}} className="text-slate-400 hover:text-cyan-600 mr-2" title="Ajustar (recuento)"><Sliders size={14}/></button>}
-                                  <button onClick={()=>loadHistorial(i)} className="text-slate-400 hover:text-orange-600 mr-2" title="Histórico de movimientos"><History size={15}/></button>
-                                  {canManageInsumos && <button onClick={()=>handleEditInsumo(i)} className="text-slate-400 hover:text-indigo-600 mr-2" title="Editar"><Pencil size={15}/></button>}
-                                  {canManageInsumos && <button onClick={()=>handleToggleInsumo(i)} className={`${i.activo ? 'text-slate-400 hover:text-red-500' : 'text-emerald-500 hover:text-emerald-700'}`} title={i.activo ? 'Desactivar' : 'Reactivar'}>{i.activo ? <Trash2 size={15}/> : <RefreshCcw size={15}/>}</button>}
+                                  {i.activo && canManageInsumos && <button onClick={()=>{setInsumoMove({insumo:i,tipo:'ajuste'});setInsumoMoveQty(String(parseFloat(i.stock_actual)));}} className="text-slate-500 hover:text-cyan-600 mr-2" title="Ajustar (recuento)"><Sliders size={14}/></button>}
+                                  <button onClick={()=>loadHistorial(i)} className="text-slate-500 hover:text-orange-600 mr-2" title="Histórico de movimientos"><History size={15}/></button>
+                                  {canManageInsumos && <button onClick={()=>handleEditInsumo(i)} className="text-slate-500 hover:text-indigo-600 mr-2" title="Editar"><Pencil size={15}/></button>}
+                                  {canManageInsumos && <button onClick={()=>handleToggleInsumo(i)} className={`${i.activo ? 'text-slate-500 hover:text-red-500' : 'text-emerald-500 hover:text-emerald-700'}`} title={i.activo ? 'Desactivar' : 'Reactivar'}>{i.activo ? <Trash2 size={15}/> : <RefreshCcw size={15}/>}</button>}
                                 </td>}
                               </tr>
                             );
                           })}
-                          {insumos.length === 0 && <tr><td colSpan={canManageInsumos ? 6 : 5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">No hay insumos registrados</td></tr>}
+                          {insumos.length === 0 && <tr><td colSpan={canManageInsumos ? 6 : 5} className="p-10 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">No hay insumos registrados</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -8923,43 +8922,43 @@ export default function App() {
                   {/* Buscador de documentos confirmados */}
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-end gap-3">
                     <div className="flex-1 min-w-[200px] space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Buscar por número o cliente</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Buscar por número o cliente</label>
                       <input type="text" value={docSearch.q} onChange={e=>setDocSearch({...docSearch,q:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')searchInsumoDocs();}} placeholder="Ej: DSP-0142 o nombre de cliente" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500"/>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Tipo</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Tipo</label>
                       <select value={docSearch.tipo} onChange={e=>setDocSearch({...docSearch,tipo:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
                         <option value="">Todos</option>
                         <option value="dispatch">Despacho</option>
                         <option value="receive">Recepción</option>
                       </select>
                     </div>
-                    <button onClick={searchInsumoDocs} disabled={docSearching} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{docSearching ? <Loader2 size={14} className="animate-spin"/> : <Search size={14}/>} Buscar</button>
+                    <button onClick={searchInsumoDocs} disabled={docSearching} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[12px] tracking-widest disabled:opacity-50 flex items-center gap-2">{docSearching ? <Loader2 size={14} className="animate-spin"/> : <Search size={14}/>} Buscar</button>
                   </div>
 
                   {/* Resultados */}
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-                    <div className="bg-slate-50 border-b border-slate-200 p-4"><h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Documentos confirmados ({docResults.length})</h3></div>
+                    <div className="bg-slate-50 border-b border-slate-200 p-4"><h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Documentos confirmados ({docResults.length})</h3></div>
                     <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
                       {docResults.map(d => {
                         const isSel = selectedDoc?.id === d.id;
                         return (
                           <button key={d.id} onClick={()=>setSelectedDoc(d)} className={`w-full text-left p-4 flex items-center justify-between gap-3 transition-colors ${isSel ? 'bg-orange-50' : 'hover:bg-slate-50'}`}>
                             <div className="flex items-center gap-3">
-                              <span className={`text-[8px] font-black px-2 py-1 rounded uppercase ${d.module==='dispatch' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>{d.module==='dispatch'?'Despacho':'Recepción'}</span>
+                              <span className={`text-[11px] font-black px-2 py-1 rounded uppercase ${d.module==='dispatch' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>{d.module==='dispatch'?'Despacho':'Recepción'}</span>
                               <div>
                                 <p className="text-xs font-black text-slate-800">[{d.doc_type}] {d.doc_num}</p>
-                                <p className="text-[10px] text-slate-500"><Building2 size={9} className="inline mr-1"/>{d.client_name} · {new Date(d.created_at).toLocaleDateString('es-CL')}</p>
+                                <p className="text-[12px] text-slate-500"><Building2 size={9} className="inline mr-1"/>{d.client_name} · {new Date(d.created_at).toLocaleDateString('es-CL')}</p>
                               </div>
                             </div>
                             <div className="flex items-center gap-2">
-                              <span className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase">{d.status}</span>
+                              <span className="text-[11px] font-black bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded uppercase">{d.status}</span>
                               {isSel && <CheckCircle2 size={16} className="text-orange-500"/>}
                             </div>
                           </button>
                         );
                       })}
-                      {docResults.length === 0 && <div className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">{docSearching ? 'Buscando…' : 'Busca un despacho o recepción confirmado'}</div>}
+                      {docResults.length === 0 && <div className="p-10 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">{docSearching ? 'Buscando…' : 'Busca un despacho o recepción confirmado'}</div>}
                     </div>
                   </div>
 
@@ -8973,17 +8972,17 @@ export default function App() {
                       {canConsumeInsumos && (
                         <div className="p-4 flex flex-wrap items-end gap-3 border-b border-slate-100">
                           <div className="flex-1 min-w-[200px] space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase">Insumo</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Insumo</label>
                             <select value={docInsumoLine.insumo_id} onChange={e=>setDocInsumoLine({...docInsumoLine,insumo_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
                               <option value="">-- Seleccionar insumo --</option>
                               {insumos.filter(i=>i.activo).map(i=><option key={i.id} value={i.id}>{i.codigo} — {i.nombre} (stock {parseFloat(i.stock_actual)} {i.unidad})</option>)}
                             </select>
                           </div>
                           <div className="w-28 space-y-1">
-                            <label className="text-[10px] font-black text-slate-400 uppercase">Cantidad</label>
+                            <label className="text-[12px] font-black text-slate-500 uppercase">Cantidad</label>
                             <input type="number" min="0.001" step="0.001" value={docInsumoLine.cantidad} onChange={e=>setDocInsumoLine({...docInsumoLine,cantidad:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')addDocInsumo();}} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-black text-center outline-none focus:border-orange-500"/>
                           </div>
-                          <button onClick={addDocInsumo} disabled={savingDocInsumo} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{savingDocInsumo ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} Registrar</button>
+                          <button onClick={addDocInsumo} disabled={savingDocInsumo} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[12px] tracking-widest disabled:opacity-50 flex items-center gap-2">{savingDocInsumo ? <Loader2 size={14} className="animate-spin"/> : <Plus size={14}/>} Registrar</button>
                         </div>
                       )}
                       <div className="divide-y divide-slate-100">
@@ -8991,7 +8990,7 @@ export default function App() {
                           <div key={l.id} className="p-3 px-4 flex items-center justify-between hover:bg-slate-50">
                             <div>
                               <p className="text-xs font-black text-slate-800">{l.codigo} — {l.nombre}</p>
-                              <p className="text-[10px] text-slate-500">{new Date(l.fecha).toLocaleString('es-CL')} · {l.usuario} · costo ${Number((l.costo_unitario||0)*parseFloat(l.cantidad)).toLocaleString('es-CL')}</p>
+                              <p className="text-[12px] text-slate-500">{new Date(l.fecha).toLocaleString('es-CL')} · {l.usuario} · costo ${Number((l.costo_unitario||0)*parseFloat(l.cantidad)).toLocaleString('es-CL')}</p>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-black text-amber-600">−{parseFloat(l.cantidad)} {l.unidad}</span>
@@ -8999,7 +8998,7 @@ export default function App() {
                             </div>
                           </div>
                         ))}
-                        {docInsumos.length === 0 && <div className="p-8 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin insumos asociados a este documento</div>}
+                        {docInsumos.length === 0 && <div className="p-8 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">Sin insumos asociados a este documento</div>}
                       </div>
                     </div>
                   )}
@@ -9011,43 +9010,43 @@ export default function App() {
                   {/* Controles: período + cliente */}
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-end gap-3">
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Período</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Período</label>
                       <select value={anDias} onChange={e=>setAnDias(parseInt(e.target.value))} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
                         {[30,60,90].map(d=><option key={d} value={d}>Últimos {d} días</option>)}
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] font-black text-slate-400 uppercase">Cliente</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase">Cliente</label>
                       <select value={anClient} onChange={e=>setAnClient(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white min-w-[180px]">
                         <option value="">Todos los clientes</option>
                         {permittedClients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                     </div>
-                    <button onClick={loadAnalisis} disabled={anLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{anLoading ? <Loader2 size={14} className="animate-spin"/> : <BarChart3 size={14}/>} Analizar</button>
-                    {anData?.items?.length > 0 && <button onClick={exportAnalisis} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
-                    <span className="text-[10px] font-bold text-slate-400 ml-auto self-center">Vista de solo lectura · basada en consumos registrados</span>
+                    <button onClick={loadAnalisis} disabled={anLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[12px] tracking-widest disabled:opacity-50 flex items-center gap-2">{anLoading ? <Loader2 size={14} className="animate-spin"/> : <BarChart3 size={14}/>} Analizar</button>
+                    {anData?.items?.length > 0 && <button onClick={exportAnalisis} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2.5 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
+                    <span className="text-[12px] font-bold text-slate-500 ml-auto self-center">Vista de solo lectura · basada en consumos registrados</span>
                   </div>
 
-                  {!anData && <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">{anLoading ? 'Analizando…' : 'Selecciona período y cliente, luego pulsa Analizar'}</div>}
+                  {!anData && <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-10 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">{anLoading ? 'Analizando…' : 'Selecciona período y cliente, luego pulsa Analizar'}</div>}
 
                   {anData && (<>
                     {/* KPIs */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">En riesgo de quiebre</p>
+                        <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">En riesgo de quiebre</p>
                         <p className={`text-3xl font-black mt-1 ${anData.kpis.en_riesgo>0?'text-red-600':'text-emerald-600'}`}>{anData.kpis.en_riesgo}</p>
-                        <p className="text-[10px] font-bold text-slate-400 mt-1">crítico + por quebrar</p>
+                        <p className="text-[12px] font-bold text-slate-500 mt-1">crítico + por quebrar</p>
                       </div>
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Consumo del período</p>
+                        <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Consumo del período</p>
                         <p className="text-3xl font-black mt-1 text-slate-800">{Math.round(parseFloat(anData.kpis.consumo_total_periodo)).toLocaleString('es-CL')}</p>
-                        <p className="text-[10px] font-bold text-slate-400 mt-1">unidades · últimos {anData.periodo.dias} días</p>
+                        <p className="text-[12px] font-bold text-slate-500 mt-1">unidades · últimos {anData.periodo.dias} días</p>
                       </div>
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Más consumido</p>
+                        <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Más consumido</p>
                         {anData.kpis.insumo_mas_consumido ? (<>
                           <p className="text-base font-black mt-1 text-slate-800 truncate">{anData.kpis.insumo_mas_consumido.codigo}</p>
-                          <p className="text-[10px] font-bold text-slate-400 mt-1 truncate">{anData.kpis.insumo_mas_consumido.nombre} · {parseFloat(anData.kpis.insumo_mas_consumido.consumo_total_periodo)} {anData.kpis.insumo_mas_consumido.unidad}</p>
+                          <p className="text-[12px] font-bold text-slate-500 mt-1 truncate">{anData.kpis.insumo_mas_consumido.nombre} · {parseFloat(anData.kpis.insumo_mas_consumido.consumo_total_periodo)} {anData.kpis.insumo_mas_consumido.unidad}</p>
                         </>) : <p className="text-base font-black mt-1 text-slate-300">— sin consumo —</p>}
                       </div>
                     </div>
@@ -9055,18 +9054,18 @@ export default function App() {
                     {/* Tabla por insumo */}
                     <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                       <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
-                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Análisis por insumo ({anData.items.length})</h3>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase">Click en una fila para ver consumo por cliente</span>
+                        <h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Análisis por insumo ({anData.items.length})</h3>
+                        <span className="text-[12px] font-bold text-slate-500 uppercase">Click en una fila para ver consumo por cliente</span>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="w-full text-left">
                           <thead className="bg-slate-100 border-b border-slate-200"><tr>
-                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Insumo</th>
-                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
-                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Prom./día</th>
-                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Días cobertura</th>
-                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Quiebre estimado</th>
-                            <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center pr-5">Estado</th>
+                            <th className="p-3 text-[12px] font-black text-slate-500 uppercase pl-5">Insumo</th>
+                            <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Stock</th>
+                            <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Prom./día</th>
+                            <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Días cobertura</th>
+                            <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Quiebre estimado</th>
+                            <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center pr-5">Estado</th>
                           </tr></thead>
                           <tbody className="divide-y divide-slate-100">
                             {anData.items.map(i => {
@@ -9074,16 +9073,16 @@ export default function App() {
                               const sel = anSelected?.id === i.id;
                               return (
                                 <tr key={i.id} onClick={()=>loadAnalisisClientes(i)} className={`cursor-pointer ${sel?'bg-orange-50':'hover:bg-slate-50'}`}>
-                                  <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{i.codigo}</p><p className="text-[10px] text-slate-500">{i.nombre}</p></td>
-                                  <td className="p-3 text-center text-sm font-black text-slate-700">{parseFloat(i.stock_actual)} <span className="text-[9px] text-slate-400">{i.unidad}</span></td>
+                                  <td className="p-3 pl-5"><p className="text-xs font-black text-slate-800">{i.codigo}</p><p className="text-[12px] text-slate-500">{i.nombre}</p></td>
+                                  <td className="p-3 text-center text-sm font-black text-slate-700">{parseFloat(i.stock_actual)} <span className="text-[12px] text-slate-500">{i.unidad}</span></td>
                                   <td className="p-3 text-center text-xs font-bold text-slate-600">{parseFloat(i.consumo_prom_diario)}</td>
                                   <td className="p-3 text-center text-xs font-black text-slate-700">{i.dias_cobertura != null ? `${parseFloat(i.dias_cobertura)} d` : <span className="text-slate-300">∞ sin consumo</span>}</td>
-                                  <td className="p-3 text-center text-[11px] font-bold text-slate-600">{i.quiebre_estimado ? String(i.quiebre_estimado).slice(0,10) : <span className="text-slate-300">—</span>}</td>
-                                  <td className="p-3 text-center pr-5"><span className={`inline-flex items-center gap-1.5 text-[9px] font-black uppercase px-2 py-1 rounded-full border ${est.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${est.dot}`}/>{est.label}</span></td>
+                                  <td className="p-3 text-center text-[13px] font-bold text-slate-600">{i.quiebre_estimado ? String(i.quiebre_estimado).slice(0,10) : <span className="text-slate-300">—</span>}</td>
+                                  <td className="p-3 text-center pr-5"><span className={`inline-flex items-center gap-1.5 text-[12px] font-black uppercase px-2 py-1 rounded-full border ${est.badge}`}><span className={`w-1.5 h-1.5 rounded-full ${est.dot}`}/>{est.label}</span></td>
                                 </tr>
                               );
                             })}
-                            {anData.items.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin insumos activos para analizar</td></tr>}
+                            {anData.items.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">Sin insumos activos para analizar</td></tr>}
                           </tbody>
                         </table>
                       </div>
@@ -9093,25 +9092,25 @@ export default function App() {
                     {anSelected && (
                       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                         <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
-                          <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Consumo por cliente · {anSelected.codigo} — {anSelected.nombre}</h3>
-                          <button onClick={()=>{setAnSelected(null);setAnClientes([]);}} className="text-slate-400 hover:text-slate-700"><X size={16}/></button>
+                          <h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Consumo por cliente · {anSelected.codigo} — {anSelected.nombre}</h3>
+                          <button onClick={()=>{setAnSelected(null);setAnClientes([]);}} className="text-slate-500 hover:text-slate-700"><X size={16}/></button>
                         </div>
                         <div className="p-4">
-                          {anClientesLoading ? <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest py-6">Cargando…</p>
-                          : anClientes.length === 0 ? <p className="text-center text-slate-400 text-xs font-bold uppercase tracking-widest py-6">Sin consumo de este insumo en el período</p>
+                          {anClientesLoading ? <p className="text-center text-slate-500 text-xs font-bold uppercase tracking-widest py-6">Cargando…</p>
+                          : anClientes.length === 0 ? <p className="text-center text-slate-500 text-xs font-bold uppercase tracking-widest py-6">Sin consumo de este insumo en el período</p>
                           : (() => {
                               const max = Math.max(...anClientes.map(c=>parseFloat(c.consumo_total)||0), 1);
                               return (
                                 <div className="space-y-2">
                                   {anClientes.map((c,idx) => (
                                     <div key={(c.client_id||'null')+idx} className="flex items-center gap-3">
-                                      <span className="text-[11px] font-bold text-slate-600 w-40 truncate shrink-0">{c.client_name}</span>
+                                      <span className="text-[13px] font-bold text-slate-600 w-40 truncate shrink-0">{c.client_name}</span>
                                       <div className="flex-1 bg-slate-100 rounded-full h-5 overflow-hidden">
                                         <div className="bg-orange-400 h-5 rounded-full flex items-center justify-end pr-2" style={{ width: `${Math.max((parseFloat(c.consumo_total)/max)*100, 6)}%` }}>
-                                          <span className="text-[10px] font-black text-white">{parseFloat(c.consumo_total)}</span>
+                                          <span className="text-[12px] font-black text-white">{parseFloat(c.consumo_total)}</span>
                                         </div>
                                       </div>
-                                      <span className="text-[10px] font-bold text-slate-400 w-20 text-right shrink-0">${Math.round(parseFloat(c.costo)||0).toLocaleString('es-CL')}</span>
+                                      <span className="text-[12px] font-bold text-slate-500 w-20 text-right shrink-0">${Math.round(parseFloat(c.costo)||0).toLocaleString('es-CL')}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -9127,28 +9126,28 @@ export default function App() {
               {insumosTab === 'reportes' && (
                 <div className="space-y-4">
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 flex flex-wrap items-end gap-3">
-                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Desde</label><input type="date" value={repRange.from} onChange={e=>setRepRange({...repRange,from:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white"/></div>
-                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Hasta</label><input type="date" value={repRange.to} onChange={e=>setRepRange({...repRange,to:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white"/></div>
-                    <div className="space-y-1"><label className="text-[10px] font-black text-slate-400 uppercase">Agrupar por</label>
+                    <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Desde</label><input type="date" value={repRange.from} onChange={e=>setRepRange({...repRange,from:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white"/></div>
+                    <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Hasta</label><input type="date" value={repRange.to} onChange={e=>setRepRange({...repRange,to:e.target.value})} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white"/></div>
+                    <div className="space-y-1"><label className="text-[12px] font-black text-slate-500 uppercase">Agrupar por</label>
                       <select value={repGroup} onChange={e=>setRepGroup(e.target.value)} className="border-2 border-slate-200 rounded-xl px-3 py-2 text-sm font-bold outline-none focus:border-orange-500 bg-white">
                         <option value="insumo">Insumo</option>
                         <option value="cliente">Cliente</option>
                         <option value="documento">Documento</option>
                       </select>
                     </div>
-                    <button onClick={loadInsumoReport} disabled={repLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center gap-2">{repLoading ? <Loader2 size={14} className="animate-spin"/> : <BarChart3 size={14}/>} Generar</button>
-                    {repGrouped.length > 0 && <button onClick={exportInsumoReport} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2.5 rounded-xl text-[10px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
+                    <button onClick={loadInsumoReport} disabled={repLoading} className="bg-orange-500 hover:bg-orange-600 text-white font-black px-5 py-2.5 rounded-xl uppercase text-[12px] tracking-widest disabled:opacity-50 flex items-center gap-2">{repLoading ? <Loader2 size={14} className="animate-spin"/> : <BarChart3 size={14}/>} Generar</button>
+                    {repGrouped.length > 0 && <button onClick={exportInsumoReport} className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 px-3 py-2.5 rounded-xl text-[12px] font-black uppercase flex items-center gap-2"><Download size={12}/> Excel</button>}
                   </div>
                   <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
-                      <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Consumo por {repGroup} ({repGrouped.length})</h3>
-                      <span className="text-[11px] font-black text-slate-700">Total: ${Math.round(repGrouped.reduce((s,g)=>s+g.costo,0)).toLocaleString('es-CL')}</span>
+                      <h3 className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Consumo por {repGroup} ({repGrouped.length})</h3>
+                      <span className="text-[13px] font-black text-slate-700">Total: ${Math.round(repGrouped.reduce((s,g)=>s+g.costo,0)).toLocaleString('es-CL')}</span>
                     </div>
                     <table className="w-full text-left">
                       <thead className="bg-slate-100 border-b border-slate-200"><tr>
-                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">{repGroup==='cliente'?'Cliente':repGroup==='documento'?'Documento':'Insumo'}</th>
-                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cantidad</th>
-                        <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-right pr-5">Costo</th>
+                        <th className="p-3 text-[12px] font-black text-slate-500 uppercase pl-5">{repGroup==='cliente'?'Cliente':repGroup==='documento'?'Documento':'Insumo'}</th>
+                        <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Cantidad</th>
+                        <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-right pr-5">Costo</th>
                       </tr></thead>
                       <tbody className="divide-y divide-slate-100">
                         {repGrouped.map(g => (
@@ -9158,7 +9157,7 @@ export default function App() {
                             <td className="p-3 text-right pr-5 text-xs font-bold text-slate-600">${Math.round(g.costo).toLocaleString('es-CL')}</td>
                           </tr>
                         ))}
-                        {repGrouped.length === 0 && <tr><td colSpan={3} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">{repLoading ? 'Generando…' : 'Selecciona un período y genera el reporte'}</td></tr>}
+                        {repGrouped.length === 0 && <tr><td colSpan={3} className="p-10 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">{repLoading ? 'Generando…' : 'Selecciona un período y genera el reporte'}</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -9180,11 +9179,11 @@ export default function App() {
                       <div className={`text-3xl font-black ${cls.num}`}>{signo}{r.cantidad} <span className="text-sm">{r.insumo.unidad}</span></div>
                       <div>
                         <p className="text-xs font-black text-slate-800 uppercase">{r.tipo} · {r.insumo.codigo} — {r.insumo.nombre}</p>
-                        <p className="text-[11px] font-bold text-slate-500">Stock: <span className="font-mono">{r.stock_antes}</span> → <span className={`font-mono font-black ${cls.strong}`}>{r.stock_despues}</span> {r.insumo.unidad}</p>
-                        {r.fecha && <p className="text-[10px] font-bold text-slate-400 mt-0.5">Ingresado: {new Date(r.fecha).toLocaleDateString('es-CL')}</p>}
+                        <p className="text-[13px] font-bold text-slate-500">Stock: <span className="font-mono">{r.stock_antes}</span> → <span className={`font-mono font-black ${cls.strong}`}>{r.stock_despues}</span> {r.insumo.unidad}</p>
+                        {r.fecha && <p className="text-[12px] font-bold text-slate-500 mt-0.5">Ingresado: {new Date(r.fecha).toLocaleDateString('es-CL')}</p>}
                       </div>
                     </div>
-                    <button onClick={()=>setInsumoMoveResult(null)} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                    <button onClick={()=>setInsumoMoveResult(null)} className="text-slate-500 hover:text-slate-700"><X size={18}/></button>
                   </div>
                 );
               })()}
@@ -9195,22 +9194,22 @@ export default function App() {
           {insumoMove && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4" onClick={()=>setInsumoMove(null)}>
               <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6" onClick={e=>e.stopPropagation()}>
-                <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2">
+                <h3 className="text-base font-black text-slate-800 tracking-tighter flex items-center gap-2">
                   {insumoMove.tipo === 'entrada' ? <span className="text-emerald-600">＋ Entrada</span> : insumoMove.tipo === 'consumo' ? <span className="text-amber-600">－ Consumo</span> : <span className="text-cyan-600">Δ Ajuste (recuento)</span>}
                 </h3>
                 <p className="text-xs font-bold text-slate-500 mt-1">{insumoMove.insumo.codigo} — {insumoMove.insumo.nombre}</p>
-                <p className="text-[11px] text-slate-400 mt-1">Stock actual: <span className="font-mono font-black text-slate-700">{parseFloat(insumoMove.insumo.stock_actual)}</span> {insumoMove.insumo.unidad}</p>
+                <p className="text-[13px] text-slate-500 mt-1">Stock actual: <span className="font-mono font-black text-slate-700">{parseFloat(insumoMove.insumo.stock_actual)}</span> {insumoMove.insumo.unidad}</p>
                 {insumoMove.tipo === 'entrada' && (
                   <div className="mt-4">
-                    <label className="text-[10px] font-black text-slate-400 uppercase block">Fecha de ingreso <span className="text-slate-300 normal-case">· opcional (por defecto hoy)</span></label>
+                    <label className="text-[12px] font-black text-slate-500 uppercase block">Fecha de ingreso <span className="text-slate-300 normal-case">· opcional (por defecto hoy)</span></label>
                     <input type="date" max={new Date().toISOString().slice(0,10)} value={insumoMoveFecha} onChange={e=>setInsumoMoveFecha(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-emerald-500 mt-1"/>
                   </div>
                 )}
-                <label className="text-[10px] font-black text-slate-400 uppercase mt-4 block">{insumoMove.tipo === 'ajuste' ? 'Nueva cantidad (recuento)' : 'Cantidad'}</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase mt-4 block">{insumoMove.tipo === 'ajuste' ? 'Nueva cantidad (recuento)' : 'Cantidad'}</label>
                 <input autoFocus type="number" min="0" step="0.001" value={insumoMoveQty} onChange={e=>setInsumoMoveQty(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')submitInsumoMove();}} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-2xl font-black text-center outline-none focus:border-slate-500 mt-1"/>
                 <div className="flex gap-2 mt-5">
-                  <button onClick={()=>setInsumoMove(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
-                  <button onClick={submitInsumoMove} disabled={isMovingInsumo} className="flex-1 bg-slate-900 hover:bg-black text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isMovingInsumo ? <Loader2 size={14} className="animate-spin"/> : 'Confirmar'}</button>
+                  <button onClick={()=>setInsumoMove(null)} className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest">Cancelar</button>
+                  <button onClick={submitInsumoMove} disabled={isMovingInsumo} className="flex-1 bg-slate-900 hover:bg-black text-white font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest disabled:opacity-50 flex justify-center items-center gap-2">{isMovingInsumo ? <Loader2 size={14} className="animate-spin"/> : 'Confirmar'}</button>
                 </div>
               </div>
             </div>
@@ -9224,36 +9223,36 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <History size={18} className="text-orange-500"/>
                     <div>
-                      <h3 className="text-base font-black text-slate-800 uppercase tracking-tighter">Histórico de movimientos</h3>
-                      <p className="text-[11px] font-bold text-slate-500">{histInsumo.codigo} — {histInsumo.nombre}</p>
+                      <h3 className="text-base font-black text-slate-800 tracking-tighter">Histórico de movimientos</h3>
+                      <p className="text-[13px] font-bold text-slate-500">{histInsumo.codigo} — {histInsumo.nombre}</p>
                     </div>
                   </div>
-                  <button onClick={()=>{setHistInsumo(null);setHistRows([]);}} className="text-slate-400 hover:text-slate-700"><X size={18}/></button>
+                  <button onClick={()=>{setHistInsumo(null);setHistRows([]);}} className="text-slate-500 hover:text-slate-700"><X size={18}/></button>
                 </div>
                 <div className="overflow-auto">
                   <table className="w-full text-left">
                     <thead className="bg-slate-100 border-b border-slate-200 sticky top-0"><tr>
-                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase pl-5">Fecha</th>
-                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Tipo</th>
-                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Cantidad</th>
-                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase text-center">Stock</th>
-                      <th className="p-3 text-[9px] font-black text-slate-400 uppercase">Documento / Usuario</th>
+                      <th className="p-3 text-[12px] font-black text-slate-500 uppercase pl-5">Fecha</th>
+                      <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Tipo</th>
+                      <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Cantidad</th>
+                      <th className="p-3 text-[12px] font-black text-slate-500 uppercase text-center">Stock</th>
+                      <th className="p-3 text-[12px] font-black text-slate-500 uppercase">Documento / Usuario</th>
                     </tr></thead>
                     <tbody className="divide-y divide-slate-100">
-                      {histLoading ? <tr><td colSpan={5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Cargando…</td></tr>
-                      : histRows.length === 0 ? <tr><td colSpan={5} className="p-10 text-center text-slate-400 text-xs font-bold uppercase tracking-widest">Sin movimientos registrados</td></tr>
+                      {histLoading ? <tr><td colSpan={5} className="p-10 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">Cargando…</td></tr>
+                      : histRows.length === 0 ? <tr><td colSpan={5} className="p-10 text-center text-slate-500 text-xs font-bold uppercase tracking-widest">Sin movimientos registrados</td></tr>
                       : histRows.map(m => {
                           const tc = m.tipo==='entrada'?'text-emerald-600':m.tipo==='consumo'?'text-amber-600':'text-cyan-600';
                           const sig = m.tipo==='entrada'?'+':m.tipo==='consumo'?'−':'Δ';
                           return (
                             <tr key={m.id} className={`${m.anulado?'opacity-50 line-through':''} hover:bg-slate-50`}>
-                              <td className="p-3 pl-5 text-[11px] font-bold text-slate-600 whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-CL')}<span className="text-slate-400 ml-1">{new Date(m.fecha).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</span></td>
-                              <td className="p-3"><span className={`text-[10px] font-black uppercase ${tc}`}>{m.tipo}</span>{m.anulado && <span className="ml-1.5 text-[8px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase no-underline inline-block">Anulado</span>}</td>
+                              <td className="p-3 pl-5 text-[13px] font-bold text-slate-600 whitespace-nowrap">{new Date(m.fecha).toLocaleDateString('es-CL')}<span className="text-slate-500 ml-1">{new Date(m.fecha).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'})}</span></td>
+                              <td className="p-3"><span className={`text-[12px] font-black uppercase ${tc}`}>{m.tipo}</span>{m.anulado && <span className="ml-1.5 text-[11px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded uppercase no-underline inline-block">Anulado</span>}</td>
                               <td className={`p-3 text-center text-sm font-black ${tc}`}>{sig}{parseFloat(m.cantidad)}</td>
-                              <td className="p-3 text-center text-[11px] font-mono text-slate-500 whitespace-nowrap">{parseFloat(m.stock_antes)}→{parseFloat(m.stock_despues)}</td>
-                              <td className="p-3 text-[10px] text-slate-500">
-                                {m.documento_id ? <span className="font-bold text-slate-600">[{(m.documento_tipo||'').toUpperCase()}] {m.documento_id}</span> : <span className="text-slate-400">—</span>}
-                                <span className="block text-slate-400">{m.usuario||'SYSTEM'}{m.anulado && m.anulado_by ? ` · anuló: ${m.anulado_by}` : ''}</span>
+                              <td className="p-3 text-center text-[13px] font-mono text-slate-500 whitespace-nowrap">{parseFloat(m.stock_antes)}→{parseFloat(m.stock_despues)}</td>
+                              <td className="p-3 text-[12px] text-slate-500">
+                                {m.documento_id ? <span className="font-bold text-slate-600">[{(m.documento_tipo||'').toUpperCase()}] {m.documento_id}</span> : <span className="text-slate-500">—</span>}
+                                <span className="block text-slate-500">{m.usuario||'SYSTEM'}{m.anulado && m.anulado_by ? ` · anuló: ${m.anulado_by}` : ''}</span>
                               </td>
                             </tr>
                           );
@@ -9261,7 +9260,7 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
-                <div className="p-3 border-t border-slate-100 text-[10px] font-bold text-slate-400 text-center">Últimos {histRows.length} movimientos · los anulados se conservan para trazabilidad</div>
+                <div className="p-3 border-t border-slate-100 text-[12px] font-bold text-slate-500 text-center">Últimos {histRows.length} movimientos · los anulados se conservan para trazabilidad</div>
               </div>
             </div>
           )}
@@ -9270,7 +9269,7 @@ export default function App() {
           {activeTab === 'docks' && (
             <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><Truck className="w-7 h-7 mr-3 text-cyan-600"/> Gestión de Muelles</h2>
+                <h2 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center"><Truck className="w-7 h-7 mr-3 text-cyan-600"/> Gestión de Muelles</h2>
                 <div className="flex gap-2">
                   <button onClick={()=>setDockView(dockView==='appointments'?'docks':'appointments')} className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 py-2 rounded-xl font-black uppercase tracking-widest transition-colors">
                     {dockView==='appointments'?'Ver Muelles':'Ver Citas'}
@@ -9281,7 +9280,7 @@ export default function App() {
               {dockView==='docks' && (
                 <div className="space-y-4">
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                    <h3 className="font-black text-sm text-slate-600 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Registrar Muelle</h3>
+                    <h3 className="font-black text-sm text-slate-600 tracking-widest mb-4 border-b border-slate-100 pb-2">Registrar Muelle</h3>
                     <form onSubmit={async(e)=>{e.preventDefault();const method=dockEditId?'PUT':'POST';const url=dockEditId?`${host}/api/docks/${dockEditId}`:`${host}/api/docks`;const r=await apiFetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(dockForm)});if(r.ok){showMsg('✅ Muelle guardado');setDockForm({dock_code:'',name:'',dock_type:'INBOUND',capacity:1,notes:''});setDockEditId(null);fetchData();}else{const e2=await r.json();showMsg(`⛔ ${e2.error}`,true);}}} className="grid grid-cols-2 gap-4">
                       <input required value={dockForm.dock_code} onChange={e=>setDockForm({...dockForm,dock_code:e.target.value})} placeholder="Código Muelle (ej: DOCK-01) *" className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 uppercase"/>
                       <input required value={dockForm.name} onChange={e=>setDockForm({...dockForm,name:e.target.value})} placeholder="Nombre *" className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400"/>
@@ -9299,7 +9298,7 @@ export default function App() {
                   </div>
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100 font-black text-sm text-slate-600 uppercase tracking-widest">Muelles Registrados ({docks.length})</div>
-                    {docks.length===0 ? <div className="p-10 text-center text-slate-400 font-bold text-sm">Sin muelles.</div> : (
+                    {docks.length===0 ? <div className="p-10 text-center text-slate-500 font-bold text-sm">Sin muelles.</div> : (
                       <div className="divide-y divide-slate-100">
                         {docks.map(d=>(
                           <div key={d.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50">
@@ -9322,7 +9321,7 @@ export default function App() {
               {dockView==='appointments' && (
                 <div className="space-y-4">
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-                    <h3 className="font-black text-sm text-slate-600 uppercase tracking-widest mb-4 border-b border-slate-100 pb-2">Nueva Cita de Muelle</h3>
+                    <h3 className="font-black text-sm text-slate-600 tracking-widest mb-4 border-b border-slate-100 pb-2">Nueva Cita de Muelle</h3>
                     <form onSubmit={async(e)=>{e.preventDefault();const method=apptEditId?'PUT':'POST';const url=apptEditId?`${host}/api/dock-appointments/${apptEditId}`:`${host}/api/dock-appointments`;const r=await apiFetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(apptForm)});if(r.ok){showMsg('✅ Cita guardada');setApptForm({dock_id:'',carrier:'',doc_reference:'',appt_date:'',appt_time:'',direction:'INBOUND',notes:''});setApptEditId(null);fetchData();}else{const e2=await r.json();showMsg(`⛔ ${e2.error}`,true);}}} className="grid grid-cols-2 gap-4">
                       <select required value={apptForm.dock_id} onChange={e=>setApptForm({...apptForm,dock_id:e.target.value})} className="border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 bg-white">
                         <option value="">-- Muelle *</option>
@@ -9344,14 +9343,14 @@ export default function App() {
                   </div>
                   <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-slate-100 font-black text-sm text-slate-600 uppercase tracking-widest">Citas Agendadas ({dockAppointments.length})</div>
-                    {dockAppointments.length===0 ? <div className="p-10 text-center text-slate-400 font-bold text-sm">Sin citas.</div> : (
+                    {dockAppointments.length===0 ? <div className="p-10 text-center text-slate-500 font-bold text-sm">Sin citas.</div> : (
                       <div className="divide-y divide-slate-100">
                         {dockAppointments.map(a=>(
                           <div key={a.id} className="flex items-center justify-between px-6 py-4 hover:bg-slate-50">
                             <div>
                               <p className="font-black text-slate-800">{a.appt_date?.split('T')[0]} {a.appt_time} — {a.dock_code}</p>
                               <p className="text-xs text-slate-500">{a.direction} {a.carrier && `— ${a.carrier}`} {a.doc_reference && `| ${a.doc_reference}`}</p>
-                              <span className={`mt-1 inline-block text-[9px] font-black uppercase px-2 py-0.5 rounded border ${a.status==='COMPLETADA'?'bg-emerald-50 text-emerald-600 border-emerald-200':a.status==='EN_PROCESO'?'bg-blue-50 text-blue-600 border-blue-200':a.status==='CANCELADA'?'bg-red-50 text-red-600 border-red-200':'bg-amber-50 text-amber-600 border-amber-200'}`}>{a.status}</span>
+                              <span className={`mt-1 inline-block text-[12px] font-black uppercase px-2 py-0.5 rounded border ${a.status==='COMPLETADA'?'bg-emerald-50 text-emerald-600 border-emerald-200':a.status==='EN_PROCESO'?'bg-blue-50 text-blue-600 border-blue-200':a.status==='CANCELADA'?'bg-red-50 text-red-600 border-red-200':'bg-amber-50 text-amber-600 border-amber-200'}`}>{a.status}</span>
                             </div>
                             <div className="flex gap-2 flex-wrap justify-end">
                               {a.status==='AGENDADA' && <>
@@ -9374,7 +9373,7 @@ export default function App() {
           {activeTab === 'billing' && is3PLMode && (
             <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in">
               <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><FileText className="w-7 h-7 mr-3 text-cyan-600"/> Facturación 3PL</h2>
+                <h2 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center"><FileText className="w-7 h-7 mr-3 text-cyan-600"/> Facturación 3PL</h2>
                 <button onClick={()=>setInvoiceView(invoiceView==='list'?'new':'list')} className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl font-black text-xs uppercase tracking-widest flex items-center gap-2 transition-colors">
                   {invoiceView==='new'?<><X size={14}/> Cancelar</>:<><Plus size={14}/> Generar Factura</>}
                 </button>
@@ -9382,21 +9381,21 @@ export default function App() {
 
               {invoiceView==='new' && (
                 <div className="bg-white rounded-2xl border-2 border-cyan-200 shadow-sm p-6 space-y-5">
-                  <h3 className="font-black text-slate-800 uppercase tracking-tighter">Generar Factura por Período</h3>
+                  <h3 className="font-black text-slate-800 tracking-tighter">Generar Factura por Período</h3>
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Cliente *</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Cliente *</label>
                       <select value={invoiceGenForm.client_id} onChange={e=>setInvoiceGenForm({...invoiceGenForm,client_id:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 bg-white mt-1">
                         <option value="">-- Seleccionar --</option>
                         {clients.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
                       </select>
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Desde *</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Desde *</label>
                       <input type="date" value={invoiceGenForm.period_start} onChange={e=>setInvoiceGenForm({...invoiceGenForm,period_start:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 mt-1"/>
                     </div>
                     <div>
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hasta *</label>
+                      <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Hasta *</label>
                       <input type="date" value={invoiceGenForm.period_end} onChange={e=>setInvoiceGenForm({...invoiceGenForm,period_end:e.target.value})} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-cyan-400 mt-1"/>
                     </div>
                   </div>
@@ -9413,14 +9412,14 @@ export default function App() {
               )}
 
               <div className="space-y-3">
-                {invoices.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-400 font-bold">Sin facturas generadas.</div> : invoices.map(inv=>(
+                {invoices.length===0 ? <div className="bg-white rounded-2xl border border-slate-200 p-10 text-center text-slate-500 font-bold">Sin facturas generadas.</div> : invoices.map(inv=>(
                   <div key={inv.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                     <div className="flex items-start justify-between">
                       <div>
                         <p className="font-black text-slate-800 font-mono">{inv.invoice_number||`INV-${inv.id}`}</p>
                         <p className="text-xs text-slate-500">Cliente: {inv.client_name||inv.client_id} — Período: {inv.period_start?.split('T')[0]} → {inv.period_end?.split('T')[0]}</p>
                         <p className="text-sm font-black text-slate-700 mt-1">Total: ${Number(inv.total_amount||0).toLocaleString('es-CL')}</p>
-                        <span className={`mt-1 inline-block text-[9px] font-black uppercase px-2 py-1 rounded border ${inv.status==='PAGADA'?'bg-emerald-50 text-emerald-600 border-emerald-200':inv.status==='EMITIDA'?'bg-blue-50 text-blue-600 border-blue-200':inv.status==='ANULADA'?'bg-red-50 text-red-600 border-red-200':'bg-slate-50 text-slate-500 border-slate-200'}`}>{inv.status}</span>
+                        <span className={`mt-1 inline-block text-[12px] font-black uppercase px-2 py-1 rounded border ${inv.status==='PAGADA'?'bg-emerald-50 text-emerald-600 border-emerald-200':inv.status==='EMITIDA'?'bg-blue-50 text-blue-600 border-blue-200':inv.status==='ANULADA'?'bg-red-50 text-red-600 border-red-200':'bg-slate-50 text-slate-500 border-slate-200'}`}>{inv.status}</span>
                       </div>
                       <div className="flex gap-2 flex-wrap justify-end">
                         {inv.status==='BORRADOR' && <button onClick={async()=>{const r=await apiFetch(`${host}/api/invoices/${inv.id}/issue`,{method:'POST'});if(r.ok){showMsg('✅ Factura emitida');fetchData();}else{const e2=await r.json();showMsg(`⛔ ${e2.error}`,true);}}} className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg font-bold transition-colors flex items-center gap-1"><Send size={12}/> Emitir</button>}
@@ -9437,7 +9436,7 @@ export default function App() {
           {/* ═══════════════ REPORTERÍA AVANZADA ═══════════════ */}
           {activeTab === 'advanced-reports' && (
             <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in">
-              <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center"><BarChart3 className="w-7 h-7 mr-3 text-cyan-600"/> Reportería Avanzada</h2>
+              <h2 className="text-2xl font-black text-slate-800 tracking-tighter flex items-center"><BarChart3 className="w-7 h-7 mr-3 text-cyan-600"/> Reportería Avanzada</h2>
 
               <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
                 <div className="flex flex-wrap gap-3 mb-6">
@@ -9477,14 +9476,14 @@ export default function App() {
                     </p>
                   </div>
                   {advReport.data.length===0 ? (
-                    <div className="p-10 text-center text-slate-400 font-bold">Sin datos para el reporte.</div>
+                    <div className="p-10 text-center text-slate-500 font-bold">Sin datos para el reporte.</div>
                   ) : (
                     <div className="overflow-x-auto custom-scrollbar">
                       <table className="w-full text-sm">
                         <thead className="bg-slate-50 border-b border-slate-200">
                           <tr>
                             {Object.keys(advReport.data[0]).map(k=>(
-                              <th key={k} className="text-left px-4 py-3 font-black text-[10px] uppercase tracking-widest text-slate-500">{k.replace(/_/g,' ')}</th>
+                              <th key={k} className="text-left px-4 py-3 font-black text-[12px] uppercase tracking-widest text-slate-500">{k.replace(/_/g,' ')}</th>
                             ))}
                           </tr>
                         </thead>
@@ -9582,33 +9581,33 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e=>e.target===e.currentTarget && setLocAuditModalOpen(false)}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><AlertTriangle className="text-amber-500" size={18}/> Sincronización con el mapa 3D</h2>
-              <button onClick={()=>setLocAuditModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} className="text-slate-400"/></button>
+              <h2 className="text-lg font-black text-slate-800 tracking-tighter flex items-center gap-2"><AlertTriangle className="text-amber-500" size={18}/> Sincronización con el mapa 3D</h2>
+              <button onClick={()=>setLocAuditModalOpen(false)} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} className="text-slate-500"/></button>
             </div>
             <div className="p-5 space-y-5">
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
-                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total en BD</p>
+                  <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Total en BD</p>
                   <p className="text-2xl font-black text-slate-800 mt-1">{locAudit.total_in_db}</p>
                 </div>
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
-                  <p className="text-[9px] font-black text-emerald-600 uppercase tracking-widest">Con posición 3D</p>
+                  <p className="text-[12px] font-black text-emerald-600 uppercase tracking-widest">Con posición 3D</p>
                   <p className="text-2xl font-black text-emerald-700 mt-1">{locAudit.with_3d_coords}</p>
                 </div>
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-                  <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest">Sin posición 3D</p>
+                  <p className="text-[12px] font-black text-amber-600 uppercase tracking-widest">Sin posición 3D</p>
                   <p className="text-2xl font-black text-amber-700 mt-1">{locAudit.without_3d_coords}</p>
                 </div>
               </div>
 
               {locAudit.locations_without_3d?.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-black text-amber-700 uppercase tracking-widest mb-2">Ubicaciones sin posición ({locAudit.locations_without_3d.length})</p>
+                  <p className="text-[12px] font-black text-amber-700 uppercase tracking-widest mb-2">Ubicaciones sin posición ({locAudit.locations_without_3d.length})</p>
                   <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 max-h-48 overflow-y-auto space-y-1">
                     {locAudit.locations_without_3d.map(l => (
                       <div key={l.location_id} className="flex items-center justify-between text-xs">
                         <span className="font-mono font-black text-amber-800">{l.location_id}</span>
-                        <span className="text-[10px] text-amber-600">{l.zone_code || '—'} · {l.loc_type} · {l.qty_lpns} LPN</span>
+                        <span className="text-[12px] text-amber-600">{l.zone_code || '—'} · {l.loc_type} · {l.qty_lpns} LPN</span>
                       </div>
                     ))}
                   </div>
@@ -9617,12 +9616,12 @@ export default function App() {
 
               {locAudit.duplicate_positions?.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-black text-red-700 uppercase tracking-widest mb-2">Coordenadas duplicadas ({locAudit.duplicate_positions.length})</p>
+                  <p className="text-[12px] font-black text-red-700 uppercase tracking-widest mb-2">Coordenadas duplicadas ({locAudit.duplicate_positions.length})</p>
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3 max-h-32 overflow-y-auto space-y-1">
                     {locAudit.duplicate_positions.map((d, i) => (
                       <div key={i} className="text-xs">
                         <span className="font-mono font-black text-red-700">[{d.x},{d.y},{d.z}]</span>
-                        <span className="text-[10px] text-red-600 ml-2">{d.location_ids.join(', ')}</span>
+                        <span className="text-[12px] text-red-600 ml-2">{d.location_ids.join(', ')}</span>
                       </div>
                     ))}
                   </div>
@@ -9631,12 +9630,12 @@ export default function App() {
 
               {locAudit.orphan_inventory?.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-black text-rose-700 uppercase tracking-widest mb-2">Inventario en ubicaciones que no existen ({locAudit.orphan_inventory.length})</p>
+                  <p className="text-[12px] font-black text-rose-700 uppercase tracking-widest mb-2">Inventario en ubicaciones que no existen ({locAudit.orphan_inventory.length})</p>
                   <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 max-h-32 overflow-y-auto space-y-1">
                     {locAudit.orphan_inventory.map(o => (
                       <div key={o.location_id} className="flex items-center justify-between text-xs">
                         <span className="font-mono font-black text-rose-700">{o.location_id}</span>
-                        <span className="text-[10px] text-rose-600">{o.lpn_count} LPN(s) huérfanos</span>
+                        <span className="text-[12px] text-rose-600">{o.lpn_count} LPN(s) huérfanos</span>
                       </div>
                     ))}
                   </div>
@@ -9652,8 +9651,8 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e=>e.target===e.currentTarget && setSubstituteModal(null)}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-amber-200 bg-amber-50">
-              <h2 className="text-lg font-black text-amber-900 uppercase tracking-tighter flex items-center gap-2"><AlertTriangle size={18}/> Stock insuficiente</h2>
-              <p className="text-[10px] font-bold text-amber-700 mt-1">El sistema sugiere productos similares con stock disponible.</p>
+              <h2 className="text-lg font-black text-amber-900 tracking-tighter flex items-center gap-2"><AlertTriangle size={18}/> Stock insuficiente</h2>
+              <p className="text-[12px] font-bold text-amber-700 mt-1">El sistema sugiere productos similares con stock disponible.</p>
             </div>
             <div className="p-5 space-y-5">
               {substituteModal.items_con_deficit.map(item => {
@@ -9664,12 +9663,12 @@ export default function App() {
                     <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
                       <div>
                         <p className="text-sm font-black text-slate-800">{item.sku}</p>
-                        <p className="text-[10px] text-slate-500">Solicitado: <strong>{item.qty_solicitada}</strong> · Disponible: <strong>{item.qty_disponible}</strong> · <span className="text-red-600 font-black">Déficit: {item.deficit}</span></p>
+                        <p className="text-[12px] text-slate-500">Solicitado: <strong>{item.qty_solicitada}</strong> · Disponible: <strong>{item.qty_disponible}</strong> · <span className="text-red-600 font-black">Déficit: {item.deficit}</span></p>
                       </div>
                     </div>
-                    {!data ? <p className="text-xs text-slate-400 text-center py-4">Cargando sustitutos…</p>
+                    {!data ? <p className="text-xs text-slate-500 text-center py-4">Cargando sustitutos…</p>
                       : data.substitutes.length === 0
-                        ? <p className="text-xs text-slate-400 text-center py-4 bg-slate-50 rounded-xl">No hay sustitutos disponibles con stock.</p>
+                        ? <p className="text-xs text-slate-500 text-center py-4 bg-slate-50 rounded-xl">No hay sustitutos disponibles con stock.</p>
                         : (
                           <div className="space-y-1.5">
                             {data.substitutes.map(s => (
@@ -9678,16 +9677,16 @@ export default function App() {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <p className="text-sm font-black text-slate-800">{s.sku}</p>
-                                    {s.match_type === 'manual'           && <span className="bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded text-[9px] font-black uppercase">★ Manual</span>}
-                                    {s.match_type === 'same_manufacturer'&& <span className="bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[9px] font-black uppercase">Mismo fabricante</span>}
-                                    {s.match_type === 'high_match'       && <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[9px] font-black uppercase">Alta similitud</span>}
-                                    {s.match_type === 'auto'             && <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-[9px] font-black uppercase">Auto</span>}
-                                    <span className="text-[10px] font-bold text-slate-500">Stock: <strong className="text-slate-800">{s.available_qty}</strong></span>
-                                    {s.similarity_score > 0 && <span className="text-[10px] font-bold text-slate-500">Similitud: <strong className="text-slate-800">{Math.round(s.similarity_score * 100)}%</strong></span>}
+                                    {s.match_type === 'manual'           && <span className="bg-amber-100 text-amber-700 border border-amber-200 px-2 py-0.5 rounded text-[12px] font-black uppercase">★ Manual</span>}
+                                    {s.match_type === 'same_manufacturer'&& <span className="bg-blue-100 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[12px] font-black uppercase">Mismo fabricante</span>}
+                                    {s.match_type === 'high_match'       && <span className="bg-emerald-100 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[12px] font-black uppercase">Alta similitud</span>}
+                                    {s.match_type === 'auto'             && <span className="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-[12px] font-black uppercase">Auto</span>}
+                                    <span className="text-[12px] font-bold text-slate-500">Stock: <strong className="text-slate-800">{s.available_qty}</strong></span>
+                                    {s.similarity_score > 0 && <span className="text-[12px] font-bold text-slate-500">Similitud: <strong className="text-slate-800">{Math.round(s.similarity_score * 100)}%</strong></span>}
                                   </div>
-                                  <p className="text-[11px] text-slate-600 mt-0.5">{s.desc}</p>
+                                  <p className="text-[13px] text-slate-600 mt-0.5">{s.desc}</p>
                                   {s.manufacturer && (s.manufacturer.name || s.manufacturer.code) && (
-                                    <p className="text-[10px] text-slate-500 mt-1 flex items-center gap-1"><HardHat size={10}/> {s.manufacturer.name || s.manufacturer.code}{s.manufacturer_sku && ` · Cód. fab.: ${s.manufacturer_sku}`}{s.brand && ` · ${s.brand}`}</p>
+                                    <p className="text-[12px] text-slate-500 mt-1 flex items-center gap-1"><HardHat size={10}/> {s.manufacturer.name || s.manufacturer.code}{s.manufacturer_sku && ` · Cód. fab.: ${s.manufacturer_sku}`}{s.brand && ` · ${s.brand}`}</p>
                                   )}
                                 </div>
                               </label>
@@ -9699,7 +9698,7 @@ export default function App() {
               })}
             </div>
             <div className="px-5 pb-5 flex gap-2">
-              <button onClick={()=>setSubstituteModal(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest">Cancelar despacho</button>
+              <button onClick={()=>setSubstituteModal(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-xl uppercase text-[12px] tracking-widest">Cancelar despacho</button>
               <button
                 disabled={Object.keys(substituteModal.selection).length === 0}
                 onClick={async () => {
@@ -9721,7 +9720,7 @@ export default function App() {
                     showMsg(`⛔ ${d.error || 'Error al despachar'}`, true);
                   }
                 }}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black py-3 rounded-xl uppercase text-[10px] tracking-widest">Confirmar despacho</button>
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black py-3 rounded-xl uppercase text-[12px] tracking-widest">Confirmar despacho</button>
             </div>
           </div>
         </div>
@@ -9732,41 +9731,41 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={e=>e.target===e.currentTarget && setSkuVersionsModal(null)}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Historial de versiones — {skuVersionsModal.sku}</h2>
-              <button onClick={()=>setSkuVersionsModal(null)} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} className="text-slate-400"/></button>
+              <h2 className="text-lg font-black text-slate-800 tracking-tighter">Historial de versiones — {skuVersionsModal.sku}</h2>
+              <button onClick={()=>setSkuVersionsModal(null)} className="p-2 hover:bg-slate-100 rounded-lg"><X size={18} className="text-slate-500"/></button>
             </div>
             <div className="p-5">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50"><tr>
-                  <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase">Versión</th>
-                  <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase">Config. lote</th>
-                  <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase">Config. serie</th>
-                  <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase text-right">Stock activo</th>
-                  <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase">Fecha</th>
-                  <th className="px-3 py-2 text-[9px] font-black text-slate-400 uppercase">Motivo</th>
+                  <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase">Versión</th>
+                  <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase">Config. lote</th>
+                  <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase">Config. serie</th>
+                  <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase text-right">Stock activo</th>
+                  <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase">Fecha</th>
+                  <th className="px-3 py-2 text-[12px] font-black text-slate-500 uppercase">Motivo</th>
                 </tr></thead>
                 <tbody className="divide-y divide-slate-100">
                   {skuVersionsModal.versions.length === 0 && (
-                    <tr><td colSpan="6" className="p-6 text-center text-slate-400">Sin historial registrado.</td></tr>
+                    <tr><td colSpan="6" className="p-6 text-center text-slate-500">Sin historial registrado.</td></tr>
                   )}
                   {skuVersionsModal.versions.map(v => (
                     <tr key={v.version} className={v.is_current ? 'bg-emerald-50/50' : ''}>
                       <td className="px-3 py-2 font-mono font-black">
                         v{v.version}
                         {v.is_current
-                          ? <span className="ml-2 bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[8px] font-black uppercase">✓ Actual</span>
-                          : <span className="ml-2 bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded text-[8px] font-black uppercase">🔒 Histórica</span>}
+                          ? <span className="ml-2 bg-emerald-100 text-emerald-700 border border-emerald-200 px-1.5 py-0.5 rounded text-[11px] font-black uppercase">✓ Actual</span>
+                          : <span className="ml-2 bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded text-[11px] font-black uppercase">🔒 Histórica</span>}
                       </td>
                       <td className="px-3 py-2">{v.requires_lot ? <span className="text-emerald-700 font-black">Con lote</span> : <span className="text-slate-500">Sin lote</span>}</td>
                       <td className="px-3 py-2">{v.requires_serial ? <span className="text-emerald-700 font-black">Con serie</span> : <span className="text-slate-500">Sin serie</span>}</td>
                       <td className="px-3 py-2 text-right font-black">{v.active_stock || 0} un.</td>
-                      <td className="px-3 py-2 text-[10px] text-slate-500">{v.changed_at ? new Date(v.changed_at).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td>
-                      <td className="px-3 py-2 text-[10px] text-slate-600 italic">{v.reason || '—'}</td>
+                      <td className="px-3 py-2 text-[12px] text-slate-500">{v.changed_at ? new Date(v.changed_at).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }) : '—'}</td>
+                      <td className="px-3 py-2 text-[12px] text-slate-600 italic">{v.reason || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <p className="text-[11px] text-slate-600 font-medium mt-3 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
+              <p className="text-[13px] text-slate-600 font-medium mt-3 bg-indigo-50 border border-indigo-200 rounded-lg p-3">
                 ℹ️ El código <span className="font-mono font-black text-indigo-700">{skuVersionsModal.sku}</span> no cambia. El stock anterior se sigue despachando con su configuración original (FIFO). Las nuevas recepciones usan la configuración de la versión actual.
               </p>
             </div>
@@ -9779,32 +9778,32 @@ export default function App() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => e.target === e.currentTarget && setShowMfrQuickForm(false)}>
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md animate-in zoom-in-95">
             <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-sm font-black text-slate-800 uppercase tracking-tighter flex items-center gap-2"><HardHat size={16} className="text-indigo-500"/> Nuevo fabricante</h2>
-              <button onClick={()=>setShowMfrQuickForm(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-400"/></button>
+              <h2 className="text-sm font-black text-slate-800 tracking-tighter flex items-center gap-2"><HardHat size={16} className="text-indigo-500"/> Nuevo fabricante</h2>
+              <button onClick={()=>setShowMfrQuickForm(false)} className="p-1.5 hover:bg-slate-100 rounded-lg"><X size={16} className="text-slate-500"/></button>
             </div>
             <div className="p-5 space-y-3">
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase">Código (dejá vacío para auto)</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase">Código (dejá vacío para auto)</label>
                 <input type="text" value={manufacturerForm.code} onChange={e=>setManufacturerForm(p=>({...p, code: e.target.value.toUpperCase()}))} placeholder="Ej: FAB-006" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-indigo-500 uppercase"/>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase">Nombre *</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase">Nombre *</label>
                 <input type="text" value={manufacturerForm.name} onChange={e=>setManufacturerForm(p=>({...p, name: e.target.value}))} required placeholder="Nombre comercial" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-indigo-500"/>
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-400 uppercase">País</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase">País</label>
                 <input type="text" value={manufacturerForm.country} onChange={e=>setManufacturerForm(p=>({...p, country: e.target.value}))} placeholder="Ej: Chile" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-indigo-500"/>
               </div>
             </div>
             <div className="px-5 pb-5 flex gap-2">
-              <button onClick={()=>setShowMfrQuickForm(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-2.5 rounded-xl uppercase text-[10px] tracking-widest">Cancelar</button>
+              <button onClick={()=>setShowMfrQuickForm(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-2.5 rounded-xl uppercase text-[12px] tracking-widest">Cancelar</button>
               <button disabled={!manufacturerForm.name.trim()} onClick={async()=>{
                 const created = await handleSaveManufacturer();
                 if (created) {
                   setSkuForm(p => ({ ...p, manufacturer_id: String(created.id), manufacturer_code: created.code }));
                   setShowMfrQuickForm(false);
                 }
-              }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black py-2.5 rounded-xl uppercase text-[10px] tracking-widest">Crear y seleccionar</button>
+              }} className="flex-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-black py-2.5 rounded-xl uppercase text-[12px] tracking-widest">Crear y seleccionar</button>
             </div>
           </div>
         </div>
@@ -9831,16 +9830,16 @@ export default function App() {
                   <Lightbulb className="text-amber-600" size={20}/>
                 </div>
                 <div>
-                  <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter">Sugerir Mejora</h2>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase">Tu comentario va al equipo de desarrollo</p>
+                  <h2 className="text-lg font-black text-slate-800 tracking-tighter">Sugerir Mejora</h2>
+                  <p className="text-[12px] font-bold text-slate-500 uppercase">Tu comentario va al equipo de desarrollo</p>
                 </div>
               </div>
-              <button onClick={() => setShowFeedbackModal(false)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={18} className="text-slate-400"/></button>
+              <button onClick={() => setShowFeedbackModal(false)} className="p-2 hover:bg-slate-100 rounded-xl"><X size={18} className="text-slate-500"/></button>
             </div>
 
             <div className="p-6 space-y-4">
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Tipo</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Tipo</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[['BUG','🐛 Bug','red'],['MEJORA','💡 Mejora','amber'],['IDEA','✨ Idea','indigo']].map(([id,label,color]) => (
                     <button key={id} onClick={() => setFeedbackForm(p=>({...p, category: id}))} className={`p-3 rounded-xl text-xs font-black border-2 transition-colors ${feedbackForm.category===id ? `bg-${color}-100 border-${color}-500 text-${color}-700` : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}>
@@ -9850,7 +9849,7 @@ export default function App() {
                 </div>
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 block">Mensaje *</label>
+                <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-2 block">Mensaje *</label>
                 <textarea
                   value={feedbackForm.message}
                   onChange={e => setFeedbackForm(p=>({...p, message: e.target.value}))}
@@ -9859,15 +9858,15 @@ export default function App() {
                   placeholder="Describe el bug, la mejora o la idea con todo el detalle posible…"
                   className="w-full border-2 border-slate-200 focus:border-amber-500 rounded-xl px-4 py-3 text-sm font-medium outline-none resize-none transition-colors"
                 />
-                <p className="text-[10px] font-bold text-slate-400 mt-1 text-right">{feedbackForm.message.length} / 4000</p>
+                <p className="text-[12px] font-bold text-slate-500 mt-1 text-right">{feedbackForm.message.length} / 4000</p>
               </div>
-              <div className="bg-slate-50 rounded-xl px-3 py-2 text-[10px] font-bold text-slate-500 flex items-center gap-2">
+              <div className="bg-slate-50 rounded-xl px-3 py-2 text-[12px] font-bold text-slate-500 flex items-center gap-2">
                 <Info size={11}/> Como <span className="font-mono text-indigo-700">@{currentUser?.username}</span> · módulo actual: <span className="font-mono text-slate-700">{activeTab}</span>
               </div>
             </div>
 
             <div className="px-6 pb-6 flex gap-3">
-              <button onClick={() => setShowFeedbackModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest">Cancelar</button>
+              <button onClick={() => setShowFeedbackModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest">Cancelar</button>
               <button
                 disabled={feedbackBusy || feedbackForm.message.trim().length < 5}
                 onClick={async () => {
@@ -9889,7 +9888,7 @@ export default function App() {
                   } catch (e) { showMsg('⛔ Error de red', true); }
                   finally { setFeedbackBusy(false); }
                 }}
-                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-black py-3 rounded-2xl uppercase text-[10px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-black py-3 rounded-2xl uppercase text-[12px] tracking-widest disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {feedbackBusy ? <Loader2 size={14} className="animate-spin"/> : <Send size={14}/>}
                 {feedbackBusy ? 'Enviando…' : 'Enviar'}

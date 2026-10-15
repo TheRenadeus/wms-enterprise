@@ -20,7 +20,7 @@ export default function ChangeStatusTab({
   return (
     <div className="space-y-6 animate-in fade-in max-w-7xl mx-auto">
       <div className="flex justify-between items-center flex-wrap gap-3">
-        <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tighter">Cambiar estado de producto</h1>
+        <h1 className="text-2xl font-black text-slate-800 tracking-tighter">Cambiar estado de producto</h1>
         <div className="flex items-center gap-2">
           <div className="flex items-center bg-pink-50 border border-pink-200 rounded-xl px-3 py-2 shadow-sm">
             <Scan size={14} className="text-pink-600 mr-2"/>
@@ -42,26 +42,26 @@ export default function ChangeStatusTab({
           )}
           {/* Filtros individuales combinables (AND) */}
           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
-            <Search size={14} className="text-slate-400 mr-2" />
+            <Search size={14} className="text-slate-500 mr-2" />
             <input type="text" placeholder="LPN..." value={relLpnFilter} onChange={(e) => setRelLpnFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
           </div>
           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
-            <Search size={14} className="text-slate-400 mr-2" />
+            <Search size={14} className="text-slate-500 mr-2" />
             <input type="text" placeholder="SKU / producto..." value={relSkuFilter} onChange={(e) => setRelSkuFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
           </div>
           <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-2 shadow-sm w-40">
-            <Search size={14} className="text-slate-400 mr-2" />
+            <Search size={14} className="text-slate-500 mr-2" />
             <input type="text" placeholder="Ubicación..." value={relLocFilter} onChange={(e) => setRelLocFilter(e.target.value)} className="bg-transparent text-xs font-bold outline-none w-full text-slate-700"/>
           </div>
           {(relLpnFilter || relSkuFilter || relLocFilter) && (
             <button
               onClick={() => { setRelLpnFilter(''); setRelSkuFilter(''); setRelLocFilter(''); }}
-              className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[9px] font-black uppercase flex items-center gap-1"
+              className="bg-red-50 text-red-500 border border-red-200 rounded-xl px-3 py-2 text-[12px] font-black uppercase flex items-center gap-1"
             >
               <X size={10}/> Limpiar
             </button>
           )}
-          <span className="text-[10px] font-black text-slate-400 uppercase">{filteredRelData.length} registros</span>
+          <span className="text-[12px] font-black text-slate-500 uppercase">{filteredRelData.length} registros</span>
         </div>
       </div>
 
@@ -69,25 +69,25 @@ export default function ChangeStatusTab({
         <table className="w-full text-left">
           <thead className="bg-slate-50 border-b">
             <tr>
-              <th className="p-5 text-[10px] font-black text-slate-400 uppercase">LPN / SKU</th>
-              <th className="p-5 text-[10px] font-black text-slate-400 uppercase">Ubicación y Estado Actual</th>
-              <th className="p-5 text-[10px] font-black text-slate-400 uppercase text-center">Cantidad</th>
-              <th className="p-5 text-[10px] font-black text-slate-400 uppercase">Nuevo Estado y Glosa</th>
-              <th className="p-5 text-[10px] font-black text-slate-400 uppercase text-center">Acción</th>
+              <th className="p-5 text-[12px] font-black text-slate-500 uppercase">LPN / SKU</th>
+              <th className="p-5 text-[12px] font-black text-slate-500 uppercase">Ubicación y Estado Actual</th>
+              <th className="p-5 text-[12px] font-black text-slate-500 uppercase text-center">Cantidad</th>
+              <th className="p-5 text-[12px] font-black text-slate-500 uppercase">Nuevo Estado y Glosa</th>
+              <th className="p-5 text-[12px] font-black text-slate-500 uppercase text-center">Acción</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filteredRelData.map(i => (
               <tr key={i.id} className="hover:bg-slate-50">
                 <td className="p-5">
-                  <p className="font-mono text-[10px] font-black text-slate-500">{i.id}</p>
+                  <p className="font-mono text-[12px] font-black text-slate-500">{i.id}</p>
                   <p className="text-xs font-black text-slate-800 uppercase mt-1">{i.sku}</p>
                 </td>
                 <td className="p-5">
                   <span className="bg-slate-100 px-2 py-1 rounded border border-slate-200 font-mono text-xs font-bold text-slate-700 block w-max mb-1">
                     {i.location_id || 'PISO-RECEPCION'}
                   </span>
-                  <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${getStatusBadge(i.status)}`}>
+                  <span className={`px-2 py-0.5 rounded text-[12px] font-black uppercase border ${getStatusBadge(i.status)}`}>
                     {statusLabel(i.status || 'DISPONIBLE')}
                   </span>
                 </td>
@@ -108,7 +108,7 @@ export default function ChangeStatusTab({
                       placeholder="Glosa (Opcional)..."
                       value={glosas[i.id] || ''}
                       onChange={e => setGlosas({ ...glosas, [i.id]: e.target.value })}
-                      className="w-full border-2 border-slate-200 rounded-xl px-3 py-1.5 text-[10px] font-bold outline-none focus:border-pink-500"
+                      className="w-full border-2 border-slate-200 rounded-xl px-3 py-1.5 text-[12px] font-bold outline-none focus:border-pink-500"
                     />
                   </div>
                 </td>
@@ -116,7 +116,7 @@ export default function ChangeStatusTab({
                   <button
                     disabled={!lpnStatuses[i.id] || lpnStatuses[i.id] === (i.status || 'DISPONIBLE')}
                     onClick={() => handleChangeStatus(i.id, i.status || 'DISPONIBLE')}
-                    className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest disabled:opacity-50 transition-colors shadow-md flex items-center justify-center mx-auto"
+                    className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest disabled:opacity-50 transition-colors shadow-md flex items-center justify-center mx-auto"
                   >
                     <RefreshCcw size={14} className="mr-1"/> Aplicar
                   </button>

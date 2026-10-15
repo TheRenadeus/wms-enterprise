@@ -17,7 +17,7 @@ const GlobalStyles = () => null;
 const SimpleDonut = ({ data, colors }) => {
   const total = data.reduce((sum, item) => sum + item.value, 0);
   let cumulativePercent = 0;
-  if(total === 0) return <div className="w-24 h-24 rounded-full bg-slate-100 border-4 border-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-400">Vacío</div>;
+  if(total === 0) return <div className="w-24 h-24 rounded-full bg-slate-100 border-4 border-slate-200 flex items-center justify-center text-[12px] font-bold text-slate-500">Vacío</div>;
 
   return (
     <svg viewBox="-1 -1 2 2" className="w-28 h-28 transform -rotate-90 drop-shadow-md">
@@ -58,67 +58,71 @@ const DocTrayView = ({
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-8">
-        <h2 className="text-xl font-black text-slate-800 uppercase tracking-tighter flex items-center border-b border-slate-100 pb-4 mb-6">
-          <Icon className={`w-6 h-6 mr-2 ${textClass}`}/> Crear Nuevo {title}
+        <h2 className="text-xl font-black text-slate-800 tracking-tighter flex items-center border-b border-slate-100 pb-4 mb-6">
+          <Icon className={`w-6 h-6 mr-2 ${textClass}`}/> Crear {title}
         </h2>
         <form onSubmit={(e) => handleCreateDoc(e, module)} className="flex flex-col gap-4">
           {is3PLMode && (
             <div className="space-y-1">
-              <label className="text-[10px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1"><Building2 size={12}/> Cliente del movimiento *</label>
-              <select value={newDocClient || ''} onChange={e=>setNewDocClient(e.target.value)} required className="w-full border-2 border-indigo-200 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 text-indigo-800">
+              <label htmlFor={`${module}-cliente`} className="text-[12px] font-black text-indigo-600 uppercase tracking-widest flex items-center gap-1"><Building2 size={12}/> Cliente del movimiento *</label>
+              <select id={`${module}-cliente`} value={newDocClient || ''} onChange={e=>setNewDocClient(e.target.value)} required className="w-full border-2 border-indigo-200 bg-indigo-50 rounded-xl px-4 py-3 text-sm font-black outline-none focus:border-indigo-500 text-indigo-800">
                 <option value="">-- Seleccione el cliente --</option>
                 {opsClients.map(c => <option key={c.id} value={c.id}>{c.id} - {c.name}</option>)}
               </select>
-              {opsClients.length === 0 && <p className="text-[9px] text-red-500 font-bold">No tiene clientes asignados para operar.</p>}
+              {opsClients.length === 0 && <p className="text-[12px] text-red-500 font-bold">No tiene clientes asignados para operar.</p>}
             </div>
           )}
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap">
             {module !== 'adjust' && (
-              <select value={newDocType} onChange={e=>setNewDocType(e.target.value)} required className="flex-[0.5] border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500 bg-white uppercase">
-                <option value="">-- TIPO DOC --</option>
-                {allowedTypes.map(d => <option key={d.id} value={d.id}>{d.description}</option>)}
-              </select>
+              <div className="flex-[0.5] space-y-1 min-w-[160px]">
+                <label htmlFor={`${module}-tipo`} className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Tipo de documento *</label>
+                <select id={`${module}-tipo`} value={newDocType} onChange={e=>setNewDocType(e.target.value)} required className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500 bg-white uppercase">
+                  <option value="">-- Seleccione --</option>
+                  {allowedTypes.map(d => <option key={d.id} value={d.id}>{d.description}</option>)}
+                </select>
+              </div>
             )}
-            <div className="flex-1 space-y-1">
-              <input type="text" value={newDocNum} onChange={e=>setNewDocNum(e.target.value)} placeholder="Número de Documento / Ref Interna *" className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500 uppercase" required/>
+            <div className="flex-1 space-y-1 min-w-[200px]">
+              <label htmlFor={`${module}-numero`} className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Número de documento / ref. interna *</label>
+              <input id={`${module}-numero`} type="text" value={newDocNum} onChange={e=>setNewDocNum(e.target.value)} placeholder="Ej: GD-1042" autoComplete="off" spellCheck={false} className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500 uppercase" required/>
             </div>
           </div>
           <div className="flex gap-4 flex-wrap">
             <div className="flex-1 space-y-1 min-w-[140px]">
-              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Fecha Documento</label>
-              <input type="date" value={newDocDate} onChange={e=>setNewDocDate(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-slate-500 bg-white" />
+              <label htmlFor={`${module}-fecha`} className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Fecha Documento</label>
+              <input id={`${module}-fecha`} type="date" value={newDocDate} onChange={e=>setNewDocDate(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-slate-500 bg-white" />
             </div>
             <div className="flex-[1.5] space-y-1 min-w-[160px]">
-              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Referencia (OC / Factura)</label>
-              <input type="text" value={newDocRef} onChange={e=>setNewDocRef(e.target.value)} placeholder="Ej: OC-2024-001" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-slate-500 uppercase" />
+              <label htmlFor={`${module}-ref`} className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Referencia (OC / Factura)</label>
+              <input id={`${module}-ref`} type="text" value={newDocRef} onChange={e=>setNewDocRef(e.target.value)} placeholder="Ej: OC-2024-001" autoComplete="off" className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-slate-500 uppercase" />
             </div>
             <div className="flex-1 space-y-1 min-w-[180px]">
-              <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Fecha de Digitado</label>
-              <input type="datetime-local" value={newDocEnteredAt} onChange={e=>setNewDocEnteredAt(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-slate-500 bg-white" />
+              <label htmlFor={`${module}-digitado`} className="text-[11px] font-black text-slate-500 uppercase tracking-widest">Fecha de Digitado</label>
+              <input id={`${module}-digitado`} type="datetime-local" value={newDocEnteredAt} onChange={e=>setNewDocEnteredAt(e.target.value)} className="w-full border-2 border-slate-200 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-slate-500 bg-white" />
             </div>
           </div>
           <div className="flex gap-4">
             <div className="flex-[1.5] space-y-1">
               {(currentUser?.role === 'DEMO' || currentUser?.is_demo) && DEMO_GLOSA_OPTIONS[module] ? (
-                <select value={newDocGlosa} onChange={e=>setNewDocGlosa(e.target.value)} className="w-full border-2 border-amber-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-amber-400 bg-amber-50 text-slate-700">
+                <select aria-label="Comentario (opcional)" value={newDocGlosa} onChange={e=>setNewDocGlosa(e.target.value)} className="w-full border-2 border-amber-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-amber-400 bg-amber-50 text-slate-700">
                   <option value="">— Seleccionar comentario (Opcional) —</option>
                   {DEMO_GLOSA_OPTIONS[module].map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               ) : (
-                <input type="text" value={newDocGlosa} onChange={e=>setNewDocGlosa(e.target.value)} placeholder="Observaciones / Chofer / Notas (Opcional)" className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500" />
+                <input type="text" aria-label="Observaciones (opcional)" value={newDocGlosa} onChange={e=>setNewDocGlosa(e.target.value)} placeholder="Observaciones / Chofer / Notas (Opcional)" autoComplete="off" className="w-full border-2 border-slate-200 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:border-slate-500" />
               )}
             </div>
-            <button type="submit" className={`px-6 py-3 rounded-xl font-black text-white text-xs uppercase tracking-widest shadow-md transition-transform hover:scale-105 ${btnColor}`}>Comenzar</button>
+            <button type="submit" className={`px-6 py-3 rounded-xl font-black text-white text-xs uppercase tracking-widest shadow-md transition-transform hover:scale-105 ${btnColor}`}>Crear borrador</button>
           </div>
         </form>
       </div>
 
-      <h3 className="text-sm font-black text-slate-600 uppercase tracking-widest mt-8 mb-4 border-b border-slate-200 pb-2 flex items-center justify-between">
+      <h3 className="text-sm font-black text-slate-600 tracking-widest mt-8 mb-4 border-b border-slate-200 pb-2 flex items-center justify-between">
         <span>Documentos "En Proceso" (Borradores)</span>
-        <span className="bg-slate-200 text-slate-600 px-2 py-1 rounded-lg text-[10px]">{docs.length} Pendientes</span>
+        <span className="bg-slate-200 text-slate-600 px-2 py-1 rounded-lg text-[12px]">{docs.length} Pendientes</span>
       </h3>
       {docs.length === 0 ? (
-         <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-10 text-center text-slate-400">
+         <div className="bg-slate-100 border-2 border-dashed border-slate-300 rounded-3xl p-10 text-center text-slate-500">
            <FolderOpen className="w-12 h-12 mx-auto mb-2 opacity-50" />
            <p className="font-bold uppercase tracking-widest text-xs">Bandeja Vacía</p>
          </div>
@@ -128,13 +132,13 @@ const DocTrayView = ({
             <div key={d.id} className="bg-white p-5 rounded-2xl border-l-8 shadow-sm hover:shadow-md transition-all cursor-pointer border-slate-200 flex flex-col" style={{ borderLeftColor: '#f59e0b' }}>
               <div className="flex justify-between items-start mb-3">
                 <div>
-                  <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest">En Proceso / Parcial</span>
+                  <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-[12px] font-black uppercase tracking-widest">En Proceso / Parcial</span>
                   <h4 className="text-lg font-black text-slate-800 uppercase mt-2 leading-none">[{d.docType || 'AJUSTE'}] {d.docNum}</h4>
-                  {d.client && <p className="text-[10px] font-black text-indigo-600 uppercase mt-1 flex items-center gap-1"><Building2 size={11}/> {clientName(d.client)}</p>}
+                  {d.client && <p className="text-[12px] font-black text-indigo-600 uppercase mt-1 flex items-center gap-1"><Building2 size={11}/> {clientName(d.client)}</p>}
                   {d.glosa && <p className="text-xs text-slate-500 mt-1 italic truncate">"{d.glosa}"</p>}
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {d.docDate && <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">📅 Doc: {d.docDate}</span>}
-                    {d.docRef && <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Ref: {d.docRef}</span>}
+                    {d.docDate && <span className="text-[12px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">📅 Doc: {d.docDate}</span>}
+                    {d.docRef && <span className="text-[12px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">Ref: {d.docRef}</span>}
                   </div>
                 </div>
                 {canDeleteDoc && (
@@ -146,13 +150,13 @@ const DocTrayView = ({
                   {(() => {
                     const ago = timeAgo(d.createdAt);
                     const isOld = d.createdAt && (Date.now() - (() => { try { const p = d.createdAt.includes('/') ? new Date(d.createdAt.split(', ')[0].split('/').reverse().join('-')+'T'+(d.createdAt.split(', ')[1]||'00:00')) : new Date(d.createdAt); return p.getTime(); } catch(e){return Date.now();} })()) > 86400000;
-                    return <p className={`text-[10px] font-bold ${isOld ? 'text-amber-500' : 'text-slate-400'}`}>Iniciado: {d.createdAt} <span className="font-black">({ago})</span>{isOld && ' ⚠️'}</p>;
+                    return <p className={`text-[12px] font-bold ${isOld ? 'text-amber-500' : 'text-slate-500'}`}>Iniciado: {d.createdAt} <span className="font-black">({ago})</span>{isOld && ' ⚠️'}</p>;
                   })()}
-                  {d.docEnteredAt && <p className="text-[9px] font-bold text-slate-400">Digitado: {d.docEnteredAt.replace('T',' ')}</p>}
+                  {d.docEnteredAt && <p className="text-[12px] font-bold text-slate-500">Digitado: {d.docEnteredAt.replace('T',' ')}</p>}
                 </div>
-                <p className="text-[10px] font-black text-slate-600 uppercase bg-slate-100 px-2 py-1 rounded">{d.items.length} Líneas Extraídas</p>
+                <p className="text-[12px] font-black text-slate-600 uppercase bg-slate-100 px-2 py-1 rounded">{d.items.length} Líneas Extraídas</p>
               </div>
-              <button type="button" onClick={() => setActiveDocId(d.id)} className={`w-full mt-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-center text-white shadow-sm ${btnColor}`}>Abrir y Continuar</button>
+              <button type="button" onClick={() => setActiveDocId(d.id)} className={`w-full mt-4 py-2 rounded-xl text-[12px] font-black uppercase tracking-widest text-center text-white shadow-sm ${btnColor}`}>Abrir y Continuar</button>
             </div>
           ))}
         </div>
@@ -223,7 +227,7 @@ function LocPicker({ value, onChange, safeLocs, placeholder = 'Buscar o escribir
                 <span className={`font-mono text-xs font-black ${isSel ? 'text-purple-700' : 'text-slate-700'}`}>{id}</span>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {loc?.zone_code && (
-                    <span className="text-[8px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">{loc.zone_code}</span>
+                    <span className="text-[11px] font-black bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">{loc.zone_code}</span>
                   )}
                   {isSel && <CheckCircle2 size={11} className="text-purple-500"/>}
                 </div>
@@ -233,7 +237,7 @@ function LocPicker({ value, onChange, safeLocs, placeholder = 'Buscar o escribir
         </div>
       )}
       {isInvalid && (
-        <p className="text-[9px] text-red-500 font-bold mt-1 flex items-center gap-1">
+        <p className="text-[12px] text-red-500 font-bold mt-1 flex items-center gap-1">
           <X size={9}/> Ubicación no registrada — créala en Diseño Bodega primero
         </p>
       )}
@@ -598,9 +602,9 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
     <div className="space-y-4 animate-in fade-in max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3 shrink-0">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-800 uppercase tracking-tighter flex items-center flex-wrap gap-2">
+          <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tighter flex items-center flex-wrap gap-2">
             Gemelo Digital 3D
-            {editMode && <span className="text-[10px] bg-red-100 text-red-600 px-2 py-1 rounded-lg uppercase tracking-widest animate-pulse border border-red-200">Modo Edición</span>}
+            {editMode && <span className="text-[12px] bg-red-100 text-red-600 px-2 py-1 rounded-lg uppercase tracking-widest animate-pulse border border-red-200">Modo Edición</span>}
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1">
             {editMode ? 'Seleccione casillas para unirlas o bloquearlas.' : 'Haga clic en un rack para inspeccionar su inventario en tiempo real.'}
@@ -609,7 +613,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
 
         <div className="flex flex-wrap items-center gap-2">
            <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
-             <Warehouse className="text-slate-400 w-4 h-4 mr-2 shrink-0" />
+             <Warehouse className="text-slate-500 w-4 h-4 mr-2 shrink-0" />
              <select value={activeWH} onChange={(e) => {
                const newWH = e.target.value;
                // Al cambiar bodega, buscar la primera zona disponible para esa bodega
@@ -625,7 +629,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
              </select>
            </div>
            <div className="flex items-center bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-sm">
-             <Layers className="text-slate-400 w-4 h-4 mr-2 shrink-0" />
+             <Layers className="text-slate-500 w-4 h-4 mr-2 shrink-0" />
              <select value={activeZ} onChange={(e) => {setActiveZ(e.target.value); setSelectedLoc(null);}} className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer uppercase max-w-[120px]">
                {derivedZones.map(z => <option key={z.id} value={z.id}>{z.id}{z.name !== z.id ? ` - ${z.name}` : ''}</option>)}
              </select>
@@ -633,10 +637,10 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
 
           {canEditLayout && (
             <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
-              <button onClick={() => {setEditMode(false); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${!editMode ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+              <button onClick={() => {setEditMode(false); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-widest transition-colors flex items-center ${!editMode ? 'bg-slate-800 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
                 <Eye size={12} className="mr-1"/> Vista
               </button>
-              <button onClick={() => {setEditMode(true); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors flex items-center ${editMode ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
+              <button onClick={() => {setEditMode(true); setSelectedLoc(null);}} className={`px-3 py-1.5 rounded-lg text-[12px] font-black uppercase tracking-widest transition-colors flex items-center ${editMode ? 'bg-red-500 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>
                 <Edit size={12} className="mr-1"/> Editar
               </button>
             </div>
@@ -649,22 +653,22 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
           <div className={`absolute inset-0 pointer-events-none transition-colors ${editMode ? 'bg-[radial-gradient(circle_at_50%_50%,rgba(239,68,68,0.05),transparent)]' : 'bg-[radial-gradient(circle_at_50%_50%,rgba(67,56,202,0.1),transparent)]'}`}></div>
           {!editMode && (
             <div className="absolute top-3 right-3 z-20 bg-slate-800/80 backdrop-blur rounded-xl px-3 py-2 border border-white/10 pointer-events-none">
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-widest mb-1">Vencimiento de lotes</p>
+              <p className="text-[11px] font-black text-white/70 uppercase tracking-widest mb-1">Vencimiento de lotes</p>
               <div className="h-2 w-32 rounded-full" style={{ background: 'linear-gradient(to right, hsl(0,85%,38%), hsl(0,70%,45%), hsl(40,70%,45%), hsl(90,70%,45%), hsl(130,70%,45%))' }}></div>
-              <div className="flex justify-between text-[7px] font-bold text-white/60 mt-0.5"><span>Vencido</span><span>Fresco (+{FRESH_DAYS}d)</span></div>
+              <div className="flex justify-between text-[11px] font-bold text-white/60 mt-0.5"><span>Vencido</span><span>Fresco (+{FRESH_DAYS}d)</span></div>
             </div>
           )}
           
           {sortedAisles.length === 0 ? (
              <div className="h-full flex flex-col items-center justify-center text-center opacity-60 z-10">
-                <MapIcon className="w-20 h-20 text-slate-500 mb-4"/>
+                <MapIcon className="w-20 h-20 text-slate-400 mb-4"/>
                 <p className="text-white text-lg font-black uppercase tracking-widest">Sector Vacío</p>
                 <p className="text-slate-400 text-xs mt-2">No hay ubicaciones registradas para: {activeWH} - {activeZ}</p>
              </div>
           ) : (
             <div className="h-max min-h-full bg-slate-800/50 rounded-3xl p-8 flex relative z-10 border border-white/5" style={{ minWidth: `${Math.max(800, (colsToRender * 56) + 200)}px`}}>
               <div className="w-20 bg-slate-800 border-r-2 border-dashed border-slate-600 flex flex-col justify-around py-10 rounded-l-2xl shadow-inner mr-8 shrink-0">
-                <div className="w-full h-16 border-r-4 border-yellow-500 text-[10px] text-slate-400 font-black flex items-center justify-center -rotate-90 tracking-[0.2em]">DOCK 1</div>
+                <div className="w-full h-16 border-r-4 border-yellow-500 text-[12px] text-slate-400 font-black flex items-center justify-center -rotate-90 tracking-[0.2em]">DOCK 1</div>
               </div>
               
               <div className="flex-1 flex flex-col gap-10">
@@ -685,7 +689,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${colsToRender}, 3rem)`, gridTemplateRows: `repeat(${levelsToRender}, 3rem) 1.5rem` }}>
                         
                         {Array.from({length: colsToRender}).map((_, c) => (
-                          <div key={`label-${c}`} style={{ gridColumn: c + 1, gridRow: levelsToRender + 1 }} className="text-center text-[9px] font-black text-slate-500 mt-2 uppercase flex items-center justify-center">
+                          <div key={`label-${c}`} style={{ gridColumn: c + 1, gridRow: levelsToRender + 1 }} className="text-center text-[12px] font-black text-slate-400 mt-2 uppercase flex items-center justify-center">
                              C{String(c + 1).padStart(2, '0')}
                           </div>
                         ))}
@@ -754,7 +758,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
 
         <div className="w-full lg:w-80 bg-white rounded-[28px] sm:rounded-[40px] border border-slate-200 shadow-xl flex flex-col overflow-hidden shrink-0 lg:max-h-full max-h-96">
            <div className={`p-6 ${editMode ? 'bg-slate-800' : 'bg-indigo-600'} transition-colors text-white flex justify-between items-center shrink-0`}>
-              <h2 className="font-black text-lg uppercase tracking-tighter flex items-center"><MapIcon className="w-5 h-5 mr-2 opacity-80"/> Scanner de Rack</h2>
+              <h2 className="font-black text-lg tracking-tighter flex items-center"><MapIcon className="w-5 h-5 mr-2 opacity-80"/> Scanner de Rack</h2>
               {selectedLoc && !editMode && <button onClick={() => setSelectedLoc(null)} className="p-1.5 hover:bg-white/20 rounded-full transition-colors" title="Cerrar selección"><X size={16}/></button>}
            </div>
            
@@ -764,26 +768,26 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                   <div className="text-center pb-4 border-b border-slate-200">
                     <div className="bg-red-100 p-4 rounded-full inline-flex mx-auto mb-2"><Edit className="w-8 h-8 text-red-500" /></div>
                     <p className="text-xs font-black text-slate-800 uppercase tracking-widest">Editor de Layout</p>
-                    <p className="text-[10px] text-slate-500 px-2 mt-1">Seleccione las casillas en el mapa 3D para modificarlas estructuralmente.</p>
+                    <p className="text-[12px] text-slate-500 px-2 mt-1">Seleccione las casillas en el mapa 3D para modificarlas estructuralmente.</p>
                   </div>
 
                   <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-2">
                      <div className="flex justify-between items-end border-b border-slate-200 pb-2">
-                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Selección Actual</p>
+                       <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Selección Actual</p>
                        <span className="text-lg font-black text-slate-800">{editSelection.size} casillas</span>
                      </div>
                      
                      <div className="space-y-3 pt-2">
-                        <button onClick={handleToggleBlock} disabled={editSelection.size === 0} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 transition-colors flex items-center justify-center">
+                        <button onClick={handleToggleBlock} disabled={editSelection.size === 0} className="w-full bg-slate-200 hover:bg-slate-300 text-slate-800 font-black py-3 rounded-xl uppercase text-[12px] tracking-widest disabled:opacity-50 transition-colors flex items-center justify-center">
                            <XCircle size={14} className="mr-2"/> Bloquear / Ocultar
                         </button>
                         
                         <div className="pt-4 space-y-2 border-t border-slate-200">
-                          <p className="text-[9px] font-bold text-slate-400 text-center">Herramientas de Agrupación (Merge)</p>
-                          <button onClick={handleMerge} disabled={editSelection.size < 2} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 transition-colors flex items-center justify-center shadow-sm">
+                          <p className="text-[12px] font-bold text-slate-500 text-center">Herramientas de Agrupación (Merge)</p>
+                          <button onClick={handleMerge} disabled={editSelection.size < 2} className="w-full bg-blue-100 hover:bg-blue-200 text-blue-800 font-black py-3 rounded-xl uppercase text-[12px] tracking-widest disabled:opacity-50 transition-colors flex items-center justify-center shadow-sm">
                              <Combine size={14} className="mr-2"/> Unir Seleccionadas
                           </button>
-                          <button onClick={handleUnmerge} disabled={editSelection.size === 0} className="w-full bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-600 font-black py-3 rounded-xl uppercase text-[10px] tracking-widest disabled:opacity-50 transition-colors flex items-center justify-center">
+                          <button onClick={handleUnmerge} disabled={editSelection.size === 0} className="w-full bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-600 font-black py-3 rounded-xl uppercase text-[12px] tracking-widest disabled:opacity-50 transition-colors flex items-center justify-center">
                              <Split size={14} className="mr-2"/> Separar Casillas
                           </button>
                         </div>
@@ -794,16 +798,16 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                <div className="space-y-4 animate-in slide-in-from-right-4 flex-1 overflow-y-auto custom-scrollbar pr-2 pb-4">
                   <div className="shrink-0">
                      <div className="flex justify-between items-end mb-1">
-                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ubicación</p>
-                        {selectedLoc && <span className="text-[8px] bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full font-black uppercase tracking-widest animate-pulse">Fijada</span>}
+                        <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Ubicación</p>
+                        {selectedLoc && <span className="text-[11px] bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full font-black uppercase tracking-widest animate-pulse">Fijada</span>}
                      </div>
                      <p className="text-xl font-mono font-black text-slate-800 bg-white border border-slate-200 py-2 px-4 rounded-xl shadow-sm inline-block">{displayLoc.locId}</p>
                      {mergedBlocks.some(mb => mb.root === displayLoc.locId) && (
-                        <div className="mt-2 text-[9px] font-black bg-blue-100 text-blue-700 px-2 py-1 rounded inline-flex items-center uppercase tracking-widest border border-blue-200">
+                        <div className="mt-2 text-[12px] font-black bg-blue-100 text-blue-700 px-2 py-1 rounded inline-flex items-center uppercase tracking-widest border border-blue-200">
                           <Combine size={12} className="mr-1"/> Ubicación Agrupada
                         </div>
                      )}
-                     <p className="mt-2 text-[10px] font-bold text-slate-500 uppercase border-t border-slate-200 pt-2">{displayLoc.items?.length || 0} LPN(s) Contenidos</p>
+                     <p className="mt-2 text-[12px] font-bold text-slate-500 uppercase border-t border-slate-200 pt-2">{displayLoc.items?.length || 0} LPN(s) Contenidos</p>
                   </div>
                   
                   {displayLoc.items && displayLoc.items.length > 0 ? (
@@ -812,25 +816,25 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                         <div key={idx} className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
                           <div className={`absolute top-0 left-0 w-1.5 h-full ${item.status && item.status !== 'DISPONIBLE' ? 'bg-red-500' : 'bg-indigo-500'}`}></div>
                           <div className="flex justify-between items-start mb-1">
-                             <p className="text-[10px] font-black text-indigo-700 uppercase tracking-tight">{clients?.find(c => c.id === item.client_id)?.name || item.client_id || 'GENERAL'}</p>
-                             <p className="text-[9px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{item.id}</p>
+                             <p className="text-[12px] font-black text-indigo-700 uppercase tracking-tight">{clients?.find(c => c.id === item.client_id)?.name || item.client_id || 'GENERAL'}</p>
+                             <p className="text-[12px] font-mono font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">{item.id}</p>
                           </div>
                           <div className="mb-2">
                              <p className="text-sm font-black text-slate-800 leading-tight">{item.sku}</p>
-                             <p className="text-[9px] font-bold text-slate-500 truncate">{item.desc}</p>
+                             <p className="text-[12px] font-bold text-slate-500 truncate">{item.desc}</p>
                           </div>
                           {(item.batch_number || item.serial_number) && (
                             <div className="mb-2 flex flex-col gap-1">
-                               {item.batch_number && <span className="w-fit text-[8px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase flex items-center"><Calendar className="w-3 h-3 mr-1"/> LT: {item.batch_number} | EXP: {item.expiry_date}</span>}
-                               {item.serial_number && <span className="w-fit text-[8px] font-black bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded uppercase flex items-center"><Tag className="w-3 h-3 mr-1"/> SN: {item.serial_number}</span>}
+                               {item.batch_number && <span className="w-fit text-[11px] font-black bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded uppercase flex items-center"><Calendar className="w-3 h-3 mr-1"/> LT: {item.batch_number} | EXP: {item.expiry_date}</span>}
+                               {item.serial_number && <span className="w-fit text-[11px] font-black bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded uppercase flex items-center"><Tag className="w-3 h-3 mr-1"/> SN: {item.serial_number}</span>}
                             </div>
                           )}
                           <div className="pt-2 border-t border-slate-100 flex justify-between items-end">
                             <div>
-                               <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Stock Físico</p>
-                               <p className="text-lg font-black text-slate-800 leading-none">{item.qty.toLocaleString()} <span className="text-[9px] text-slate-500 uppercase">{item.uom || 'UN'}</span></p>
+                               <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest mb-0.5">Stock Físico</p>
+                               <p className="text-lg font-black text-slate-800 leading-none">{item.qty.toLocaleString()} <span className="text-[12px] text-slate-500 uppercase">{item.uom || 'UN'}</span></p>
                             </div>
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border ${getStatusBadge ? getStatusBadge(item.status) : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{item.status || 'DISPONIBLE'}</span>
+                            <span className={`px-2 py-0.5 rounded text-[12px] font-black uppercase border ${getStatusBadge ? getStatusBadge(item.status) : 'bg-slate-100 text-slate-600 border-slate-200'}`}>{item.status || 'DISPONIBLE'}</span>
                           </div>
                         </div>
                       ))}
@@ -840,7 +844,7 @@ function DigitalTwinView({ inventory, locations, warehouses, zones, getStatusBad
                   )}
                </div>
              ) : (
-               <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50"><Scan className="w-16 h-16 text-slate-400" /><p className="text-xs font-black text-slate-500 uppercase tracking-widest">Pase el cursor sobre un rack<br/>para inspeccionar</p></div>
+               <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50"><Scan className="w-16 h-16 text-slate-500" /><p className="text-xs font-black text-slate-500 uppercase tracking-widest">Pase el cursor sobre un rack<br/>para inspeccionar</p></div>
              )}
            </div>
         </div>
@@ -948,10 +952,10 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <div>
-            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center"><Upload className="w-5 h-5 mr-2 text-indigo-500"/>{cfg.title || 'Importar'}</h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Soporta archivos .xlsx y .csv</p>
+            <h2 className="text-lg font-black text-slate-800 tracking-tighter flex items-center"><Upload className="w-5 h-5 mr-2 text-indigo-500"/>{cfg.title || 'Importar'}</h2>
+            <p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Soporta archivos .xlsx y .csv</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={18} className="text-slate-400"/></button>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={18} className="text-slate-500"/></button>
         </div>
 
         <div className="p-6 space-y-5">
@@ -959,7 +963,7 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between">
             <div>
               <p className="text-sm font-black text-emerald-800">Plantilla de ejemplo</p>
-              <p className="text-[10px] text-emerald-600 mt-0.5">Descarga una plantilla con las columnas correctas</p>
+              <p className="text-[12px] text-emerald-600 mt-0.5">Descarga una plantilla con las columnas correctas</p>
             </div>
             <a href={`${host}/api/templates/${type}`} download className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-colors">
               <Download size={14}/> Descargar plantilla
@@ -968,12 +972,12 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
 
           {/* Instrucciones */}
           <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
-            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Campos</p>
+            <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Campos</p>
             <div className="flex flex-wrap gap-2">
-              {cfg.required?.map(f => <span key={f} className="bg-red-100 text-red-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase">{f} *</span>)}
-              {cfg.optional?.map(f => <span key={f} className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-lg uppercase">{f}</span>)}
+              {cfg.required?.map(f => <span key={f} className="bg-red-100 text-red-700 text-[12px] font-black px-2 py-1 rounded-lg uppercase">{f} *</span>)}
+              {cfg.optional?.map(f => <span key={f} className="bg-slate-200 text-slate-600 text-[12px] font-bold px-2 py-1 rounded-lg uppercase">{f}</span>)}
             </div>
-            <p className="text-[9px] text-slate-400">* Obligatorio</p>
+            <p className="text-[12px] text-slate-500">* Obligatorio</p>
           </div>
 
           {/* Zona de carga — idle o loading */}
@@ -988,7 +992,7 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
               {status === 'loading' ? (
                 <><Loader2 className="w-10 h-10 mx-auto mb-2 text-indigo-400 animate-spin"/><p className="text-sm font-black text-slate-500">Procesando archivo...</p></>
               ) : (
-                <><Upload className="w-10 h-10 mx-auto mb-2 text-slate-300"/><p className="text-sm font-black text-slate-500">Arrastra tu archivo aquí</p><p className="text-[10px] text-slate-400 mt-1">o haz clic para seleccionar · CSV o XLSX</p></>
+                <><Upload className="w-10 h-10 mx-auto mb-2 text-slate-300"/><p className="text-sm font-black text-slate-500">Arrastra tu archivo aquí</p><p className="text-[12px] text-slate-500 mt-1">o haz clic para seleccionar · CSV o XLSX</p></>
               )}
               <input id="import-file-input" type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files[0]; if(f) handleFile(f); e.target.value=''; }}/>
             </div>
@@ -1000,13 +1004,13 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
           {status === 'preview' && preview && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Vista previa — {preview.total} filas totales</p>
-                <button onClick={() => { setStatus('idle'); setPreview(null); }} className="text-[10px] text-slate-400 hover:text-slate-600 font-bold uppercase">Cambiar archivo</button>
+                <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Vista previa — {preview.total} filas totales</p>
+                <button onClick={() => { setStatus('idle'); setPreview(null); }} className="text-[12px] text-slate-500 hover:text-slate-600 font-bold uppercase">Cambiar archivo</button>
               </div>
               <div className="overflow-x-auto rounded-xl border border-slate-200">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 border-b border-slate-200">
-                    <tr>{preview.headers.map(h => <th key={h} className="px-3 py-2 font-black text-slate-500 uppercase text-[9px] whitespace-nowrap">{h}</th>)}</tr>
+                    <tr>{preview.headers.map(h => <th key={h} className="px-3 py-2 font-black text-slate-500 uppercase text-[12px] whitespace-nowrap">{h}</th>)}</tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {preview.rows.map((row, i) => (
@@ -1017,7 +1021,7 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
                   </tbody>
                 </table>
               </div>
-              {preview.total > 5 && <p className="text-[10px] text-slate-400 text-center">Mostrando 5 de {preview.total} filas</p>}
+              {preview.total > 5 && <p className="text-[12px] text-slate-500 text-center">Mostrando 5 de {preview.total} filas</p>}
               <button onClick={handleImport} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-4 rounded-2xl shadow-lg uppercase text-xs tracking-widest transition-colors flex justify-center items-center">
                 <Database size={16} className="mr-2"/> Cargar {preview.total} filas
               </button>
@@ -1042,12 +1046,12 @@ const ImportModal = ({ type, host, currentUser, extraParams, onClose, onSuccess 
               {safeErrors.length > 0 && (
                 <div className="bg-red-50 border border-red-200 rounded-2xl p-4 space-y-1">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">Detalle de errores</p>
+                    <p className="text-[12px] font-black text-red-600 uppercase tracking-widest">Detalle de errores</p>
                     <button onClick={() => {
                       const csv = 'Fila,Error\n' + safeErrors.map((e,i) => `${i+1},"${errText(e).replace(/"/g,'""')}"`).join('\n');
                       const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
                       a.download = 'errores_importacion.csv'; a.click();
-                    }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 rounded-lg px-2 py-1 text-[8px] font-black uppercase flex items-center gap-1">
+                    }} className="bg-red-100 hover:bg-red-200 text-red-700 border border-red-200 rounded-lg px-2 py-1 text-[11px] font-black uppercase flex items-center gap-1">
                       <Download size={9}/> Descargar CSV
                     </button>
                   </div>
@@ -1074,7 +1078,7 @@ const ConfirmModal = ({ title, message, confirmText = 'Confirmar', onConfirm, on
         <div className={`w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-4 ${danger ? 'bg-red-100' : 'bg-amber-100'}`}>
           <ShieldAlert className={`w-7 h-7 ${danger ? 'text-red-600' : 'text-amber-600'}`}/>
         </div>
-        <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter">{title}</h2>
+        <h2 className="text-lg font-black text-slate-800 tracking-tighter">{title}</h2>
         <p className="text-sm text-slate-500 mt-2 font-medium leading-relaxed">{message}</p>
       </div>
       <div className="flex gap-3 px-6 pb-6">
@@ -1111,7 +1115,7 @@ const DemoHint = ({ tabId, isDemo }) => {
   if (!hint) return null;
   const isDismissed = dismissed.includes(tabId);
   if (isDismissed && !expanded) return (
-    <button onClick={()=>setExpanded(true)} className="mb-4 flex items-center gap-2 text-[10px] font-black text-amber-600 hover:text-amber-800 uppercase tracking-widest transition-colors">
+    <button onClick={()=>setExpanded(true)} className="mb-4 flex items-center gap-2 text-[12px] font-black text-amber-600 hover:text-amber-800 uppercase tracking-widest transition-colors">
       <Lightbulb size={12}/> Ver ayuda para este módulo
     </button>
   );
@@ -1146,13 +1150,13 @@ const DemoHint = ({ tabId, isDemo }) => {
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <p className="font-black text-base uppercase tracking-tighter">{hint.title}</p>
-              <span className="text-[9px] font-black bg-amber-400 text-white px-2 py-0.5 rounded-full uppercase">Modo Demo</span>
+              <span className="text-[12px] font-black bg-amber-400 text-white px-2 py-0.5 rounded-full uppercase">Modo Demo</span>
             </div>
             <p className="text-sm font-medium opacity-80 mb-3">{hint.desc}</p>
             <div className="space-y-1.5">
               {hint.steps.map((s, i) => (
                 <div key={i} className="flex items-start gap-2">
-                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-black bg-white/70 ${stepColor[hint.color]}`}>{i+1}</span>
+                  <span className={`shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[12px] font-black bg-white/70 ${stepColor[hint.color]}`}>{i+1}</span>
                   <p className={`text-xs font-medium ${stepColor[hint.color]}`}>{s}</p>
                 </div>
               ))}
@@ -1160,7 +1164,7 @@ const DemoHint = ({ tabId, isDemo }) => {
             {hint.tip && (
               <div className="mt-3 flex items-start gap-2 bg-white/50 rounded-xl px-3 py-2">
                 <Lightbulb size={12} className={`shrink-0 mt-0.5 ${stepColor[hint.color]}`}/>
-                <p className={`text-[10px] font-bold italic ${stepColor[hint.color]}`}>{hint.tip}</p>
+                <p className={`text-[12px] font-bold italic ${stepColor[hint.color]}`}>{hint.tip}</p>
               </div>
             )}
           </div>
@@ -1191,12 +1195,12 @@ const SandboxWelcome = ({ currentUser, onClose }) => {
           <div className="flex gap-3">
             <div className="flex-1 bg-slate-50 rounded-xl p-3 border border-slate-200">
               <span className="text-lg">{scenario.icon}</span>
-              <p className="text-[9px] font-black text-slate-400 uppercase mt-1">Escenario</p>
+              <p className="text-[12px] font-black text-slate-500 uppercase mt-1">Escenario</p>
               <p className="text-sm font-black text-slate-700">{scenario.label}</p>
             </div>
             <div className="flex-1 bg-slate-50 rounded-xl p-3 border border-slate-200">
               <span className="text-lg">{role.icon}</span>
-              <p className="text-[9px] font-black text-slate-400 uppercase mt-1">Tu Rol</p>
+              <p className="text-[12px] font-black text-slate-500 uppercase mt-1">Tu Rol</p>
               <p className="text-sm font-black text-slate-700">{role.label}</p>
             </div>
           </div>
@@ -1215,10 +1219,10 @@ const SandboxWelcome = ({ currentUser, onClose }) => {
           <div className="space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar">
             {missions.map((m, i) => (
               <div key={m.id} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 border border-slate-100">
-                <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-[9px] font-black shrink-0">{i+1}</span>
+                <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-[12px] font-black shrink-0">{i+1}</span>
                 <div className="min-w-0">
                   <p className="text-xs font-black text-slate-700 truncate">{m.label}</p>
-                  <p className="text-[9px] text-slate-400">{m.desc}</p>
+                  <p className="text-[12px] text-slate-500">{m.desc}</p>
                 </div>
               </div>
             ))}
@@ -1241,12 +1245,12 @@ const SandboxWelcome = ({ currentUser, onClose }) => {
             </div>
             <div>
               <p className="text-xs font-black text-amber-800">Panel Sandbox</p>
-              <p className="text-[10px] text-amber-600">Cambia rol, escenario y sigue tus misiones</p>
+              <p className="text-[12px] text-amber-600">Cambia rol, escenario y sigue tus misiones</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
             {Object.values(SANDBOX_ROLES).map(r => (
-              <span key={r.id} className="text-[9px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">
+              <span key={r.id} className="text-[12px] font-bold bg-slate-100 text-slate-600 px-2 py-1 rounded-lg">
                 {r.icon} {r.label}
               </span>
             ))}
@@ -1344,16 +1348,16 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
       <div className="w-full max-w-3xl">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 bg-amber-500/20 border border-amber-500/30 text-amber-300 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-4">
+          <div className="inline-flex items-center gap-2 bg-amber-500/20 border border-amber-500/30 text-amber-300 px-4 py-1.5 rounded-full text-[12px] font-black uppercase tracking-widest mb-4">
             <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse"/> Sandbox Interactivo
           </div>
           <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight mb-2">WMS Enterprise</h1>
-          <p className="text-slate-400 text-sm font-medium">Explora el sistema completo sin afectar datos reales</p>
+          <p className="text-slate-500 text-sm font-medium">Explora el sistema completo sin afectar datos reales</p>
         </div>
 
         {step === 'scenario' ? (
           <div className="animate-in fade-in slide-in-from-bottom-4">
-            <p className="text-center text-[11px] font-black text-slate-500 uppercase tracking-widest mb-6">
+            <p className="text-center text-[13px] font-black text-slate-500 uppercase tracking-widest mb-6">
               Paso 1 de 2 — Elige tu escenario
             </p>
             <div className="grid gap-4 md:grid-cols-3">
@@ -1365,7 +1369,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
                     <span className="text-4xl block mb-3">{sc.icon}</span>
                     <h3 className="text-lg font-black text-white mb-1">{sc.label}</h3>
                     <p className="text-white/80 text-xs font-medium leading-relaxed mb-3">{sc.desc}</p>
-                    <p className="text-white/50 text-[10px] font-medium leading-relaxed">{sc.detail}</p>
+                    <p className="text-white/50 text-[12px] font-medium leading-relaxed">{sc.detail}</p>
                     <div className="absolute top-4 right-4 bg-white/20 rounded-full w-8 h-8 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                     </div>
@@ -1381,14 +1385,14 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
                 <button onClick={() => setStep('scenario')} className="text-slate-500 hover:text-white transition-colors p-1.5 rounded-lg hover:bg-slate-700">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
                 </button>
-                <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest">
+                <p className="text-[13px] font-black text-slate-500 uppercase tracking-widest">
                   Paso 2 de 2 — Elige tu rol
                 </p>
               </div>
               {selectedScenario && (() => {
                 const sc = SANDBOX_SCENARIOS[selectedScenario];
                 const c = scenarioColors[sc.color] || FALLBACK_SCENARIO_COLOR;
-                return <span className={`${c.bg} ${c.text} px-3 py-1 rounded-full text-[10px] font-black uppercase`}>{sc.icon} {sc.label}</span>;
+                return <span className={`${c.bg} ${c.text} px-3 py-1 rounded-full text-[12px] font-black uppercase`}>{sc.icon} {sc.label}</span>;
               })()}
             </div>
             <div className="grid gap-3">
@@ -1406,14 +1410,14 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
                         <h3 className="text-sm font-black text-white">{r.label}</h3>
-                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${c.badge}`}>{r.id === 'EJECUTIVO_CUENTA' ? 'EJECUTIVO' : r.id}</span>
+                        <span className={`text-[11px] font-black uppercase px-2 py-0.5 rounded-full ${c.badge}`}>{r.id === 'EJECUTIVO_CUENTA' ? 'EJECUTIVO' : r.id}</span>
                       </div>
-                      <p className="text-slate-400 text-xs font-medium">{r.desc}</p>
+                      <p className="text-slate-500 text-xs font-medium">{r.desc}</p>
                     </div>
                     <div className="shrink-0">
                       {isLoading
-                        ? <Loader2 size={20} className="animate-spin text-slate-400"/>
-                        : <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-slate-400 group-hover:bg-white/20 group-hover:text-white transition-all">
+                        ? <Loader2 size={20} className="animate-spin text-slate-500"/>
+                        : <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-slate-500 group-hover:bg-white/20 group-hover:text-white transition-all">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                           </div>
                       }
@@ -1425,7 +1429,7 @@ const SandboxLauncher = ({ host, onLogin, showMsg }) => {
           </div>
         )}
 
-        <p className="text-center text-slate-600 text-[10px] font-bold mt-8 uppercase tracking-wider">
+        <p className="text-center text-slate-600 text-[12px] font-bold mt-8 uppercase tracking-wider">
           Las acciones son simuladas — nada se guarda en la base de datos
         </p>
       </div>
@@ -1527,11 +1531,11 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
                 strokeDasharray={`${progress}, 100`} strokeLinecap="round"/>
             </svg>
           )}
-          {progress === 100 && <span className="absolute -top-1 -right-1 text-[10px]">✅</span>}
+          {progress === 100 && <span className="absolute -top-1 -right-1 text-[12px]">✅</span>}
         </div>
         <div className="text-left hidden sm:block">
-          <p className="text-[9px] font-black uppercase tracking-widest opacity-80">Sandbox</p>
-          <p className="text-[10px] font-black leading-tight">{rl.label} · {sc?.label}</p>
+          <p className="text-[12px] font-black uppercase tracking-widest opacity-80">Sandbox</p>
+          <p className="text-[12px] font-black leading-tight">{rl.label} · {sc?.label}</p>
         </div>
       </button>
 
@@ -1545,7 +1549,7 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
                 <span className="text-lg">{rl.icon}</span>
                 <div>
                   <p className="text-white font-black text-sm">{rl.label}</p>
-                  <p className="text-white/70 text-[9px] font-bold uppercase">{sc?.icon} {sc?.label}</p>
+                  <p className="text-white/70 text-[12px] font-bold uppercase">{sc?.icon} {sc?.label}</p>
                 </div>
               </div>
               <button onClick={() => setOpen(false)} className="text-white/60 hover:text-white p-1"><X size={16}/></button>
@@ -1554,14 +1558,14 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
             <div className="bg-white/20 rounded-full h-1.5 mt-1">
               <div className="bg-white rounded-full h-1.5 transition-all duration-500" style={{ width: `${progress}%` }}/>
             </div>
-            <p className="text-white/70 text-[9px] font-bold mt-1">{completedCount}/{missions.length} misiones · {visitedTabs.length} módulos visitados</p>
+            <p className="text-white/70 text-[12px] font-bold mt-1">{completedCount}/{missions.length} misiones · {visitedTabs.length} módulos visitados</p>
           </div>
 
           {/* Tabs */}
           <div className="flex border-b border-slate-100">
             {[['role','Rol'],['scenario','Escenario'],['missions','Misiones']].map(([id,label]) => (
               <button key={id} onClick={() => setTab(id)}
-                className={`flex-1 py-2.5 text-[9px] font-black uppercase tracking-widest transition-colors ${tab===id ? 'text-amber-600 border-b-2 border-amber-500' : 'text-slate-400 hover:text-slate-600'}`}>
+                className={`flex-1 py-2.5 text-[12px] font-black uppercase tracking-widest transition-colors ${tab===id ? 'text-amber-600 border-b-2 border-amber-500' : 'text-slate-500 hover:text-slate-600'}`}>
                 {label}
               </button>
             ))}
@@ -1584,9 +1588,9 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
                       <span className="text-xl shrink-0">{r.icon}</span>
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-black ${isActive ? 'text-amber-700' : 'text-slate-700'}`}>{r.label}</p>
-                        <p className="text-[9px] text-slate-400 font-medium">{r.shortDesc}</p>
+                        <p className="text-[12px] text-slate-500 font-medium">{r.shortDesc}</p>
                       </div>
-                      {isActive && <span className="text-[8px] font-black text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full uppercase">Activo</span>}
+                      {isActive && <span className="text-[11px] font-black text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full uppercase">Activo</span>}
                       {isLoading && <Loader2 size={14} className="animate-spin text-amber-500 shrink-0"/>}
                     </button>
                   );
@@ -1606,15 +1610,15 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
                       <span className="text-xl shrink-0">{s.icon}</span>
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-black ${isActive ? 'text-amber-700' : 'text-slate-700'}`}>{s.label}</p>
-                        <p className="text-[9px] text-slate-400 font-medium">{s.desc}</p>
+                        <p className="text-[12px] text-slate-500 font-medium">{s.desc}</p>
                       </div>
-                      {isActive && <span className="text-[8px] font-black text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full uppercase">Activo</span>}
+                      {isActive && <span className="text-[11px] font-black text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full uppercase">Activo</span>}
                       {isLoading && <Loader2 size={14} className="animate-spin text-amber-500 shrink-0"/>}
                     </button>
                   );
                 })}
                 {currentScenario === 'PROPIO' && currentRole === 'CLIENTE' && (
-                  <p className="text-[9px] text-amber-600 font-bold bg-amber-50 p-2 rounded-lg mt-1">El rol Cliente no aplica en modo Propio. Se cambiará a Admin.</p>
+                  <p className="text-[12px] text-amber-600 font-bold bg-amber-50 p-2 rounded-lg mt-1">El rol Cliente no aplica en modo Propio. Se cambiará a Admin.</p>
                 )}
               </div>
             )}
@@ -1623,24 +1627,24 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
             {tab === 'missions' && (
               <div className="space-y-2">
                 {missions.length === 0 ? (
-                  <p className="text-center text-slate-400 text-[10px] font-bold py-4 uppercase">Sin misiones para este rol</p>
+                  <p className="text-center text-slate-500 text-[12px] font-bold py-4 uppercase">Sin misiones para este rol</p>
                 ) : missions.map(m => {
                   const done = completedMissions.includes(m.id);
                   return (
                     <button key={m.id} onClick={() => { switchTab(m.tab); setOpen(false); }}
                       className={`w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all border-2 ${done ? 'border-emerald-200 bg-emerald-50/50' : 'border-slate-100 hover:border-amber-300 hover:bg-amber-50/30'}`}>
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${done ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-400'}`}>
+                      <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${done ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
                         {done
                           ? <CheckCircle2 size={14}/>
-                          : <span className="text-[10px] font-black">{missions.indexOf(m)+1}</span>
+                          : <span className="text-[12px] font-black">{missions.indexOf(m)+1}</span>
                         }
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className={`text-xs font-black ${done ? 'text-emerald-700 line-through opacity-70' : 'text-slate-700'}`}>{m.label}</p>
-                        <p className="text-[9px] text-slate-400 font-medium">{m.desc}</p>
+                        <p className="text-[12px] text-slate-500 font-medium">{m.desc}</p>
                       </div>
                       {!done && (
-                        <span className="text-[8px] font-black text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full uppercase shrink-0">Ir</span>
+                        <span className="text-[11px] font-black text-amber-500 bg-amber-50 px-2 py-0.5 rounded-full uppercase shrink-0">Ir</span>
                       )}
                     </button>
                   );
@@ -1648,7 +1652,7 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
                 {completedCount === missions.length && missions.length > 0 && (
                   <div className="text-center py-3 bg-emerald-50 rounded-xl border border-emerald-200 mt-2">
                     <span className="text-lg">🎉</span>
-                    <p className="text-[10px] font-black text-emerald-700 uppercase mt-1">¡Todas las misiones completadas!</p>
+                    <p className="text-[12px] font-black text-emerald-700 uppercase mt-1">¡Todas las misiones completadas!</p>
                   </div>
                 )}
               </div>
@@ -1657,9 +1661,9 @@ const SandboxSwitcher = ({ host, currentUser, setCurrentUser, activeTab, switchT
 
           {/* Footer — salir */}
           <div className="border-t border-slate-100 px-4 py-3 flex justify-between items-center">
-            <p className="text-[8px] text-slate-400 font-bold uppercase">Los cambios no se guardan</p>
+            <p className="text-[11px] text-slate-500 font-bold uppercase">Los cambios no se guardan</p>
             <button onClick={() => { localStorage.removeItem('wms_token'); setCurrentUser(null); sessionStorage.removeItem('sandbox_missions'); sessionStorage.removeItem('sandbox_visited'); }}
-              className="text-[9px] font-black text-red-500 hover:text-red-700 uppercase flex items-center gap-1 transition-colors">
+              className="text-[12px] font-black text-red-500 hover:text-red-700 uppercase flex items-center gap-1 transition-colors">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
               Salir del Sandbox
             </button>
@@ -1906,10 +1910,10 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], ext
       <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-5xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-slate-100">
           <div>
-            <h2 className="text-lg font-black text-slate-800 uppercase tracking-tighter flex items-center"><Upload className="w-5 h-5 mr-2 text-emerald-500"/>{schema.title} — Previsualización</h2>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Edita, verifica y confirma · CSV o XLSX</p>
+            <h2 className="text-lg font-black text-slate-800 tracking-tighter flex items-center"><Upload className="w-5 h-5 mr-2 text-emerald-500"/>{schema.title} — Previsualización</h2>
+            <p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest mt-0.5">Edita, verifica y confirma · CSV o XLSX</p>
           </div>
-          <button onClick={handleCancel} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={18} className="text-slate-400"/></button>
+          <button onClick={handleCancel} className="p-2 hover:bg-slate-100 rounded-xl transition-colors"><X size={18} className="text-slate-500"/></button>
         </div>
 
         <div className="p-6 space-y-5">
@@ -1919,19 +1923,19 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], ext
               <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center justify-between">
                 <div>
                   <p className="text-sm font-black text-emerald-800">Plantilla de ejemplo</p>
-                  <p className="text-[10px] text-emerald-600 mt-0.5">Descarga el Excel con las columnas correctas</p>
+                  <p className="text-[12px] text-emerald-600 mt-0.5">Descarga el Excel con las columnas correctas</p>
                 </div>
                 <a href={`${host}/api/templates/${schema.template}`} download className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-colors">
                   <Download size={14}/> Descargar plantilla
                 </a>
               </div>
               <div className="bg-slate-50 rounded-2xl p-4 space-y-2">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Columnas</p>
+                <p className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Columnas</p>
                 <div className="flex flex-wrap gap-2">
-                  {schema.required.map(f => <span key={f} className="bg-red-100 text-red-700 text-[10px] font-black px-2 py-1 rounded-lg uppercase">{f} *</span>)}
-                  {cols.filter(c => !schema.required.includes(c)).map(f => <span key={f} className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-lg uppercase">{f}</span>)}
+                  {schema.required.map(f => <span key={f} className="bg-red-100 text-red-700 text-[12px] font-black px-2 py-1 rounded-lg uppercase">{f} *</span>)}
+                  {cols.filter(c => !schema.required.includes(c)).map(f => <span key={f} className="bg-slate-200 text-slate-600 text-[12px] font-bold px-2 py-1 rounded-lg uppercase">{f}</span>)}
                 </div>
-                <p className="text-[9px] text-slate-400">* Obligatorio{schema.hint ? ` · ${schema.hint}` : ''}</p>
+                <p className="text-[12px] text-slate-500">* Obligatorio{schema.hint ? ` · ${schema.hint}` : ''}</p>
               </div>
               <div
                 className={`border-2 border-dashed rounded-2xl p-10 text-center transition-colors cursor-pointer ${isDragOver ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-emerald-300 hover:bg-slate-50'}`}
@@ -1942,7 +1946,7 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], ext
               >
                 <Upload className="w-10 h-10 mx-auto mb-2 text-slate-300"/>
                 <p className="text-sm font-black text-slate-500">Arrastra tu archivo aquí</p>
-                <p className="text-[10px] text-slate-400 mt-1">o haz clic para seleccionar · CSV o XLSX</p>
+                <p className="text-[12px] text-slate-500 mt-1">o haz clic para seleccionar · CSV o XLSX</p>
                 <input id="bulk-file-input" type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ''; }}/>
               </div>
             </>
@@ -1956,10 +1960,10 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], ext
               {schema.duplicateCheck && (
                 <div className="flex flex-col sm:flex-row sm:items-end gap-3">
                   <div className="flex-1">
-                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{schema.docLabel}</label>
+                    <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">{schema.docLabel}</label>
                     <input value={docNum} onChange={e => setDocNum(e.target.value)} onBlur={() => runDupCheck(rows, docNum)} placeholder="Déjalo vacío para autogenerar" className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-emerald-500"/>
                   </div>
-                  <button onClick={() => runDupCheck(rows, docNum)} disabled={checking} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest flex items-center gap-2 disabled:opacity-50">
+                  <button onClick={() => runDupCheck(rows, docNum)} disabled={checking} className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-[12px] font-black uppercase tracking-widest flex items-center gap-2 disabled:opacity-50">
                     {checking ? <Loader2 size={12} className="animate-spin"/> : <ShieldAlert size={12}/>} Revalidar duplicados
                   </button>
                 </div>
@@ -1967,7 +1971,7 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], ext
               {docDuplicate && <p className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2">⚠️ El documento '{docNum}' ya fue procesado anteriormente.</p>}
               {pideCliente && (
                 <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Cliente del documento</label>
+                  <label className="text-[12px] font-black text-slate-500 uppercase tracking-widest">Cliente del documento</label>
                   <select value={docClient} onChange={e => setDocClient(e.target.value)} className="w-full mt-1 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-emerald-500 bg-white">
                     <option value="">— Selecciona el cliente —</option>
                     {clients.map(c => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
@@ -1977,20 +1981,20 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], ext
 
               {/* Resumen */}
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-slate-700">{rows.length}</p><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Filas</p></div>
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-emerald-700">{validRows.length}</p><p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Válidas</p></div>
-                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-red-600">{errorRows.length}</p><p className="text-[10px] font-bold text-red-400 uppercase tracking-widest">Con error</p></div>
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-slate-700">{rows.length}</p><p className="text-[12px] font-bold text-slate-500 uppercase tracking-widest">Filas</p></div>
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-emerald-700">{validRows.length}</p><p className="text-[12px] font-bold text-emerald-500 uppercase tracking-widest">Válidas</p></div>
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 text-center"><p className="text-2xl font-black text-red-600">{errorRows.length}</p><p className="text-[12px] font-bold text-red-400 uppercase tracking-widest">Con error</p></div>
               </div>
-              <p className="text-[10px] text-slate-400 font-bold">Puedes corregir cualquier celda directamente en la tabla; la validación se actualiza al instante.</p>
+              <p className="text-[12px] text-slate-500 font-bold">Puedes corregir cualquier celda directamente en la tabla; la validación se actualiza al instante.</p>
 
               <div className="overflow-x-auto rounded-xl border border-slate-200 max-h-96 overflow-y-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                     <tr>
-                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[9px]">#</th>
-                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[9px]">Estado</th>
-                      {cols.map(h => <th key={h} className="px-2 py-2 font-black text-slate-500 uppercase text-[9px] whitespace-nowrap">{h}{schema.required.includes(h) && <span className="text-red-500"> *</span>}</th>)}
-                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[9px]">Motivo</th>
+                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[12px]">#</th>
+                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[12px]">Estado</th>
+                      {cols.map(h => <th key={h} className="px-2 py-2 font-black text-slate-500 uppercase text-[12px] whitespace-nowrap">{h}{schema.required.includes(h) && <span className="text-red-500"> *</span>}</th>)}
+                      <th className="px-2 py-2 font-black text-slate-500 uppercase text-[12px]">Motivo</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1998,11 +2002,11 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], ext
                       const ok = isRowValid(r);
                       return (
                         <tr key={i} className={ok ? 'hover:bg-slate-50' : 'bg-red-50/50'}>
-                          <td className="px-2 py-1 text-slate-400 font-bold">{i + 2}</td>
+                          <td className="px-2 py-1 text-slate-500 font-bold">{i + 2}</td>
                           <td className="px-2 py-1">
                             {ok
-                              ? <span className="inline-flex items-center gap-1 text-emerald-700 font-black text-[10px] uppercase"><CheckCircle2 size={12}/> OK</span>
-                              : <span className="inline-flex items-center gap-1 text-red-700 font-black text-[10px] uppercase"><XCircle size={12}/> Error</span>}
+                              ? <span className="inline-flex items-center gap-1 text-emerald-700 font-black text-[12px] uppercase"><CheckCircle2 size={12}/> OK</span>
+                              : <span className="inline-flex items-center gap-1 text-red-700 font-black text-[12px] uppercase"><XCircle size={12}/> Error</span>}
                           </td>
                           {cols.map(h => {
                             // Campos booleanos (ej. requires_lot/serial) → casilla en vez de texto.
@@ -2024,12 +2028,12 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], ext
                                 <input
                                   value={String(r.data[h] ?? '')}
                                   onChange={(e) => updateCell(i, h, e.target.value)}
-                                  className={`w-full min-w-[80px] border rounded-md px-2 py-1 text-[11px] font-bold outline-none focus:border-emerald-500 ${fieldErr ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
+                                  className={`w-full min-w-[80px] border rounded-md px-2 py-1 text-[13px] font-bold outline-none focus:border-emerald-500 ${fieldErr ? 'border-red-300 bg-red-50' : 'border-slate-200'}`}
                                 />
                               </td>
                             );
                           })}
-                          <td className="px-2 py-1 text-[10px] font-bold max-w-[200px]">
+                          <td className="px-2 py-1 text-[12px] font-bold max-w-[200px]">
                             {rowMotivo(r) && <span className="text-red-600">{rowMotivo(r)}</span>}
                             {r.dupWarnings.length > 0 && <span className="text-amber-600 block">{r.dupWarnings.join('; ')}</span>}
                           </td>
@@ -2055,8 +2059,8 @@ const BulkImportModal = ({ type, host, currentUser, skus = [], clients = [], ext
                   <Database size={16} className="mr-2"/> Confirmar ({validRows.length} {validRows.length === 1 ? 'fila válida' : 'filas válidas'})
                 </button>
               </div>
-              {validRows.length === 0 && <p className="text-[11px] text-red-500 font-bold text-center">No hay filas válidas. Corrige las celdas marcadas y reintenta.</p>}
-              {validRows.length > 0 && errorRows.length > 0 && <p className="text-[11px] text-red-500 font-bold text-center">La importación es completa o no se hace: corrige las filas marcadas o quítalas para confirmar.</p>}
+              {validRows.length === 0 && <p className="text-[13px] text-red-500 font-bold text-center">No hay filas válidas. Corrige las celdas marcadas y reintenta.</p>}
+              {validRows.length > 0 && errorRows.length > 0 && <p className="text-[13px] text-red-500 font-bold text-center">La importación es completa o no se hace: corrige las filas marcadas o quítalas para confirmar.</p>}
             </div>
           )}
 
