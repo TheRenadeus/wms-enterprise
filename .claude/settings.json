@@ -1,0 +1,10 @@
+{
+  "extraKnownMarketplaces": {
+    "mods-renato": {
+      "source": { "source": "github", "repo": "TheRenadeus/mods-claude" }
+    }
+  },
+  "enabledPlugins": {
+    "oficina@mods-renato": true
+  }
+}
