@@ -56,6 +56,7 @@
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 table{font-variant-numeric:tabular-nums}
@@ -120,6 +121,7 @@ table.t{width:100%;border-collapse:collapse;font-size:13px}
 .t tr:last-child td{border-bottom:0}
 .t .num{text-align:right;white-space:nowrap}
 .t .ctr{text-align:center}
+.t td.code{white-space:nowrap}
 .t tbody tr:hover td{background:color-mix(in srgb,var(--surface-2) 60%,transparent)}
 .t .grp td{background:var(--surface-2);font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:8px 12px}
 .code{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink-2)}
@@ -228,6 +230,16 @@ select.in{padding-right:28px}
 .search svg{position:absolute;left:10px;color:var(--muted);pointer-events:none}
 .fbar .search .in{width:100%;padding-left:34px}
 .fcount{font-size:12px;color:var(--muted);font-weight:700;white-space:nowrap}
+.kinds{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.kind-card{padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.kind-card.sel{border-color:var(--money);box-shadow:0 0 0 1px var(--money)}
+.kind-card h3{margin:0;font-size:15px;font-weight:900;display:flex;gap:8px;align-items:center}
+.kind-card p{margin:0;line-height:1.45}
+.kind-card .big{font-size:24px;font-weight:900;font-variant-numeric:tabular-nums;margin-top:2px}
+.tr-note{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);margin-top:3px}
+.fields.four{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:960px){ .kinds{grid-template-columns:minmax(0,1fr)} .fields.four{grid-template-columns:repeat(2,minmax(0,1fr))} }
+@media (max-width:640px){ .fields.four{grid-template-columns:minmax(0,1fr)} }
 
 /* ── Vista previa (documento) ── */
 .modal{position:fixed;inset:0;background:var(--overlay);z-index:60;display:flex;justify-content:center;align-items:flex-start;overflow-y:auto;padding-top:max(24px,env(safe-area-inset-top,0px));padding-bottom:max(24px,env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -350,14 +362,31 @@ const roundUp10 = v => Math.ceil(v/10)*10;
 const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 const match = (q, ...fields) => { const n = norm(String(q||'').trim()); return !n || fields.some(f => norm(f).includes(n)); };
 
-// ─── Datos de ejemplo (clientes y SKUs del modo demo del WMS) ────────────
+// ─── Datos de ejemplo ────────────────────────────────────────────────────
+// Dos tipos de cliente:
+//  - almacenaje: guarda su propia mercadería en la bodega (clientes 3PL del modo demo);
+//    se le cobra almacenaje, operación, insumos y transporte.
+//  - venta: compra productos propios, que se le despachan con guía, con o sin flete.
+const KINDS = {
+  almacenaje: { short:'Almacenaje', ico:'layers', cls:'acc',  desc:'Guarda su propia mercadería en la bodega. Se le cobra almacenaje, operación, insumos y transporte' },
+  venta:      { short:'Venta',      ico:'tag',    cls:'good', desc:'Compra productos propios, que se le despachan con guía de despacho, con o sin flete' }
+};
+// Tipos de línea que se le cobran a cada tipo de cliente.
+const KIND_TYPES = { almacenaje:['servicio','insumo','transporte','otro'], venta:['producto','transporte','otro'] };
 const CLIENTS = [
-  { id:'ACME', name:'ACME Corp', rut:'76.512.340-K', giro:'Venta de equipos computacionales', contact:'Juan Pérez', email:'juan@acme.cl', dir:'Av. Apoquindo 4501, Las Condes', terms:'30' },
-  { id:'RETAIL-X', name:'Retail Express', rut:'77.204.118-3', giro:'Comercio al por menor de vestuario', contact:'María López', email:'maria@retailx.cl', dir:'Av. Matta 820, Santiago', terms:'45' },
-  { id:'FARMA-SUR', name:'Farma del Sur', rut:'76.981.552-1', giro:'Distribución de productos farmacéuticos', contact:'Carlos Vega', email:'carlos@farmasur.cl', dir:'Camino a Melipilla 9120, Maipú', terms:'30' }
+  { id:'ACME',       kind:'almacenaje', name:'ACME Corp',                   rut:'76.512.340-K', giro:'Venta de equipos computacionales',       contact:'Juan Pérez',     email:'juan@acme.cl',                        dir:'Av. Apoquindo 4501, Las Condes',      terms:'30', stock:{ pos:20, skus:5, units:358 } },
+  { id:'RETAIL-X',   kind:'almacenaje', name:'Retail Express',              rut:'77.204.118-3', giro:'Comercio al por menor de vestuario',     contact:'María López',    email:'maria@retailx.cl',                    dir:'Av. Matta 820, Santiago',             terms:'45', stock:{ pos:42, skus:4, units:423 } },
+  { id:'FARMA-SUR',  kind:'almacenaje', name:'Farma del Sur',               rut:'76.981.552-1', giro:'Distribución de productos farmacéuticos', contact:'Carlos Vega',   email:'carlos@farmasur.cl',                  dir:'Camino a Melipilla 9120, Maipú',      terms:'30', stock:{ pos:14, skus:4, units:1105 } },
+  { id:'NORTE-V',    kind:'almacenaje', name:'Distribuidora Norte Verde',   rut:'76.702.455-8', giro:'Distribución de alimentos envasados',     contact:'Lorena Díaz',    email:'lorena@norteverde.cl',                dir:'Av. Lo Espejo 01565, San Bernardo',   terms:'30', stock:{ pos:26, skus:12, units:3840 } },
+  { id:'LOS-ALAMOS', kind:'venta',      name:'Constructora Los Álamos SpA', rut:'76.334.210-5', giro:'Construcción de edificios',              contact:'Patricia Rojas', email:'compras@losalamos.cl',                dir:'Av. La Florida 9650, La Florida',     terms:'30' },
+  { id:'CLINICA-SE', kind:'venta',      name:'Clínica Santa Elena',         rut:'77.410.982-6', giro:'Servicios de salud',                     contact:'Andrés Muñoz',   email:'abastecimiento@clinicasantaelena.cl', dir:'Av. Irarrázaval 3120, Ñuñoa',         terms:'45' },
+  { id:'DON-PEDRO',  kind:'venta',      name:'Minimarket Don Pedro',        rut:'76.098.765-4', giro:'Comercio al por menor de abarrotes',     contact:'Pedro Soto',     email:'pedro@minimarketdonpedro.cl',         dir:'Av. Concha y Toro 1450, Puente Alto', terms:'0' }
 ];
-const clientById = id => CLIENTS.find(c => c.id === id) || { id, name:id, rut:'—', giro:'—', contact:'—', email:'—', dir:'—', terms:'30' };
+const clientById = id => CLIENTS.find(c => c.id === id) || { id, kind:'almacenaje', name:id, rut:'—', giro:'—', contact:'—', email:'—', dir:'—', terms:'30' };
+const clientsOf = k => CLIENTS.filter(c => c.kind === k);
+const kindOf = id => clientById(id).kind;
 const termsLabel = t => t === '0' ? 'Contado' : `${t} días`;
+const CUR_PERIOD = '2026-10';
 
 const TYPES = {
   producto:   { label:'Producto',   ico:'cube' },
@@ -379,22 +408,18 @@ function seed(){
   const L = (type, key, qty, price, cost, extra={}) => ({ id:uid(), type, key, qty, price, cost, disc:0, afecto:true, desc:'', uom:'', origin:'', ...extra });
   const d = {
     minMargin: 15,
-    nextPf: 49,
+    nextPf: 50,
     nextInvoice: 10241,
+    // Productos propios que se venden a los clientes de venta.
     products: [
-      { sku:'LAPTOP-15PRO',    client:'ACME',      desc:'Laptop 15" Pro i7 16GB',     uom:'UN',     cost:820000, price:1049990 },
-      { sku:'MONITOR-27',      client:'ACME',      desc:'Monitor 27" 4K IPS',         uom:'UN',     cost:245000, price:329990 },
-      { sku:'TECLADO-MEC',     client:'ACME',      desc:'Teclado Mecánico RGB',       uom:'UN',     cost:32000,  price:49990 },
-      { sku:'MOUSE-WRLS',      client:'ACME',      desc:'Mouse Inalámbrico Ergonómico', uom:'UN',   cost:9800,   price:16990 },
-      { sku:'CABLE-USBC',      client:'ACME',      desc:'Cable USB-C 2m',             uom:'UN',     cost:2100,   price:5990 },
-      { sku:'CAMISA-M',        client:'RETAIL-X',  desc:'Camisa Algodón Talla M',     uom:'UN',     cost:6500,   price:14990 },
-      { sku:'JEANS-32',        client:'RETAIL-X',  desc:'Jeans Slim Fit 32',          uom:'UN',     cost:11200,  price:24990 },
-      { sku:'ZAPATILLA-42',    client:'RETAIL-X',  desc:'Zapatilla Running 42',       uom:'PAR',    cost:28500,  price:33990 },
-      { sku:'POLERA-L',        client:'RETAIL-X',  desc:'Polera Deportiva Talla L',   uom:'UN',     cost:4800,   price:0 },
-      { sku:'IBUPROFENO-400',  client:'FARMA-SUR', desc:'Ibuprofeno 400mg x 20',      uom:'CAJA',   cost:950,    price:1290 },
-      { sku:'PARACETAMOL-500', client:'FARMA-SUR', desc:'Paracetamol 500mg x 30',     uom:'CAJA',   cost:780,    price:890 },
-      { sku:'VITAMINA-C',      client:'FARMA-SUR', desc:'Vitamina C 1000mg x 60',     uom:'FRASCO', cost:4200,   price:7490 },
-      { sku:'ALCOHOL-GEL',     client:'FARMA-SUR', desc:'Alcohol Gel 500ml',          uom:'UN',     cost:1650,   price:0 }
+      { sku:'OFIC-PAPEL-A4',  cat:'Oficina', desc:'Resma papel carta 75 g (500 hojas)',   uom:'UN',    cost:3200, price:4990 },
+      { sku:'OFIC-TONER-85A', cat:'Oficina', desc:'Tóner 85A compatible',                 uom:'UN',    cost:9800, price:16990 },
+      { sku:'ASEO-CLORO-5L',  cat:'Aseo',    desc:'Cloro gel 5 L',                        uom:'BIDÓN', cost:2900, price:4590 },
+      { sku:'ASEO-TOALLA-6',  cat:'Aseo',    desc:'Toalla de papel industrial (6 rollos)', uom:'PAQ',  cost:7400, price:10990 },
+      { sku:'EPP-GUANTE-NIT', cat:'EPP',     desc:'Guante de nitrilo (caja 100)',         uom:'CAJA',  cost:4100, price:6490 },
+      { sku:'EPP-KN95-20',    cat:'EPP',     desc:'Mascarilla KN95 (caja 20)',            uom:'CAJA',  cost:5200, price:5690 },
+      { sku:'EPP-CASCO',      cat:'EPP',     desc:'Casco de seguridad con ajuste',        uom:'UN',    cost:4900, price:8990 },
+      { sku:'BEB-AGUA-6',     cat:'Bebidas', desc:'Agua mineral 1,5 L (pack 6)',          uom:'PACK',  cost:2600, price:0 }
     ],
     insumos: [
       { code:'CAJA-403030',  cat:'embalaje',   desc:'Caja cartón 40x30x30',       uom:'UN',    cost:420,  price:690 },
@@ -420,28 +445,27 @@ function seed(){
       { code:'TR-KG',       group:'Transporte', desc:'Envío courier por peso',         uom:'KG',         cost:420,   price:690 },
       { code:'TR-PEON',     group:'Transporte', desc:'Peoneta adicional',              uom:'HORA',       cost:6500,  price:9000 }
     ],
-    // Precio especial por cliente: reemplaza al precio de lista del SKU.
+    // Precio o tarifa especial por cliente: reemplaza al de la lista general.
     clientPrices: {
-      'ACME':      { 'MONITOR-27':315000, 'MOUSE-WRLS':15490 },
-      'RETAIL-X':  { 'JEANS-32':22990 },
-      'FARMA-SUR': { 'PARACETAMOL-500':870, 'IBUPROFENO-400':1250 }
+      'CLINICA-SE': { 'EPP-GUANTE-NIT':5990 },
+      'LOS-ALAMOS': { 'EPP-CASCO':8490 },
+      'RETAIL-X':   { 'ALM-PAL-DIA':260 },
+      'FARMA-SUR':  { 'DES-PED':2300 }
     },
-    // Guías de despacho del WMS con productos que se le venden al cliente.
-    // pf = prefactura en la que quedó incluida (null = pendiente de cobrar).
+    // Guías de despacho de productos vendidos. tr = flete (null: retira el cliente).
+    // pf = prefactura en la que quedó incluida (null = pendiente de cobro).
     dispatches: [
-      { id:'GD-4931', num:4931, client:'RETAIL-X',  date:'2026-09-15', dest:'Tienda Mall Plaza Oeste',   lines:[{ sku:'CAMISA-M', qty:30 }], pf:'pf45' },
-      { id:'GD-5044', num:5044, client:'RETAIL-X',  date:'2026-10-04', dest:'Tienda centro',             lines:[{ sku:'JEANS-32', qty:25 }, { sku:'CAMISA-M', qty:40 }], pf:null },
-      { id:'GD-5052', num:5052, client:'ACME',      date:'2026-10-08', dest:'ACME oficina Las Condes',   lines:[{ sku:'MONITOR-27', qty:4 }], pf:'pf46' },
-      { id:'GD-5061', num:5061, client:'FARMA-SUR', date:'2026-10-03', dest:'Farmacia Maipú',            lines:[{ sku:'PARACETAMOL-500', qty:120 }, { sku:'IBUPROFENO-400', qty:80 }], pf:'pf48' },
-      { id:'GD-5077', num:5077, client:'FARMA-SUR', date:'2026-10-12', dest:'Farmacia Puente Alto',      lines:[{ sku:'VITAMINA-C', qty:40 }, { sku:'ALCOHOL-GEL', qty:60 }], pf:null },
-      { id:'GD-5088', num:5088, client:'ACME',      date:'2026-10-19', dest:'ACME sucursal Providencia', lines:[{ sku:'MOUSE-WRLS', qty:15 }, { sku:'TECLADO-MEC', qty:10 }, { sku:'CABLE-USBC', qty:40 }], pf:null },
-      { id:'GD-5090', num:5090, client:'FARMA-SUR', date:'2026-10-21', dest:'Farmacia Maipú',            lines:[{ sku:'IBUPROFENO-400', qty:150 }, { sku:'PARACETAMOL-500', qty:80 }], pf:null },
-      { id:'GD-5096', num:5096, client:'RETAIL-X',  date:'2026-10-23', dest:'Tienda Buin',               lines:[{ sku:'POLERA-L', qty:60 }, { sku:'ZAPATILLA-42', qty:12 }], pf:null },
-      { id:'GD-5101', num:5101, client:'ACME',      date:'2026-10-26', dest:'ACME oficina Las Condes',   lines:[{ sku:'LAPTOP-15PRO', qty:3 }], pf:null }
+      { id:'GD-4952', num:4952, client:'CLINICA-SE', date:'2026-09-18', dest:'Clínica Santa Elena, bodega central', lines:[{ sku:'EPP-GUANTE-NIT', qty:40 }, { sku:'EPP-KN95-20', qty:30 }, { sku:'ASEO-TOALLA-6', qty:10 }], tr:{ key:'TR-RM-URB', qty:1 }, pf:'pf43' },
+      { id:'GD-5071', num:5071, client:'LOS-ALAMOS', date:'2026-10-10', dest:'Obra Edificio Vista Cordillera, Puente Alto', lines:[{ sku:'EPP-CASCO', qty:20 }, { sku:'EPP-GUANTE-NIT', qty:15 }, { sku:'EPP-KN95-20', qty:10 }], tr:{ key:'TR-RM-RUR', qty:1 }, pf:'pf49' },
+      { id:'GD-5083', num:5083, client:'LOS-ALAMOS', date:'2026-10-17', dest:'Obra Condominio Los Robles, Pirque', lines:[{ sku:'BEB-AGUA-6', qty:30 }, { sku:'EPP-CASCO', qty:5 }], tr:{ key:'TR-RM-RUR', qty:1 }, pf:null },
+      { id:'GD-5094', num:5094, client:'CLINICA-SE', date:'2026-10-22', dest:'Clínica Santa Elena, bodega central', lines:[{ sku:'EPP-GUANTE-NIT', qty:60 }, { sku:'ASEO-CLORO-5L', qty:24 }, { sku:'ASEO-TOALLA-6', qty:20 }], tr:{ key:'TR-RM-URB', qty:1 }, pf:null },
+      { id:'GD-5099', num:5099, client:'DON-PEDRO',  date:'2026-10-24', dest:'Retira el cliente en bodega', lines:[{ sku:'OFIC-PAPEL-A4', qty:50 }, { sku:'ASEO-CLORO-5L', qty:12 }], tr:null, pf:null },
+      { id:'GD-5104', num:5104, client:'CLINICA-SE', date:'2026-10-27', dest:'Clínica Santa Elena, administración', lines:[{ sku:'OFIC-TONER-85A', qty:6 }], tr:{ key:'TR-RM-URB', qty:1 }, pf:null }
     ],
     prefacturas: []
   };
-  const pf = (id, num, client, period, date, status, lines, extra={}) => ({ id, num, client, period, date, status, ref:'', terms:'30', notes:'', discount:0, ivaRate:19, lines, invoice:null, ...extra });
+  const pf = (id, num, client, period, date, status, lines, extra={}) => ({ id, num, client, period, date, status, ref:'', terms:clientById(client).terms, notes:'', discount:0, ivaRate:19, lines, invoice:null, ...extra });
+  const G = (n, extra={}) => ({ origin:`Guía de despacho N° ${n}`, gd:`GD-${n}`, ...extra });
   d.prefacturas = [
     pf('pf41','PF-2026-0041','ACME','2026-09','2026-09-30','FACTURADA',[
       L('servicio','ALM-PAL-DIA',600,290,180,{origin:'20 posiciones × 30 días'}),
@@ -450,49 +474,61 @@ function seed(){
       L('transporte','TR-RM-URB',6,55000,38000),
       L('insumo','CAJA-403030',90,690,420)
     ],{ ref:'OC-ACME-2291', invoice:{ num:10233, dte:33 } }),
+    pf('pf43','PF-2026-0043','CLINICA-SE','2026-09','2026-09-30','FACTURADA',[
+      L('producto','EPP-GUANTE-NIT',40,5990,4100,G(4952)),
+      L('producto','EPP-KN95-20',30,5690,5200,G(4952)),
+      L('producto','ASEO-TOALLA-6',10,10990,7400,G(4952)),
+      L('transporte','TR-RM-URB',1,55000,38000,G(4952,{ desc:'Flete Santiago urbano (3/4) · guía 4952' }))
+    ],{ ref:'OC-CSE-0912', invoice:{ num:10236, dte:33 } }),
     pf('pf45','PF-2026-0045','RETAIL-X','2026-09','2026-09-30','FACTURADA',[
-      L('servicio','ALM-PAL-DIA',1260,290,180),
+      L('servicio','ALM-PAL-DIA',1260,260,180,{origin:'42 posiciones × 30 días'}),
       L('servicio','REC-PAL',22,3200,1900),
       L('servicio','DES-PED',140,2500,1400),
-      L('producto','CAMISA-M',30,14990,6500,{ origin:'Guía de despacho N° 4931', gd:'GD-4931' }),
       L('transporte','TR-V-REG',3,140000,98000)
-    ],{ terms:'45', invoice:{ num:10238, dte:33 } }),
+    ],{ invoice:{ num:10238, dte:33 } }),
     pf('pf46','PF-2026-0046','ACME','2026-10','2026-10-27','APROBADA',[
       L('servicio','ALM-PAL-DIA',620,290,180,{origin:'20 posiciones × 31 días'}),
-      L('servicio','DES-PED',47,2500,1400),
-      L('producto','MONITOR-27',4,315000,245000,{ origin:'Guía de despacho N° 5052', gd:'GD-5052' }),
+      L('servicio','DES-PED',47,2500,1400,{origin:'47 despachos cerrados en octubre'}),
+      L('servicio','PICK-LIN',161,390,210),
       L('transporte','TR-RM-URB',5,55000,38000)
     ],{ ref:'OC-ACME-2350' }),
     pf('pf47','PF-2026-0047','RETAIL-X','2026-10','2026-10-27','EN_REVISION',[
-      L('servicio','ALM-PAL-DIA',1302,290,180),
+      L('servicio','ALM-PAL-DIA',1302,260,180,{origin:'42 posiciones × 31 días'}),
       L('servicio','REC-PAL',18,3200,1900),
       L('servicio','DES-PED',156,2500,1400),
       L('servicio','ETQ-UN',2400,90,45,{ origin:'Etiquetado temporada verano' }),
       L('transporte','TR-RM-RUR',4,75000,52000)
-    ],{ terms:'45' }),
+    ]),
     pf('pf48','PF-2026-0048','FARMA-SUR','2026-10','2026-10-28','BORRADOR',[
       L('servicio','ALM-PAL-DIA',434,290,180,{ origin:'14 posiciones × 31 días' }),
-      L('servicio','DES-PED',38,2500,1400,{ origin:'38 despachos cerrados en octubre' }),
+      L('servicio','REC-PAL',6,3200,1900,{ origin:'3 recepciones (OC-3301, OC-3318, OC-3340)' }),
+      L('servicio','DES-PED',38,2300,1400,{ origin:'38 despachos cerrados en octubre' }),
       L('servicio','PICK-LIN',212,390,210,{ origin:'212 líneas pickeadas' }),
       L('insumo','CAJA-403030',85,690,420,{ origin:'Consumo en 38 documentos' }),
-      L('producto','PARACETAMOL-500',120,870,780,{ origin:'Guía de despacho N° 5061', gd:'GD-5061' }),
-      L('producto','IBUPROFENO-400',80,1250,950,{ origin:'Guía de despacho N° 5061', gd:'GD-5061' }),
+      L('insumo','CINTA-48',12,990,1150,{ origin:'Consumo en 38 documentos' }),
       L('transporte','TR-RM-URB',9,55000,38000,{ disc:10, origin:'9 viajes con guía de despacho' }),
       L('otro','',1,18500,0,{ afecto:false, desc:'Reembolso de peajes y estacionamiento (no afecto)', uom:'GL' })
-    ],{ ref:'OC-FS-7781', notes:'Incluye flete con 10% de descuento acordado por volumen.' })
+    ],{ ref:'OC-FS-7781', notes:'Incluye flete con 10% de descuento acordado por volumen.' }),
+    pf('pf49','PF-2026-0049','LOS-ALAMOS','2026-10','2026-10-28','BORRADOR',[
+      L('producto','EPP-CASCO',20,8490,4900,G(5071)),
+      L('producto','EPP-GUANTE-NIT',15,6490,4100,G(5071)),
+      L('producto','EPP-KN95-20',10,5690,5200,G(5071)),
+      L('transporte','TR-RM-RUR',1,75000,52000,G(5071,{ desc:'Flete RM rural · guía 5071' }))
+    ],{ ref:'OC-LA-1187' })
   ];
   // Completa descripción y unidad desde el catálogo.
   d.prefacturas.forEach(p => p.lines.forEach(l => { const it = findItem(d, l.type, l.key); if (it) { l.desc = l.desc || it.desc; l.uom = l.uom || it.uom; } }));
   return d;
 }
 
-const specialPrice = (d, client, sku) => { const v = ((d.clientPrices||{})[client]||{})[sku]; return num(v) > 0 ? num(v) : null; };
+const specialPrice = (d, client, key) => { const v = ((d.clientPrices||{})[client]||{})[key]; return num(v) > 0 ? num(v) : null; };
 function catalog(d, type, client){
-  if (type === 'producto')   return d.products.map(p => { const sp = client ? specialPrice(d, client, p.sku) : null;
-    return { key:p.sku, label:`${p.sku} · ${p.desc}${sp ? ' (precio cliente)' : ''}`, desc:p.desc, uom:p.uom, cost:p.cost, price: sp ?? p.price, client:p.client }; });
-  if (type === 'insumo')     return d.insumos.map(i => ({ key:i.code, label:`${i.code} · ${i.desc}`, desc:i.desc, uom:i.uom, cost:i.cost, price:i.price }));
-  if (type === 'transporte') return d.services.filter(s => s.group === 'Transporte').map(s => ({ key:s.code, label:`${s.code} · ${s.desc}`, desc:s.desc, uom:s.uom, cost:s.cost, price:s.price }));
-  if (type === 'servicio')   return d.services.filter(s => s.group !== 'Transporte').map(s => ({ key:s.code, label:`${s.code} · ${s.desc}`, desc:s.desc, uom:s.uom, cost:s.cost, price:s.price, group:s.group }));
+  const mk = (key, desc, uom, cost, price, extra={}) => { const sp = client ? specialPrice(d, client, key) : null;
+    return { key, label:`${key} · ${desc}${sp ? ' (precio cliente)' : ''}`, desc, uom, cost, price: sp ?? price, listPrice:price, special:!!sp, ...extra }; };
+  if (type === 'producto')   return d.products.map(p => mk(p.sku, p.desc, p.uom, p.cost, p.price, { cat:p.cat }));
+  if (type === 'insumo')     return d.insumos.map(i => mk(i.code, i.desc, i.uom, i.cost, i.price, { cat:i.cat }));
+  if (type === 'transporte') return d.services.filter(s => s.group === 'Transporte').map(s => mk(s.code, s.desc, s.uom, s.cost, s.price, { group:s.group }));
+  if (type === 'servicio')   return d.services.filter(s => s.group !== 'Transporte').map(s => mk(s.code, s.desc, s.uom, s.cost, s.price, { group:s.group }));
   return [];
 }
 function findItem(d, type, key, client){ return catalog(d, type, client).find(x => x.key === key); }
@@ -505,18 +541,23 @@ function gdState(g){
   return { key:'PF', label:`En ${pf.num}`, cls:'acc', pf };
 }
 const gdPending = g => gdState(g).key === 'PEND';
-const gdAmount = g => g.lines.reduce((a,x) => { const it = findItem(D, 'producto', x.sku, g.client); return a + (it ? it.price*x.qty : 0); }, 0);
+const gdTrLabel = g => g.tr ? ((findItem(D, 'transporte', g.tr.key) || {}).desc || g.tr.key) : 'Retira el cliente';
+// Una línea por producto despachado, más el flete si la guía lo lleva.
 function gdLines(g){
-  return g.lines.map(x => { const it = findItem(D, 'producto', x.sku, g.client) || { desc:x.sku, uom:'UN', price:0, cost:0 };
+  const ls = g.lines.map(x => { const it = findItem(D, 'producto', x.sku, g.client) || { desc:x.sku, uom:'UN', price:0, cost:0 };
     return { id:uid(), type:'producto', key:x.sku, desc:it.desc, uom:it.uom, qty:x.qty, price:it.price, cost:it.cost, disc:0, afecto:true, origin:`Guía de despacho N° ${g.num}`, gd:g.id }; });
+  if (g.tr) { const it = findItem(D, 'transporte', g.tr.key, g.client);
+    if (it) ls.push({ id:uid(), type:'transporte', key:g.tr.key, desc:`${it.desc} · guía ${g.num}`, uom:it.uom, qty:g.tr.qty, price:it.price, cost:it.cost, disc:0, afecto:true, origin:`Flete a ${g.dest}`, gd:g.id }); }
+  return ls;
 }
+const gdAmount = g => gdLines(g).reduce((a,l) => a + lineNet(l), 0);
 // Libera las guías que ya no tienen líneas en su prefactura.
 function syncGd(pf){
   D.dispatches.forEach(g => { if (g.pf === pf.id && !pf.lines.some(l => l.gd === g.id)) g.pf = null; });
 }
 
-// Movimientos del período que el WMS ya registra (despachos, picking, almacenaje,
-// insumos consumidos en documentos, transporte). En la simulación son fijos.
+// Movimientos del período que el WMS ya registra para los clientes de almacenaje
+// (almacenaje, recepciones, despachos, picking, insumos consumidos, transporte).
 const SUGGEST = {
   'FARMA-SUR': [
     { type:'servicio',   key:'ALM-PAL-DIA', qty:434, origin:'14 posiciones ocupadas × 31 días' },
@@ -539,6 +580,15 @@ const SUGGEST = {
     { type:'insumo',     key:'FILM-STRETCH',qty:4,   origin:'Consumo registrado en 9 recepciones' },
     { type:'transporte', key:'TR-RM-URB',   qty:5,   origin:'5 viajes con guía de despacho' }
   ],
+  'NORTE-V': [
+    { type:'servicio',   key:'ALM-PAL-DIA', qty:806, origin:'26 posiciones ocupadas × 31 días' },
+    { type:'servicio',   key:'REC-PAL',     qty:31,  origin:'5 recepciones de contenedor' },
+    { type:'servicio',   key:'DES-PED',     qty:64,  origin:'64 despachos cerrados en octubre' },
+    { type:'servicio',   key:'PICK-LIN',    qty:418, origin:'418 líneas pickeadas en 12 olas' },
+    { type:'insumo',     key:'FILM-STRETCH',qty:18,  origin:'Consumo registrado en 31 recepciones' },
+    { type:'insumo',     key:'PALLET-MAD',  qty:12,  origin:'Pallets entregados con despachos' },
+    { type:'transporte', key:'TR-V-REG',    qty:3,   origin:'3 viajes a San Antonio' }
+  ],
   'RETAIL-X': [
     { type:'servicio',   key:'ALM-PAL-DIA', qty:1302, origin:'42 posiciones ocupadas × 31 días' },
     { type:'servicio',   key:'REC-PAL',     qty:18,  origin:'Recepción GD-5100 temporada verano' },
@@ -550,7 +600,7 @@ const SUGGEST = {
 };
 
 // ─── Estado (se guarda solo en este navegador) ───────────────────────────
-const KEY = 'wms-sim-prefacturacion-v2';
+const KEY = 'wms-sim-prefacturacion-v3';
 function load(){ try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; } }
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(D)); } catch(e){} }
 let D = load() || seed();
@@ -564,8 +614,9 @@ const UI = {
 // Filtros de cada listado.
 const F0 = {
   pq:'', pClient:'', pCat:'', pMargin:'',            // Costos y precios
-  fq:'', fClient:'', fPeriod:'', fIssues:false,      // Prefacturas (el estado va en UI.pfFilter)
-  cq:'', cOnlyPend:false,                            // Clientes
+  fq:'', fKind:'', fClient:'', fPeriod:'', fIssues:false, // Prefacturas (el estado va en UI.pfFilter)
+  cq:'', cKind:'', cOnlyPend:false,                  // Clientes
+  svq:'', svType:'',                                 // Cobros del mes de un cliente de almacenaje
   gq:'', gState:'', gFrom:'', gTo:'',                // Guías de un cliente
   spq:'', spOnly:false,                              // Precios de un cliente
   lType:''                                           // Líneas de la prefactura
@@ -666,7 +717,7 @@ function renderSide(){
 // ─── Vista: Costos y precios ─────────────────────────────────────────────
 function preciosRows(){
   const F = UI.F; let rows;
-  if (UI.preciosTab === 'productos') rows = D.products.map((p,i) => ({...p, _i:i, _k:'products'})).filter(p => (!F.pClient || p.client === F.pClient) && match(F.pq, p.sku, p.desc));
+  if (UI.preciosTab === 'productos') rows = D.products.map((p,i) => ({...p, _i:i, _k:'products'})).filter(p => (!F.pCat || p.cat === F.pCat) && match(F.pq, p.sku, p.desc));
   else if (UI.preciosTab === 'insumos') rows = D.insumos.map((p,i) => ({...p, _i:i, _k:'insumos'})).filter(p => (!F.pCat || p.cat === F.pCat) && match(F.pq, p.code, p.desc));
   else rows = D.services.map((p,i) => ({...p, _i:i, _k:'services'})).filter(p => (!F.pCat || p.group === F.pCat) && match(F.pq, p.code, p.desc, p.uom));
   if (F.pMargin) rows = rows.filter(r => marginState(r.cost, r.price) === F.pMargin);
@@ -676,7 +727,7 @@ function marginState(cost, price){ const m = marginOf(cost, price); return m ===
 function preciosFilterBar(shown, total){
   const tab = UI.preciosTab;
   const second = tab === 'productos'
-    ? selF('pClient', [['','Todos los clientes'], ...CLIENTS.map(c => [c.id, c.name])], 'Cliente')
+    ? selF('pCat', [['','Todas las categorías'], ...[...new Set(D.products.map(p => p.cat))].map(c => [c, c])], 'Categoría')
     : tab === 'insumos'
       ? selF('pCat', [['','Todas las categorías'], ...[...new Set(D.insumos.map(i => i.cat))].map(c => [c, c.charAt(0).toUpperCase()+c.slice(1)])], 'Categoría')
       : selF('pCat', [['','Todos los grupos'], ['Almacenaje','Almacenaje'], ['Operación','Operación'], ['Transporte','Transporte']], 'Grupo');
@@ -710,9 +761,9 @@ function renderPrecios(){
   const moneyIn = (r, f) => `<input class="in num money" type="number" min="0" step="10" inputmode="numeric" id="p-${r._k}-${r._i}-${f}" data-pk="${r._k}" data-pi="${r._i}" data-pf="${f}" value="${num(r[f])}" aria-label="${f==='cost'?'Costo':'Precio'} ${esc(r.sku||r.code)}">`;
   let head, body;
   if (tab === 'productos') {
-    head = `<tr><th>SKU</th><th>Descripción</th><th>Cliente</th><th>UM</th><th class="num">Costo unitario</th><th class="num">Precio venta (neto)</th><th class="num">Precio con IVA</th><th class="num">Margen</th></tr>`;
+    head = `<tr><th>SKU</th><th>Descripción</th><th>Categoría</th><th>UM</th><th class="num">Costo unitario</th><th class="num">Precio venta (neto)</th><th class="num">Precio con IVA</th><th class="num">Margen</th></tr>`;
     body = rows.map(r => `<tr>
-      <td class="code">${esc(r.sku)}</td><td>${esc(r.desc)}</td><td><span class="chip mute">${esc(r.client)}</span></td><td class="sub">${esc(r.uom)}</td>
+      <td class="code">${esc(r.sku)}</td><td>${esc(r.desc)}</td><td><span class="chip mute">${esc(r.cat)}</span></td><td class="sub">${esc(r.uom)}</td>
       <td class="num">${moneyIn(r,'cost')}</td><td class="num">${moneyIn(r,'price')}</td>
       <td class="num sub" data-iva="${r._k}-${r._i}">${num(r.price)?clp(num(r.price)*1.19):'—'}</td>
       <td class="num" data-m="${r._k}-${r._i}">${marginCell(r.cost, r.price)}</td></tr>`).join('');
@@ -735,11 +786,11 @@ function renderPrecios(){
         <td class="num" data-m="${r._k}-${r._i}">${marginCell(r.cost, r.price)}</td></tr>`;
     }).join('');
   }
-  const tabs = [['productos','Productos'],['insumos','Insumos'],['servicios','Servicios y transporte']];
+  const tabs = [['productos','Productos para venta'],['insumos','Insumos'],['servicios','Servicios y transporte']];
   const note = {
-    productos:'El costo y el precio se agregan a la ficha de cada SKU. Si un cliente tiene un precio especial, se define en su lista de precios y reemplaza este.',
-    insumos:'El costo ya existe hoy en el módulo Insumos de Bodega. Aquí solo se agrega el precio al que se le cobra al cliente.',
-    servicios:'Estas tarifas reemplazarían a las tarifas sueltas de "Cobros a clientes" (pallet por día, entrada y salida) y suman transporte y servicios de valor agregado.'
+    productos:'Productos propios que se venden a los clientes de venta. El costo y el precio se agregan a la ficha de cada SKU. Si un cliente tiene un precio especial, se define en su ficha y reemplaza este.',
+    insumos:'Se cobran a los clientes de almacenaje. El costo ya existe hoy en el módulo Insumos de Bodega; aquí solo se agrega el precio de cobro.',
+    servicios:'Almacenaje y operación se cobran a los clientes de almacenaje. Los fletes se cobran a los dos tipos de cliente. Estas tarifas reemplazarían a las de "Cobros a clientes" (pallet por día, entrada y salida).'
   }[tab];
   return `
     <div class="head">
@@ -782,7 +833,7 @@ function renderPrecios(){
 function renderPfList(){
   const all = D.prefacturas.slice().sort((a,b) => b.num.localeCompare(a.num));
   const F = UI.F;
-  const list = all.filter(p => (UI.pfFilter === 'TODAS' || p.status === UI.pfFilter) && (!F.fClient || p.client === F.fClient) &&
+  const list = all.filter(p => (UI.pfFilter === 'TODAS' || p.status === UI.pfFilter) && (!F.fKind || kindOf(p.client) === F.fKind) && (!F.fClient || p.client === F.fClient) &&
     (!F.fPeriod || p.period === F.fPeriod) && (!F.fIssues || issues(p).length > 0) &&
     match(F.fq, p.num, clientById(p.client).name, clientById(p.client).rut, p.ref, p.invoice ? p.invoice.num : ''));
   const periods = [...new Set(all.map(p => p.period))].sort().reverse();
@@ -792,6 +843,7 @@ function renderPfList(){
   const rows = list.map(p => { const c = calc(p); const s = STATUS[p.status]; return `<tr>
       <td><button class="link pf-num" data-act="open" data-id="${p.id}">${esc(p.num)}</button></td>
       <td><b>${esc(clientById(p.client).name)}</b><div class="sub">${esc(clientById(p.client).rut)}</div></td>
+      <td>${kindChip(kindOf(p.client))}</td>
       <td>${periodLabel(p.period)}</td><td class="sub">${dateLabel(p.date)}</td>
       <td><span class="chip ${s.cls}">${s.label}</span>${p.invoice ? `<div class="sub" style="margin-top:4px">Factura N° ${p.invoice.num}</div>` : ''}</td>
       <td class="num">${p.lines.length}</td>
@@ -807,7 +859,7 @@ function renderPfList(){
       </div>
       <div class="bar-row">
         <select class="in" id="newClient" style="width:auto" aria-label="Cliente de la nueva prefactura">
-          <option value="">Elige un cliente…</option>${CLIENTS.map(c => `<option value="${c.id}" ${UI.newClient===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+          <option value="">Elige un cliente…</option>${['almacenaje','venta'].map(k => `<optgroup label="Clientes de ${KINDS[k].short.toLowerCase()}">${clientsOf(k).map(c => `<option value="${c.id}" ${UI.newClient===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</optgroup>`).join('')}
         </select>
         <button class="btn money" data-act="new">${ic('plus',16)} Nueva prefactura</button>
       </div>
@@ -824,12 +876,13 @@ function renderPfList(){
       </div>
       ${fbar([
         searchBox('fq', 'Buscar N°, cliente, RUT, OC o factura'),
-        selF('fClient', [['','Todos los clientes'], ...CLIENTS.map(c => [c.id, c.name])], 'Cliente'),
+        selF('fKind', [['','Todos los tipos'], ['almacenaje','Almacenaje'], ['venta','Venta']], 'Tipo de cliente'),
+        selF('fClient', [['','Todos los clientes'], ...CLIENTS.filter(c => !F.fKind || c.kind === F.fKind).map(c => [c.id, c.name])], 'Cliente'),
         selF('fPeriod', [['','Todos los períodos'], ...periods.map(x => [x, periodLabel(x)])], 'Período'),
         chkF('fIssues', 'Solo con observaciones')
-      ], ['fq','fClient','fPeriod','fIssues','pfFilter'], list.length, all.length)}
-      <div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Cliente</th><th>Período</th><th>Fecha</th><th>Estado</th><th class="num">Líneas</th><th class="num">Neto</th><th class="num">IVA</th><th class="num">Total</th><th></th></tr></thead>
-      <tbody>${rows || emptyRow(10, 'fq,fClient,fPeriod,fIssues,pfFilter')}</tbody></table></div>
+      ], ['fq','fKind','fClient','fPeriod','fIssues','pfFilter'], list.length, all.length)}
+      <div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Cliente</th><th>Tipo</th><th>Período</th><th>Fecha</th><th>Estado</th><th class="num">Líneas</th><th class="num">Neto</th><th class="num">IVA</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody>${rows || emptyRow(11, 'fq,fKind,fClient,fPeriod,fIssues,pfFilter')}</tbody></table></div>
     </div>`;
 }
 
@@ -840,12 +893,7 @@ function lineRow(l, editable){
   const dis = editable ? '' : 'disabled';
   const pf = currentPf();
   const cat = catalog(D, l.type, pf.client);
-  let opts = '';
-  if (l.type === 'producto') {
-    const mine = cat.filter(x => x.client === pf.client), other = cat.filter(x => x.client !== pf.client);
-    opts = `<optgroup label="Productos de ${esc(clientById(pf.client).name)}">${mine.map(x => `<option value="${x.key}" ${x.key===l.key?'selected':''}>${esc(x.label)}</option>`).join('')}</optgroup>` +
-           (other.length ? `<optgroup label="Otros clientes">${other.map(x => `<option value="${x.key}" ${x.key===l.key?'selected':''}>${esc(x.label)}</option>`).join('')}</optgroup>` : '');
-  } else opts = cat.map(x => `<option value="${x.key}" ${x.key===l.key?'selected':''}>${esc(x.label)}</option>`).join('');
+  const opts = cat.map(x => `<option value="${x.key}" ${x.key===l.key?'selected':''}>${esc(x.label)}</option>`).join('');
   const item = l.type === 'otro' ? '' : `<select class="in" data-lf="key" id="lk-${l.id}" ${dis} aria-label="Ítem del catálogo"><option value="">Elegir del catálogo…</option>${opts}</select>`;
   const under = num(l.cost) > 0 && num(l.price) > 0 && lineNet(l) < lineCost(l);
   return `<tr data-line="${l.id}">
@@ -930,13 +978,13 @@ function renderEditor(){
     const n = k ? pf.lines.filter(x => x.type === k).length : pf.lines.length;
     return (k && !n) ? '' : `<button class="fchip ${UI.F.lType===k?'on':''}" data-act="ltype" data-t="${k}">${l} (${n})</button>`;
   }).join('');
-  const addBtns = Object.entries(TYPES).map(([k,T]) => `<button class="btn sm add-btn ty-${k}" data-act="add" data-type="${k}" ${dis}>${ic('plus',14)} ${T.label}</button>`).join('');
+  const addBtns = KIND_TYPES[cl.kind].map(k => [k, TYPES[k]]).map(([k,T]) => `<button class="btn sm add-btn ty-${k}" data-act="add" data-type="${k}" ${dis}>${ic('plus',14)} ${T.label}</button>`).join('');
   return `
     <div class="head">
       <div style="min-width:0">
         <button class="back" data-act="list">${ic('left',14)} Todas las prefacturas</button>
         <h1>Prefactura <span class="pf-num" style="font-size:.8em">${esc(pf.num)}</span> <span class="chip ${s.cls}" style="font-size:11px">${s.label}</span></h1>
-        <p>${esc(cl.name)} · ${periodLabel(pf.period)}${ed ? '' : ' · Para modificarla, devuélvela a borrador.'}</p>
+        <p>${kindChip(cl.kind)} ${esc(cl.name)} · ${periodLabel(pf.period)}${ed ? '' : ' · Para modificarla, devuélvela a borrador.'}</p>
         ${stepsHtml(pf)}
       </div>
     </div>
@@ -945,7 +993,7 @@ function renderEditor(){
         <div class="card">
           <div class="card-h"><h3>Datos del cobro</h3></div>
           <div class="card-b fields">
-            <div class="field"><label for="f-client">Cliente</label><select class="in" id="f-client" data-hf="client" ${dis}>${CLIENTS.map(x => `<option value="${x.id}" ${x.id===pf.client?'selected':''}>${esc(x.name)}</option>`).join('')}</select><span class="sub">RUT ${esc(cl.rut)}</span></div>
+            <div class="field"><label for="f-client">Cliente</label><select class="in" id="f-client" data-hf="client" ${dis}>${clientsOf(cl.kind).map(x => `<option value="${x.id}" ${x.id===pf.client?'selected':''}>${esc(x.name)}</option>`).join('')}</select><span class="sub">RUT ${esc(cl.rut)}</span></div>
             <div class="field"><label for="f-period">Período facturado</label><input class="in" type="month" id="f-period" data-hf="period" value="${esc(pf.period)}" ${dis}></div>
             <div class="field"><label for="f-date">Fecha</label><input class="in" type="date" id="f-date" data-hf="date" value="${esc(pf.date)}" ${dis}></div>
             <div class="field"><label for="f-ref">OC o referencia del cliente</label><input class="in" id="f-ref" data-hf="ref" value="${esc(pf.ref)}" placeholder="Ej: OC-4471" ${dis}></div>
@@ -963,16 +1011,17 @@ function renderEditor(){
           <div class="card-b" style="display:flex;flex-direction:column;gap:12px">
             <div class="add-row"><span class="sub" style="font-weight:700">Agregar:</span>${addBtns}
               <span style="flex:1"></span>
-              <button class="btn sm" data-act="gd-open" ${dis}>${ic('outb',14)} Desde guía de despacho${pendCount ? ` <span class="chip warn">${pendCount}</span>` : ''}</button>
-              <button class="btn sm money" data-act="sg-open" ${dis}>${ic('import',14)} Traer movimientos del período</button>
+              ${cl.kind === 'venta'
+                ? `<button class="btn sm money" data-act="gd-open" ${dis}>${ic('outb',14)} Traer guías de despacho${pendCount ? ` <span class="chip warn">${pendCount}</span>` : ''}</button>`
+                : `<button class="btn sm money" data-act="sg-open" ${dis}>${ic('import',14)} Traer movimientos del período</button>`}
             </div>
           </div>
-          ${UI.gdOpen && ed ? gdPanelHtml(pf) : ''}
-          ${UI.suggestOpen && ed ? suggestHtml(pf) : ''}
+          ${UI.gdOpen && ed && cl.kind === 'venta' ? gdPanelHtml(pf) : ''}
+          ${UI.suggestOpen && ed && cl.kind === 'almacenaje' ? suggestHtml(pf) : ''}
           ${pf.lines.length ? `<div class="fbar" style="border-top:1px solid var(--line)">${ic('filter',16)}<div class="filters">${typeChips}</div>${UI.F.lType ? `<span style="flex:1"></span><span class="fcount">Los totales suman todas las líneas</span>` : ''}</div>` : ''}
           <div class="scroll"><table class="t lines">
             <thead><tr><th>Tipo</th><th>Concepto</th><th class="num">Cant.</th><th>UM</th><th class="num">Precio unit.</th><th class="num">Desc. %</th><th class="ctr">IVA</th><th class="num">Subtotal</th>${UI.showCosts ? '<th class="num internal">Margen</th>' : ''}<th></th></tr></thead>
-            <tbody>${pf.lines.filter(l => !UI.F.lType || l.type === UI.F.lType).map(l => lineRow(l, ed)).join('') || `<tr><td colspan="10"><div class="empty"><b>Esta prefactura no tiene líneas</b>Agrega productos, insumos, transporte o servicios, o trae los movimientos del período desde el WMS.</div></td></tr>`}</tbody>
+            <tbody>${pf.lines.filter(l => !UI.F.lType || l.type === UI.F.lType).map(l => lineRow(l, ed)).join('') || `<tr><td colspan="10"><div class="empty"><b>Esta prefactura no tiene líneas</b>${cl.kind === 'venta' ? 'Trae las guías de despacho pendientes o agrega productos y fletes a mano.' : 'Trae los movimientos del período desde el WMS o agrega servicios, insumos y fletes a mano.'}</div></td></tr>`}</tbody>
           </table></div>
         </div>
       </div>
@@ -1012,7 +1061,7 @@ function refreshFigures(){
 }
 
 // ─── Guías de despacho ───────────────────────────────────────────────────
-const gdProducts = g => g.lines.map(x => `${esc(x.sku)} × ${qtyf(x.qty)}`).join('<br>');
+const gdProducts = g => `<span class="code">${g.lines.map(x => `${esc(x.sku)} × ${qtyf(x.qty)}`).join('<br>')}</span><br><span class="tr-note">${g.tr ? ic('truck',12) : ''}${esc(gdTrLabel(g))}</span>`;
 function gdPanelHtml(pf){
   const pend = D.dispatches.filter(g => g.client === pf.client && gdPending(g)).sort((a,b) => a.date.localeCompare(b.date));
   const done = D.dispatches.filter(g => g.client === pf.client && !gdPending(g)).length;
@@ -1021,38 +1070,81 @@ function gdPanelHtml(pf){
   const rows = pend.map(g => `<tr>
       <td class="ctr"><input type="checkbox" data-gd="${g.id}" id="gd-${g.id}" ${sel(g)?'checked':''} style="width:16px;height:16px;accent-color:var(--money)" aria-label="Incluir guía ${g.num}"></td>
       <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td>${esc(g.dest)}</td>
-      <td class="code">${gdProducts(g)}</td><td class="num"><b>${clp(gdAmount(g))}</b></td></tr>`).join('');
+      <td>${gdProducts(g)}</td><td class="num"><b>${clp(gdAmount(g))}</b></td></tr>`).join('');
   return `<div class="suggest">
     <div class="card-h"><h3>Guías de despacho pendientes de cobro · ${esc(clientById(pf.client).name)}</h3><span style="flex:1"></span>
       <button class="btn sm ghost" data-act="gd-close">Cerrar</button>
       <button class="btn sm money" data-act="gd-add" ${n?'':'disabled'}>${ic('plus',14)} Agregar ${n} guía${n===1?'':'s'}</button></div>
-    ${pend.length ? `<div class="scroll"><table class="t"><thead><tr><th></th><th>Guía</th><th>Fecha</th><th>Destino</th><th>Productos</th><th class="num">Neto a precio cliente</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ${pend.length ? `<div class="scroll"><table class="t"><thead><tr><th></th><th>Guía</th><th>Fecha</th><th>Destino</th><th>Productos y flete</th><th class="num">Neto a precio cliente</th></tr></thead><tbody>${rows}</tbody></table></div>`
       : `<div class="empty"><b>No hay guías pendientes</b>Todas las guías de este cliente ya están en una prefactura o facturadas.</div>`}
-    <div class="card-b sub" style="padding-top:8px">Cada producto despachado entra como una línea con el precio del cliente. ${done ? `${done} guía${done===1?' ya está':'s ya están'} en otra prefactura o facturada${done===1?'':'s'}.` : ''}</div>
+    <div class="card-b sub" style="padding-top:8px">Cada producto despachado entra como una línea con el precio del cliente, y el flete de la guía como una línea de transporte. ${done ? `${done} guía${done===1?' ya está':'s ya están'} en otra prefactura o facturada${done===1?'':'s'}.` : ''}</div>
   </div>`;
 }
 function newPfFromGuides(client, guides){
-  const n = D.nextPf++; const id = 'pf' + n + uid();
-  const pf = { id, num:`PF-2026-${String(n).padStart(4,'0')}`, client, period:'2026-10', date:'2026-10-28', status:'BORRADOR', ref:'', terms:clientById(client).terms, notes:'', discount:0, ivaRate:19, lines:[], invoice:null };
-  guides.forEach(g => { pf.lines.push(...gdLines(g)); g.pf = id; });
-  D.prefacturas.push(pf);
+  const pf = newPf(client);
+  guides.forEach(g => { pf.lines.push(...gdLines(g)); g.pf = pf.id; });
   return pf;
 }
 
 // ─── Vista: Clientes ─────────────────────────────────────────────────────
+const kindChip = k => `<span class="chip ${KINDS[k].cls}">${ic(KINDS[k].ico,12)} ${KINDS[k].short}</span>`;
+function newPf(client){
+  const n = D.nextPf++;
+  const pf = { id:'pf'+n+uid(), num:`PF-2026-${String(n).padStart(4,'0')}`, client, period:CUR_PERIOD, date:'2026-10-28', status:'BORRADOR', ref:'', terms:clientById(client).terms, notes:'', discount:0, ivaRate:19, lines:[], invoice:null };
+  D.prefacturas.push(pf);
+  return pf;
+}
+const periodPf = (cid, period) => D.prefacturas.find(p => p.client === cid && p.period === period && p.status !== 'ANULADA');
+const suggestRows = cid => (SUGGEST[cid] || []).map((s,i) => ({ ...s, i, it:findItem(D, s.type, s.key, cid) })).filter(s => s.it);
+const suggestTotal = cid => suggestRows(cid).reduce((a,s) => a + s.qty*s.it.price, 0);
+// Lo que falta cobrar: guías sin prefactura (venta) o el mes sin prefactura (almacenaje).
+function pendingOf(c){
+  if (c.kind === 'venta') {
+    const gp = D.dispatches.filter(g => g.client === c.id && gdPending(g));
+    return { n:gp.length, amount:gp.reduce((a,g) => a + gdAmount(g), 0), label: gp.length ? `${gp.length} guía${gp.length===1?'':'s'} sin cobrar` : '' };
+  }
+  const pf = periodPf(c.id, CUR_PERIOD);
+  return pf ? { n:0, amount:0, label:'', pf } : { n:1, amount:suggestTotal(c.id), label:`${periodLabel(CUR_PERIOD)} sin prefacturar` };
+}
+function kindCard(k){
+  const cs = clientsOf(k), pend = cs.map(pendingOf).filter(p => p.n);
+  const amount = pend.reduce((a,p) => a + p.amount, 0);
+  const n = pend.reduce((a,p) => a + p.n, 0);
+  const txt = k === 'venta'
+    ? `${n} guía${n===1?'':'s'} sin cobrar`
+    : `${pend.length} de ${cs.length} clientes sin prefacturar ${periodLabel(CUR_PERIOD).toLowerCase()}`;
+  const open = D.prefacturas.filter(p => kindOf(p.client) === k && ['BORRADOR','EN_REVISION','APROBADA'].includes(p.status));
+  const on = UI.F.cKind === k;
+  return `<div class="card kind-card ${on?'sel':''}">
+    <div class="bar-row"><h3>${ic(KINDS[k].ico,18)} Clientes de ${KINDS[k].short.toLowerCase()}</h3><span style="flex:1"></span><span class="sub">${cs.length} cliente${cs.length===1?'':'s'}</span></div>
+    <p class="sub">${KINDS[k].desc}.</p>
+    <div class="add-row"><span class="sub" style="font-weight:700">Se cobra:</span>${KIND_TYPES[k].map(t => `<span class="tchip ty-${t}">${ic(TYPES[t].ico,14)}${TYPES[t].label}</span>`).join('')}</div>
+    <div class="bar-row" style="justify-content:space-between;align-items:flex-end">
+      <div class="bar-row" style="gap:28px;align-items:flex-start">
+        <div><div class="eyebrow">Sin prefacturar</div><div class="big">${clp(amount)}</div><div class="sub">${txt}</div></div>
+        <div><div class="eyebrow">En prefacturas abiertas</div><div class="big">${clp(open.reduce((a,p) => a + calc(p).neto, 0))}</div><div class="sub">${open.length} prefactura${open.length===1?'':'s'} sin facturar · neto</div></div>
+      </div>
+      <button class="btn sm" data-act="ckind" data-k="${on ? '' : k}">${on ? 'Ver todos los clientes' : 'Ver solo estos'}</button>
+    </div>
+  </div>`;
+}
 function renderClientes(){
   if (UI.clientId) return renderClientDetail();
-  const pend = D.dispatches.filter(gdPending);
-  const shownC = CLIENTS.filter(c => match(UI.F.cq, c.name, c.rut, c.giro, c.contact) && (!UI.F.cOnlyPend || pend.some(g => g.client === c.id)));
+  const F = UI.F;
+  const shownC = CLIENTS.filter(c => (!F.cKind || c.kind === F.cKind) && match(F.cq, c.name, c.rut, c.giro, c.contact) && (!F.cOnlyPend || pendingOf(c).n > 0));
   const rows = shownC.map(c => {
-    const gp = pend.filter(g => g.client === c.id);
-    const sp = Object.keys(D.clientPrices[c.id] || {}).length;
+    const pd = pendingOf(c);
     const open = D.prefacturas.filter(p => p.client === c.id && ['BORRADOR','EN_REVISION','APROBADA'].includes(p.status)).length;
+    const sp = Object.keys(D.clientPrices[c.id] || {}).length;
+    const cell = pd.n ? `<span class="chip warn">${esc(pd.label)}</span>`
+      : pd.pf ? `<button class="chip ${STATUS[pd.pf.status].cls}" style="cursor:pointer" data-act="open" data-id="${pd.pf.id}">${periodLabel(CUR_PERIOD)} en ${esc(pd.pf.num)}</button>`
+      : '<span class="sub">Al día</span>';
     return `<tr>
-      <td><button class="link" data-act="cl-open" data-id="${c.id}"><b>${esc(c.name)}</b></button><div class="sub">${esc(c.giro)}</div></td>
+      <td style="min-width:230px"><button class="link" data-act="cl-open" data-id="${c.id}" style="text-align:left"><b>${esc(c.name)}</b></button><div class="sub">${esc(c.giro)}</div></td>
+      <td>${kindChip(c.kind)}</td>
       <td class="code">${esc(c.rut)}</td><td>${termsLabel(c.terms)}</td>
-      <td class="num">${gp.length ? `<span class="chip warn">${gp.length} pendiente${gp.length===1?'':'s'}</span>` : '<span class="sub">al día</span>'}</td>
-      <td class="num"><b>${clp(gp.reduce((a,g) => a + gdAmount(g), 0))}</b></td>
+      <td>${cell}</td>
+      <td class="num"><b>${pd.amount ? clp(pd.amount) : '—'}</b></td>
       <td class="num">${sp}</td><td class="num">${open}</td>
       <td class="num"><button class="btn sm" data-act="cl-open" data-id="${c.id}">Ver cliente</button></td></tr>`;
   }).join('');
@@ -1060,79 +1152,119 @@ function renderClientes(){
     <div class="head"><div>
       <div class="eyebrow">Comercial</div>
       <h1>Clientes</h1>
-      <p>Condiciones comerciales de cada cliente, sus precios especiales y los productos que se le despacharon con guía y todavía no se le cobran.</p>
+      <p>Cada cliente es de almacenaje o de venta, y eso define qué se le cobra y de dónde salen sus prefacturas.</p>
     </div></div>
-    <div class="kpis">
-      <div class="kpi hl"><small>Por cobrar en guías</small><b>${clp(pend.reduce((a,g) => a + gdAmount(g), 0))}</b><span>neto, a precio de cada cliente</span></div>
-      <div class="kpi warn"><small>Guías pendientes</small><b>${pend.length}</b><span>despachadas y sin prefactura</span></div>
-      <div class="kpi"><small>Clientes</small><b>${CLIENTS.length}</b><span>con cuenta comercial</span></div>
-      <div class="kpi"><small>Precios especiales</small><b>${Object.values(D.clientPrices).reduce((a,o) => a + Object.keys(o).length, 0)}</b><span>reemplazan el precio de lista</span></div>
-    </div>
+    <div class="kinds">${kindCard('almacenaje')}${kindCard('venta')}</div>
     <div class="card">
       <div class="card-h"><h3>Clientes</h3></div>
-      ${fbar([searchBox('cq', 'Buscar nombre, RUT, giro o contacto'), chkF('cOnlyPend', 'Solo con guías sin cobrar')], ['cq','cOnlyPend'], shownC.length, CLIENTS.length)}
-      <div class="scroll"><table class="t"><thead><tr><th>Cliente</th><th>RUT</th><th>Pago</th><th class="num">Guías sin cobrar</th><th class="num">Monto pendiente</th><th class="num">Precios especiales</th><th class="num">Prefacturas abiertas</th><th></th></tr></thead><tbody>${rows || emptyRow(8, 'cq,cOnlyPend')}</tbody></table></div>
+      ${fbar([
+        searchBox('cq', 'Buscar nombre, RUT, giro o contacto'),
+        selF('cKind', [['','Todos los tipos'], ['almacenaje','Almacenaje'], ['venta','Venta']], 'Tipo de cliente'),
+        chkF('cOnlyPend', 'Solo con cobros pendientes')
+      ], ['cq','cKind','cOnlyPend'], shownC.length, CLIENTS.length)}
+      <div class="scroll"><table class="t"><thead><tr><th>Cliente</th><th>Tipo</th><th>RUT</th><th>Pago</th><th>Pendiente de cobro</th><th class="num">Monto pendiente</th><th class="num">Precios esp.</th><th class="num">Abiertas</th><th></th></tr></thead>
+      <tbody>${rows || emptyRow(9, 'cq,cKind,cOnlyPend')}</tbody></table></div>
     </div>`;
 }
-function spMarginHtml(p, cid){
-  const sp = specialPrice(D, cid, p.sku); const eff = sp ?? num(p.price);
-  return marginCell(p.cost, eff);
+function spMarginHtml(key, cid, type){ const it = findItem(D, type, key, cid); return it ? marginCell(it.cost, it.price) : ''; }
+
+function clientGuidesTab(c){
+  const guides = D.dispatches.filter(g => g.client === c.id);
+  const gShown = filteredGuides(c.id);
+  const sel = g => UI.clientGdSel[g.id] ?? false;
+  const nSel = gShown.filter(g => gdPending(g) && sel(g)).length;
+  const pend = guides.filter(gdPending);
+  const rows = gShown.map(g => { const st = gdState(g); return `<tr>
+    <td class="ctr">${st.key==='PEND' ? `<input type="checkbox" data-cgd="${g.id}" id="cgd-${g.id}" ${sel(g)?'checked':''} style="width:16px;height:16px;accent-color:var(--money)" aria-label="Seleccionar guía ${g.num}">` : ''}</td>
+    <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td>${esc(g.dest)}</td>
+    <td>${gdProducts(g)}</td><td class="num"><b>${clp(gdAmount(g))}</b></td>
+    <td>${st.pf ? `<button class="chip ${st.cls}" style="cursor:pointer" data-act="open" data-id="${st.pf.id}">${esc(st.label)}</button>` : `<span class="chip ${st.cls}">${esc(st.label)}</span>`}</td></tr>`; }).join('');
+  return `<div class="card-b" style="padding-bottom:12px"><div class="bar-row">
+      <span class="sub">${pend.length ? `${pend.length} guía${pend.length===1?'':'s'} sin cobrar por ${clp(pend.reduce((a,g) => a + gdAmount(g), 0))} neto, con flete incluido.` : 'Todas las guías de este cliente ya están cobradas o en una prefactura.'}</span>
+      <span style="flex:1"></span>
+      ${gShown.some(gdPending) ? `<button class="btn sm" data-act="cgd-all">Seleccionar pendientes${gShown.length < guides.length ? ' de la vista' : ''}</button>` : ''}
+      <button class="btn money" data-act="cl-prefact" ${nSel?'':'disabled'}>${ic('file',16)} Prefacturar ${nSel ? nSel+' ' : ''}guía${nSel===1?'':'s'}</button>
+    </div></div>
+    ${fbar([
+      searchBox('gq', 'Buscar N° de guía, destino o producto'),
+      selF('gState', [['','Todos los estados'], ['PEND','Pendientes de cobro'], ['PF','En prefactura'], ['FACT','Facturadas']], 'Estado de cobro'),
+      dateF('gFrom', 'Desde'), dateF('gTo', 'Hasta')
+    ], ['gq','gState','gFrom','gTo'], gShown.length, guides.length)}
+    <div class="scroll"><table class="t"><thead><tr><th></th><th>Guía</th><th>Fecha</th><th>Destino</th><th>Productos y flete</th><th class="num">Neto a precio cliente</th><th>Estado de cobro</th></tr></thead>
+    <tbody>${rows || (guides.length ? emptyRow(7, 'gq,gState,gFrom,gTo') : `<tr><td colspan="7"><div class="empty"><b>Sin guías de despacho</b>Cuando se cierre un despacho de venta a este cliente aparecerá aquí.</div></td></tr>`)}</tbody></table></div>`;
+}
+function clientServicesTab(c){
+  const F = UI.F, pfp = periodPf(c.id, CUR_PERIOD);
+  const all = suggestRows(c.id);
+  const rows = all.filter(s => (!F.svType || s.type === F.svType) && match(F.svq, s.key, s.it.desc, s.origin));
+  const mes = periodLabel(CUR_PERIOD).toLowerCase();
+  const banner = pfp
+    ? `<div class="note-box" style="background:var(--money-soft);color:var(--money-ink)">${ic('check',18)}<span style="flex:1">El cobro de ${mes} ya está en <b>${esc(pfp.num)}</b> (${STATUS[pfp.status].label.toLowerCase()}).</span><button class="btn sm" data-act="open" data-id="${pfp.id}">Abrir prefactura</button></div>`
+    : `<div class="bar-row"><span class="sub">El WMS registró ${all.length} conceptos cobrables en ${mes}, por ${clp(suggestTotal(c.id))} neto a las tarifas de este cliente.</span><span style="flex:1"></span>
+       <button class="btn money" data-act="cl-period">${ic('file',16)} Prefacturar ${mes}</button></div>`;
+  return `<div class="card-b" style="padding-bottom:12px">${banner}</div>
+    ${fbar([
+      searchBox('svq', 'Buscar concepto u origen'),
+      selF('svType', [['','Todos los tipos'], ['servicio','Servicios'], ['insumo','Insumos'], ['transporte','Transporte']], 'Tipo')
+    ], ['svq','svType'], rows.length, all.length)}
+    <div class="scroll"><table class="t"><thead><tr><th>Tipo</th><th>Concepto y origen en el WMS</th><th class="num">Cantidad</th><th class="num">Tarifa</th><th class="num">Subtotal</th></tr></thead><tbody>
+    ${rows.map(s => `<tr>
+      <td><span class="tchip ty-${s.type}">${ic(TYPES[s.type].ico,14)}${TYPES[s.type].label}</span></td>
+      <td><b>${esc(s.it.desc)}</b><div class="origin">${ic('link',12)}${esc(s.origin)}</div></td>
+      <td class="num">${qtyf(s.qty)} <span class="sub">${esc(s.it.uom)}</span></td>
+      <td class="num">${clp(s.it.price)}${s.it.special ? '<div><span class="chip good">Especial</span></div>' : ''}</td>
+      <td class="num"><b>${clp(s.qty*s.it.price)}</b></td></tr>`).join('') || (all.length ? emptyRow(5, 'svq,svType') : `<tr><td colspan="5"><div class="empty"><b>Sin movimientos en ${mes}</b>Cuando el cliente tenga almacenaje o despachos, aparecerán aquí.</div></td></tr>`)}
+    </tbody></table></div>`;
+}
+function clientPricesTab(c){
+  const types = c.kind === 'venta' ? ['producto','transporte'] : ['servicio','transporte','insumo'];
+  const all = types.flatMap(t => catalog(D, t, c.id).map(x => ({ ...x, type:t })));
+  const rows = all.filter(x => match(UI.F.spq, x.key, x.desc) && (!UI.F.spOnly || x.special));
+  let grp = '';
+  const body = rows.map(x => {
+    const g = x.type === 'servicio' ? x.group : TYPES[x.type].label;
+    const head = g !== grp ? `<tr class="grp"><td colspan="7">${esc(g)}</td></tr>` : ''; grp = g;
+    return `${head}<tr>
+      <td class="code">${esc(x.key)}</td><td>${esc(x.desc)}</td><td class="sub">${esc(x.uom)}</td>
+      <td class="num">${clp(x.cost)}</td><td class="num">${num(x.listPrice) ? clp(x.listPrice) : '<span class="chip warn">Sin precio</span>'}</td>
+      <td class="num"><input class="in num money" type="number" min="0" step="10" data-sp="${esc(x.key)}" data-spt="${x.type}" id="sp-${esc(x.key)}" value="${x.special ? x.price : ''}" placeholder="usa lista" aria-label="Precio especial ${esc(x.key)}"></td>
+      <td class="num" data-spm="${esc(x.key)}">${marginCell(x.cost, x.price)}</td></tr>`;
+  }).join('');
+  const what = c.kind === 'venta' ? 'productos y fletes' : 'servicios, fletes e insumos';
+  return `${fbar([searchBox('spq', 'Buscar código o descripción'), chkF('spOnly', 'Solo con precio especial')], ['spq','spOnly'], rows.length, all.length)}
+    <div class="scroll"><table class="t"><thead><tr><th>Código</th><th>Descripción</th><th>UM</th><th class="num">Costo</th><th class="num">Precio de lista</th><th class="num">Precio para ${esc(c.name)}</th><th class="num">Margen</th></tr></thead>
+    <tbody>${body || emptyRow(7, 'spq,spOnly')}</tbody></table></div>
+    <div class="card-b"><div class="note-box">${ic('info',18)}<span>Lista de ${what} para un cliente de ${KINDS[c.kind].short.toLowerCase()}. Deja el campo vacío para usar el precio de lista. El precio del cliente se aplica a las líneas nuevas; las prefacturas ya armadas mantienen su precio.</span></div></div>`;
 }
 function renderClientDetail(){
   const c = clientById(UI.clientId);
-  const tab = UI.clientTab;
-  const guides = D.dispatches.filter(g => g.client === c.id).sort((a,b) => b.date.localeCompare(a.date));
-  const pend = guides.filter(gdPending);
-  const sel = g => UI.clientGdSel[g.id] ?? false;
-  const gShown = filteredGuides(c.id);
-  const nSel = gShown.filter(g => gdPending(g) && sel(g)).length;
   const pfs = D.prefacturas.filter(p => p.client === c.id).sort((a,b) => b.num.localeCompare(a.num));
-  const tabs = [['despachos',`Guías de despacho (${guides.length})`],['precios','Precios del cliente'],['prefacturas',`Prefacturas (${pfs.length})`]];
-  let body = '';
-  if (tab === 'despachos') {
-    const rows = gShown.map(g => { const st = gdState(g); return `<tr>
-      <td class="ctr">${st.key==='PEND' ? `<input type="checkbox" data-cgd="${g.id}" id="cgd-${g.id}" ${sel(g)?'checked':''} style="width:16px;height:16px;accent-color:var(--money)" aria-label="Seleccionar guía ${g.num}">` : ''}</td>
-      <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td>${esc(g.dest)}</td>
-      <td class="code">${gdProducts(g)}</td><td class="num"><b>${clp(gdAmount(g))}</b></td>
-      <td>${st.pf ? `<button class="chip ${st.cls}" style="cursor:pointer" data-act="open" data-id="${st.pf.id}">${esc(st.label)}</button>` : `<span class="chip ${st.cls}">${esc(st.label)}</span>`}</td></tr>`; }).join('');
-    body = `<div class="card-b" style="padding-bottom:12px"><div class="bar-row">
-        <span class="sub">${pend.length ? `${pend.length} guía${pend.length===1?'':'s'} sin cobrar por ${clp(pend.reduce((a,g) => a + gdAmount(g), 0))} neto.` : 'Todas las guías de este cliente ya están cobradas o en una prefactura.'}</span>
-        <span style="flex:1"></span>
-        ${gShown.some(gdPending) ? `<button class="btn sm" data-act="cgd-all">Seleccionar pendientes${gShown.length < guides.length ? ' de la vista' : ''}</button>` : ''}
-        <button class="btn money" data-act="cl-prefact" ${nSel?'':'disabled'}>${ic('file',16)} Prefacturar ${nSel ? nSel+' ' : ''}guía${nSel===1?'':'s'}</button>
-      </div></div>
-      ${fbar([
-        searchBox('gq', 'Buscar N° de guía, destino o producto'),
-        selF('gState', [['','Todos los estados'], ['PEND','Pendientes de cobro'], ['PF','En prefactura'], ['FACT','Facturadas']], 'Estado de cobro'),
-        dateF('gFrom', 'Desde'), dateF('gTo', 'Hasta')
-      ], ['gq','gState','gFrom','gTo'], gShown.length, guides.length)}
-      <div class="scroll"><table class="t"><thead><tr><th></th><th>Guía</th><th>Fecha</th><th>Destino</th><th>Productos despachados</th><th class="num">Neto a precio cliente</th><th>Estado de cobro</th></tr></thead><tbody>${rows || (guides.length ? emptyRow(7, 'gq,gState,gFrom,gTo') : `<tr><td colspan="7"><div class="empty"><b>Sin guías de despacho</b>Cuando se cierre un despacho de este cliente aparecerá aquí.</div></td></tr>`)}</tbody></table></div>`;
-  } else if (tab === 'precios') {
-    const allProds = D.products.filter(p => p.client === c.id);
-    const prods = allProds.filter(p => match(UI.F.spq, p.sku, p.desc) && (!UI.F.spOnly || specialPrice(D, c.id, p.sku)));
-    body = `${fbar([searchBox('spq', 'Buscar SKU o descripción'), chkF('spOnly', 'Solo con precio especial')], ['spq','spOnly'], prods.length, allProds.length)}<div class="scroll"><table class="t"><thead><tr><th>SKU</th><th>Descripción</th><th>UM</th><th class="num">Costo</th><th class="num">Precio de lista</th><th class="num">Precio para ${esc(c.name)}</th><th class="num">Margen</th></tr></thead><tbody>
-      ${prods.map(p => { const sp = specialPrice(D, c.id, p.sku); return `<tr>
-        <td class="code">${esc(p.sku)}</td><td>${esc(p.desc)}</td><td class="sub">${esc(p.uom)}</td>
-        <td class="num">${clp(p.cost)}</td><td class="num">${num(p.price) ? clp(p.price) : '<span class="chip warn">Sin precio</span>'}</td>
-        <td class="num"><input class="in num money" type="number" min="0" step="10" data-sp="${esc(p.sku)}" id="sp-${esc(p.sku)}" value="${sp ?? ''}" placeholder="usa lista" aria-label="Precio especial ${esc(p.sku)}"></td>
-        <td class="num" data-spm="${esc(p.sku)}">${spMarginHtml(p, c.id)}</td></tr>`; }).join('') || emptyRow(7, 'spq,spOnly')}
-      </tbody></table></div>
-      <div class="card-b"><div class="note-box">${ic('info',18)}<span>Deja el campo vacío para usar el precio de lista. El precio del cliente se aplica a las líneas nuevas; las prefacturas ya armadas mantienen su precio.</span></div></div>`;
-  } else {
-    body = `<div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Período</th><th>Estado</th><th class="num">Neto</th><th class="num">Total</th><th></th></tr></thead><tbody>
-      ${pfs.map(p => { const k = calc(p); const s = STATUS[p.status]; return `<tr><td class="pf-num">${esc(p.num)}</td><td>${periodLabel(p.period)}</td><td><span class="chip ${s.cls}">${s.label}</span></td><td class="num">${clp(k.neto)}</td><td class="num"><b>${clp(k.total)}</b></td><td class="num"><button class="btn sm" data-act="open" data-id="${p.id}">Abrir</button></td></tr>`; }).join('') || `<tr><td colspan="6"><div class="empty"><b>Sin prefacturas</b>Selecciona guías pendientes y prefactúralas.</div></td></tr>`}
+  const tabs = c.kind === 'venta'
+    ? [['despachos',`Guías de despacho (${D.dispatches.filter(g => g.client === c.id).length})`], ['precios','Precios del cliente'], ['prefacturas',`Prefacturas (${pfs.length})`]]
+    : [['servicios',`Cobros de ${periodLabel(CUR_PERIOD).toLowerCase()}`], ['precios','Tarifas del cliente'], ['prefacturas',`Prefacturas (${pfs.length})`]];
+  if (!tabs.some(t => t[0] === UI.clientTab)) UI.clientTab = tabs[0][0];
+  const tab = UI.clientTab;
+  let body;
+  if (tab === 'despachos') body = clientGuidesTab(c);
+  else if (tab === 'servicios') body = clientServicesTab(c);
+  else if (tab === 'precios') body = clientPricesTab(c);
+  else body = `<div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Período</th><th>Estado</th><th class="num">Neto</th><th class="num">Total</th><th></th></tr></thead><tbody>
+      ${pfs.map(p => { const k = calc(p); const s = STATUS[p.status]; return `<tr><td class="pf-num">${esc(p.num)}</td><td>${periodLabel(p.period)}</td><td><span class="chip ${s.cls}">${s.label}</span></td><td class="num">${clp(k.neto)}</td><td class="num"><b>${clp(k.total)}</b></td><td class="num"><button class="btn sm" data-act="open" data-id="${p.id}">Abrir</button></td></tr>`; }).join('') || `<tr><td colspan="6"><div class="empty"><b>Sin prefacturas</b>${c.kind === 'venta' ? 'Selecciona guías pendientes y prefactúralas.' : 'Prefactura los cobros del mes desde la primera pestaña.'}</div></td></tr>`}
       </tbody></table></div>`;
-  }
+  const third = c.kind === 'almacenaje'
+    ? `<div class="field"><label>En bodega hoy</label><span>${c.stock.pos} posiciones · ${c.stock.skus} SKU · ${fmtN.format(c.stock.units)} unidades</span></div>`
+    : `<div class="field"><label>Lista de precios</label><span>General${Object.keys(D.clientPrices[c.id] || {}).length ? ` + ${Object.keys(D.clientPrices[c.id]).length} precio(s) especial(es)` : ''}</span></div>`;
   return `
     <div class="head"><div style="min-width:0">
       <button class="back" data-act="cl-list">${ic('left',14)} Todos los clientes</button>
-      <h1>${esc(c.name)}</h1>
-      <p>RUT ${esc(c.rut)} · ${esc(c.giro)}</p>
+      <h1>${esc(c.name)} ${kindChip(c.kind)}</h1>
+      <p>RUT ${esc(c.rut)} · ${esc(c.giro)}. ${KINDS[c.kind].desc}.</p>
     </div></div>
-    <div class="card"><div class="card-b fields">
+    <div class="card"><div class="card-b fields four">
       <div class="field"><label>Dirección de facturación</label><span>${esc(c.dir)}</span></div>
       <div class="field"><label>Contacto</label><span>${esc(c.contact)} · ${esc(c.email)}</span></div>
       <div class="field"><label>Condición de pago</label><span>${termsLabel(c.terms)}</span></div>
+      ${third}
     </div></div>
     <div class="tabs" role="tablist" style="align-self:flex-start">${tabs.map(([id,l]) => `<button class="tab ${tab===id?'on':''}" role="tab" aria-selected="${tab===id}" data-act="ctab" data-tab="${id}">${l}</button>`).join('')}</div>
     <div class="card">${body}</div>`;
@@ -1190,7 +1322,7 @@ function render(){
 function newLine(type){
   const pf = currentPf();
   const cat = catalog(D, type, pf.client);
-  const it = type === 'producto' ? (cat.find(x => x.client === pf.client) || cat[0]) : cat[0];
+  const it = cat[0];
   return { id:uid(), type, key: it ? it.key : '', desc: it ? it.desc : '', uom: it ? it.uom : 'GL', qty:1, price: it ? it.price : 0, cost: it ? it.cost : 0, disc:0, afecto:true, origin:'' };
 }
 function go(view){ if (view === 'clientes') UI.clientId = null; UI.view = view; UI.sideOpen = false; UI.confirmVoid = false; if (location.hash !== '#'+view) history.replaceState(null, '', '#'+view); render(); window.scrollTo(0,0); }
@@ -1221,9 +1353,8 @@ document.addEventListener('click', e => {
     case 'list': UI.pfId = null; UI.confirmVoid = false; render(); window.scrollTo(0,0); break;
     case 'new': {
       if (!UI.newClient) { toast('Elige primero el cliente de la prefactura.', 'info'); $('#newClient')?.focus(); break; }
-      const n = D.nextPf++; const id = 'pf' + n + uid();
-      D.prefacturas.push({ id, num:`PF-2026-${String(n).padStart(4,'0')}`, client:UI.newClient, period:'2026-10', date:'2026-10-28', status:'BORRADOR', ref:'', terms:clientById(UI.newClient).terms, notes:'', discount:0, ivaRate:19, lines:[], invoice:null });
-      UI.pfId = id; UI.newClient = ''; UI.suggestOpen = true; UI.suggestSel = {}; save(); render(); toast('Prefactura creada en borrador'); break;
+      const np = newPf(UI.newClient), venta = kindOf(UI.newClient) === 'venta';
+      UI.pfId = np.id; UI.newClient = ''; UI.F.lType = ''; UI.gdOpen = venta; UI.suggestOpen = !venta; UI.gdSel = {}; UI.suggestSel = {}; save(); render(); toast('Prefactura creada en borrador'); break;
     }
     case 'add': UI.F.lType = ''; pf.lines.push(newLine(b.dataset.type)); save(); render(); { const last = pf.lines[pf.lines.length-1]; const el = document.getElementById('lq-'+last.id); if (el) { el.focus(); el.select(); } } break;
     case 'del-line': { const id = b.closest('[data-line]').dataset.line; pf.lines = pf.lines.filter(l => l.id !== id); syncGd(pf); save(); render(); toast('Línea quitada', 'trash'); break; }
@@ -1233,11 +1364,21 @@ document.addEventListener('click', e => {
     case 'gd-add': {
       const gs = D.dispatches.filter(g => g.client === pf.client && gdPending(g) && (UI.gdSel[g.id] ?? true));
       let n = 0; gs.forEach(g => { const ls = gdLines(g); pf.lines.push(...ls); n += ls.length; g.pf = pf.id; });
-      UI.gdOpen = false; UI.gdSel = {}; UI.F.lType = ''; save(); render(); toast(`${gs.length} guía${gs.length===1?'':'s'} agregada${gs.length===1?'':'s'} (${n} producto${n===1?'':'s'})`); break;
+      UI.gdOpen = false; UI.gdSel = {}; UI.F.lType = ''; save(); render(); toast(`${gs.length} guía${gs.length===1?'':'s'} agregada${gs.length===1?'':'s'} (${n} línea${n===1?'':'s'})`); break;
     }
-    case 'cl-open': UI.clientId = b.dataset.id; UI.clientTab = 'despachos'; UI.clientGdSel = {}; clearF(['gq','gState','gFrom','gTo','spq','spOnly']); render(); window.scrollTo(0,0); break;
+    case 'cl-open': UI.clientId = b.dataset.id; UI.clientTab = kindOf(b.dataset.id) === 'venta' ? 'despachos' : 'servicios'; UI.clientGdSel = {}; clearF(['gq','gState','gFrom','gTo','spq','spOnly','svq','svType']); render(); window.scrollTo(0,0); break;
     case 'cl-list': UI.clientId = null; render(); window.scrollTo(0,0); break;
     case 'ctab': UI.clientTab = b.dataset.tab; render(); break;
+    case 'ckind': UI.F.cKind = b.dataset.k; render(); break;
+    case 'cl-period': {
+      const cid = UI.clientId, rows = suggestRows(cid);
+      if (!rows.length || periodPf(cid, CUR_PERIOD)) break;
+      const np = newPf(cid);
+      rows.forEach(s => np.lines.push({ id:uid(), type:s.type, key:s.key, desc:s.it.desc, uom:s.it.uom, qty:s.qty, price:s.it.price, cost:s.it.cost, disc:0, afecto:true, origin:s.origin }));
+      UI.view = 'prefacturacion'; history.replaceState(null, '', '#prefacturacion');
+      UI.pfId = np.id; UI.F.lType = ''; UI.gdOpen = false; UI.suggestOpen = false; UI.confirmVoid = false;
+      save(); render(); window.scrollTo(0,0); toast(`${np.num} creada con ${rows.length} cobros de ${periodLabel(CUR_PERIOD).toLowerCase()}`); break;
+    }
     case 'cgd-all': filteredGuides(UI.clientId).filter(gdPending).forEach(g => { UI.clientGdSel[g.id] = true; }); render(); break;
     case 'cl-prefact': {
       const gs = filteredGuides(UI.clientId).filter(g => gdPending(g) && UI.clientGdSel[g.id]);
@@ -1274,7 +1415,7 @@ document.addEventListener('click', e => {
     }
     case 'void': UI.confirmVoid = true; render(); break;
     case 'void-no': UI.confirmVoid = false; render(); break;
-    case 'void-yes': D.dispatches.forEach(g => { if (g.pf === pf.id) g.pf = null; }); setStatus('ANULADA', 'Prefactura anulada. Sus guías de despacho quedan pendientes de cobro.'); break;
+    case 'void-yes': { const had = D.dispatches.some(g => g.pf === pf.id); D.dispatches.forEach(g => { if (g.pf === pf.id) g.pf = null; }); setStatus('ANULADA', had ? 'Prefactura anulada. Sus guías de despacho quedan pendientes de cobro.' : 'Prefactura anulada'); break; }
     case 'dup': {
       const n = D.nextPf++; const id = 'pf' + n + uid();
       const [y,m] = pf.period.split('-').map(Number); const nm = m === 12 ? `${y+1}-01` : `${y}-${String(m+1).padStart(2,'0')}`;
@@ -1302,8 +1443,7 @@ document.addEventListener('input', e => {
   if (t.dataset.sp !== undefined && UI.clientId) {
     const cp = D.clientPrices[UI.clientId] = D.clientPrices[UI.clientId] || {};
     if (num(t.value) > 0) cp[t.dataset.sp] = num(t.value); else delete cp[t.dataset.sp];
-    const p = D.products.find(x => x.sku === t.dataset.sp);
-    const cell = document.querySelector(`[data-spm="${t.dataset.sp}"]`); if (cell && p) cell.innerHTML = spMarginHtml(p, UI.clientId);
+    const cell = document.querySelector(`[data-spm="${t.dataset.sp}"]`); if (cell) cell.innerHTML = spMarginHtml(t.dataset.sp, UI.clientId, t.dataset.spt);
     save(); return;
   }
   // Prefactura: encabezado
