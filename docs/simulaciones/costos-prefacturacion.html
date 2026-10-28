@@ -1,0 +1,1269 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Costos y Prefacturación</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+<style>
+/* Layout: el mismo armazón del WMS (barra lateral oscura + área de trabajo clara); el módulo nuevo "Comercial" usa esmeralda como color de sección. */
+:root{
+  --bg:#f8fafc; --surface:#ffffff; --surface-2:#f1f5f9; --line:#e2e8f0; --line-2:#cbd5e1;
+  --ink:#0f172a; --ink-2:#334155; --muted:#64748b;
+  --side:#0f172a; --side-ink:#cbd5e1; --side-muted:rgba(255,255,255,.5); --side-hover:#1e293b; --side-line:#1e293b;
+  --accent:#4f46e5; --accent-soft:#eef2ff; --accent-ink:#4338ca; --on-accent:#ffffff;
+  --money:#059669; --money-soft:#ecfdf5; --money-ink:#047857; --on-money:#ffffff; --money-side:#34d399;
+  --warn:#b45309; --warn-soft:#fffbeb; --bad:#dc2626; --bad-soft:#fef2f2;
+  --sim:#f59e0b; --sim-soft:#fef3c7; --sim-ink:#92400e;
+  --t-prod:#4f46e5; --t-ins:#c2410c; --t-tr:#0e7490; --t-srv:#6d28d9; --t-otr:#475569;
+  --shadow:0 1px 2px rgba(15,23,42,.06),0 6px 20px rgba(15,23,42,.05);
+  --overlay:rgba(15,23,42,.55);
+  --paper:#ffffff; --paper-ink:#0f172a;
+  --font:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  --mono:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0b1120; --surface:#111a2e; --surface-2:#0f172a; --line:#1f2a44; --line-2:#334155;
+  --ink:#e2e8f0; --ink-2:#cbd5e1; --muted:#94a3b8;
+  --side:#020617; --side-ink:#cbd5e1; --side-muted:rgba(255,255,255,.45); --side-hover:#0f172a; --side-line:#1e293b;
+  --accent:#818cf8; --accent-soft:rgba(99,102,241,.16); --accent-ink:#a5b4fc; --on-accent:#0b1120;
+  --money:#34d399; --money-soft:rgba(16,185,129,.14); --money-ink:#6ee7b7; --on-money:#022c22; --money-side:#34d399;
+  --warn:#fbbf24; --warn-soft:rgba(245,158,11,.14); --bad:#f87171; --bad-soft:rgba(239,68,68,.14);
+  --sim:#f59e0b; --sim-soft:rgba(245,158,11,.16); --sim-ink:#fcd34d;
+  --t-prod:#a5b4fc; --t-ins:#fb923c; --t-tr:#22d3ee; --t-srv:#c4b5fd; --t-otr:#94a3b8;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+  --overlay:rgba(2,6,23,.7);
+  --paper:#f8fafc; --paper-ink:#0f172a;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0b1120; --surface:#111a2e; --surface-2:#0f172a; --line:#1f2a44; --line-2:#334155;
+  --ink:#e2e8f0; --ink-2:#cbd5e1; --muted:#94a3b8;
+  --side:#020617; --side-ink:#cbd5e1; --side-muted:rgba(255,255,255,.45); --side-hover:#0f172a; --side-line:#1e293b;
+  --accent:#818cf8; --accent-soft:rgba(99,102,241,.16); --accent-ink:#a5b4fc; --on-accent:#0b1120;
+  --money:#34d399; --money-soft:rgba(16,185,129,.14); --money-ink:#6ee7b7; --on-money:#022c22; --money-side:#34d399;
+  --warn:#fbbf24; --warn-soft:rgba(245,158,11,.14); --bad:#f87171; --bad-soft:rgba(239,68,68,.14);
+  --sim:#f59e0b; --sim-soft:rgba(245,158,11,.16); --sim-ink:#fcd34d;
+  --t-prod:#a5b4fc; --t-ins:#fb923c; --t-tr:#22d3ee; --t-srv:#c4b5fd; --t-otr:#94a3b8;
+  --shadow:0 1px 2px rgba(0,0,0,.3);
+  --overlay:rgba(2,6,23,.7);
+  --paper:#f8fafc; --paper-ink:#0f172a;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+table{font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+
+/* ── Armazón ── */
+.app{display:grid;grid-template-columns:256px minmax(0,1fr);min-height:100%}
+.side{background:var(--side);color:var(--side-ink);position:sticky;top:0;height:100vh;overflow-y:auto;padding:18px 12px 32px;padding-left:max(12px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:2px;z-index:30}
+.brand{display:flex;align-items:center;gap:10px;color:#fff;font-weight:900;letter-spacing:.02em;font-size:17px;padding:4px 8px 16px}
+.brand svg{color:#818cf8}
+.who{border-top:1px solid var(--side-line);border-bottom:1px solid var(--side-line);padding:12px 8px;margin-bottom:8px}
+.who small{display:block;font-size:10px;font-weight:800;letter-spacing:.14em;color:var(--side-muted);text-transform:uppercase}
+.who b{display:block;color:#fff;font-size:13px;margin-top:4px}
+.who i{font-style:normal;font-size:10px;font-weight:800;color:#a5b4fc;letter-spacing:.08em}
+.nav-sec{font-size:11px;font-weight:900;letter-spacing:.14em;color:var(--side-muted);text-transform:uppercase;padding:14px 10px 6px;display:flex;align-items:center;gap:8px}
+.nav-sec .new{margin-left:auto}
+.nav-btn{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border-radius:12px;border:0;background:transparent;color:var(--side-ink);cursor:pointer;text-align:left;font-size:14px;font-weight:500}
+.nav-btn:hover{background:var(--side-hover)}
+.nav-btn.ctx{opacity:.55}
+.nav-btn.on{background:rgba(16,185,129,.18);color:var(--money-side);font-weight:800}
+.nav-sep{border-top:1px solid var(--side-line);margin:8px 0}
+.new{font-size:9px;font-weight:900;letter-spacing:.1em;background:#10b981;color:#022c22;padding:2px 6px;border-radius:999px;margin-left:auto}
+.main{min-width:0;display:flex;flex-direction:column}
+.topbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--surface);border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;min-height:56px;padding-block:8px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));flex-wrap:wrap}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:40;background:var(--surface)}
+.topbar .wms{font-weight:900;letter-spacing:.16em;font-size:12px;color:var(--ink-2)}
+.simchip{display:inline-flex;align-items:center;gap:6px;background:var(--sim-soft);color:var(--sim-ink);border:1px solid color-mix(in srgb,var(--sim) 40%,transparent);font-size:11px;font-weight:900;letter-spacing:.08em;padding:4px 10px;border-radius:8px;text-transform:uppercase}
+.topbar .note{font-size:12px;color:var(--muted)}
+.topbar .sp{flex:1}
+.btn.menu-btn{display:none}
+.content{padding-block:28px 72px;padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:20px;max-width:1440px;width:100%}
+.scrim{display:none}
+
+/* ── Encabezados ── */
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.head h1{margin:0;font-size:30px;font-weight:900;letter-spacing:-.01em;text-transform:uppercase;text-wrap:balance;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.head p{margin:6px 0 0;color:var(--muted);max-width:68ch;line-height:1.5}
+.eyebrow{font-size:11px;font-weight:900;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.back{display:inline-flex;align-items:center;gap:6px;background:none;border:0;color:var(--accent-ink);font-weight:800;font-size:12px;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;padding:0;margin-bottom:8px}
+
+/* ── Piezas ── */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);min-width:0}
+.card-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-bottom:1px solid var(--line)}
+.card-h h3{margin:0;font-size:12px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2)}
+.card-b{padding:20px}
+.scroll{overflow-x:auto}
+.tabs{display:inline-flex;gap:4px;background:var(--surface-2);border:1px solid var(--line);padding:4px;border-radius:14px;flex-wrap:wrap}
+.tab{border:0;background:transparent;padding:8px 14px;border-radius:10px;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+.tab.on{background:var(--money);color:var(--on-money)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 16px;min-width:0}
+.kpi small{display:block;font-size:10px;font-weight:900;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.kpi b{display:block;font-size:24px;font-weight:900;margin-top:6px;font-variant-numeric:tabular-nums}
+.kpi span{display:block;font-size:12px;color:var(--muted);margin-top:2px}
+.kpi.hl{background:var(--money);border-color:var(--money);color:var(--on-money)}
+.kpi.hl small,.kpi.hl span{color:inherit;opacity:.85}
+.kpi.warn b{color:var(--warn)} .kpi.bad b{color:var(--bad)}
+
+table.t{width:100%;border-collapse:collapse;font-size:13px}
+.t th{font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap;background:var(--surface-2)}
+.t td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.t tr:last-child td{border-bottom:0}
+.t .num{text-align:right;white-space:nowrap}
+.t .ctr{text-align:center}
+.t tbody tr:hover td{background:color-mix(in srgb,var(--surface-2) 60%,transparent)}
+.t .grp td{background:var(--surface-2);font-size:10px;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:8px 12px}
+.code{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink-2)}
+.sub{font-size:12px;color:var(--muted)}
+.in{border:1.5px solid var(--line);background:var(--surface);border-radius:10px;padding:7px 10px;width:100%;outline:none;min-width:0}
+.in:focus{border-color:var(--accent)}
+.in:disabled{background:var(--surface-2);color:var(--muted);border-color:transparent}
+.in.num{text-align:right;font-variant-numeric:tabular-nums}
+.in.money{width:120px}
+.in.qty{width:84px}
+.in.pct{width:64px}
+.in.uom{width:76px;text-transform:uppercase}
+select.in{padding-right:28px}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+.field label{font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.fields{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+.fields .wide{grid-column:span 3}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink-2);padding:9px 14px;border-radius:12px;font-size:12px;font-weight:800;letter-spacing:.04em;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--line-2)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.money{background:var(--money);border-color:var(--money);color:var(--on-money)}
+.btn.accent{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 35%,transparent)}
+.btn.ghost{border-color:transparent;background:transparent}
+.btn.sm{padding:6px 10px;font-size:11px}
+.icon-btn{border:0;background:transparent;color:var(--muted);padding:6px;border-radius:8px;cursor:pointer;display:inline-flex}
+.icon-btn:hover{background:var(--bad-soft);color:var(--bad)}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;padding:4px 8px;border-radius:999px;white-space:nowrap;border:1px solid transparent}
+.chip.good{background:var(--money-soft);color:var(--money-ink)}
+.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}
+.chip.mute{background:var(--surface-2);color:var(--muted);border-color:var(--line)}
+.chip.acc{background:var(--accent-soft);color:var(--accent-ink)}
+.mg{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.mg small{font-size:11px;color:var(--muted)}
+.tchip{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:800;padding:4px 9px;border-radius:8px;white-space:nowrap;background:color-mix(in srgb,var(--tc) 12%,transparent);color:var(--tc)}
+.ty-producto{--tc:var(--t-prod)} .ty-insumo{--tc:var(--t-ins)} .ty-transporte{--tc:var(--t-tr)} .ty-servicio{--tc:var(--t-srv)} .ty-otro{--tc:var(--t-otr)}
+.add-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.add-btn{border:1.5px dashed color-mix(in srgb,var(--tc) 50%,transparent);color:var(--tc);background:color-mix(in srgb,var(--tc) 6%,transparent)}
+.toggle{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;user-select:none}
+.toggle input{accent-color:var(--accent);width:16px;height:16px}
+.bar-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.note-box{display:flex;gap:10px;align-items:flex-start;background:var(--accent-soft);color:var(--accent-ink);border-radius:14px;padding:12px 14px;font-size:13px;line-height:1.45}
+.note-box.warn{background:var(--warn-soft);color:var(--warn)}
+.note-box svg{flex:none;margin-top:1px}
+
+/* ── Editor de prefactura ── */
+.ed{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+.ed-main{display:flex;flex-direction:column;gap:20px;min-width:0}
+.ed-side{position:sticky;top:76px;display:flex;flex-direction:column;gap:16px}
+.lines td{padding:8px 8px}
+.lines th{padding:10px 8px}
+.c-item{min-width:260px}
+.c-item .stack{display:flex;flex-direction:column;gap:6px}
+.flag{display:block;font-size:10px;font-weight:900;color:var(--bad);letter-spacing:.06em;text-transform:uppercase;margin-top:4px;text-align:right}
+.internal{background:color-mix(in srgb,var(--accent-soft) 55%,transparent)}
+.t th.internal{background:var(--accent-soft);color:var(--accent-ink)}
+.origin{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.empty{padding:36px 20px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink-2);font-size:15px;margin-bottom:4px}
+.tot{padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+.tot .r{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.tot .r .in{width:64px;padding:4px 8px}
+.tot .r label{display:flex;align-items:center;gap:8px}
+.tot .hr{border-top:1px dashed var(--line-2);margin:4px 0}
+.tot .big{font-size:13px;font-weight:900;letter-spacing:.1em;text-transform:uppercase;color:var(--ink)}
+.tot .big b{font-size:26px;letter-spacing:-.01em}
+.tot .neto b{font-weight:800}
+.intl{background:var(--accent-soft);color:var(--accent-ink);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-variant-numeric:tabular-nums}
+.intl .r{color:inherit}
+.intl small{font-size:10px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}
+.mix{display:flex;flex-direction:column;gap:8px}
+.mix .bar{height:10px;border-radius:999px;background:var(--surface-2);display:flex;overflow:hidden}
+.mix .bar span{display:block;height:100%;background:var(--tc)}
+.mix ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:1fr auto;gap:4px 12px;font-size:12px}
+.mix li{display:contents}
+.mix .dot{display:inline-block;width:8px;height:8px;border-radius:3px;background:var(--tc);margin-right:6px}
+.alerts{display:flex;flex-direction:column;gap:6px;font-size:12px}
+.alerts div{display:flex;gap:8px;align-items:flex-start;color:var(--warn)}
+.alerts div.bad{color:var(--bad)}
+.alerts div.ok{color:var(--money-ink)}
+.actions{display:flex;flex-direction:column;gap:8px}
+.actions .btn{width:100%}
+.confirm{display:flex;flex-direction:column;gap:8px;border:1.5px solid color-mix(in srgb,var(--bad) 35%,transparent);background:var(--bad-soft);border-radius:12px;padding:12px;font-size:12px;color:var(--bad);font-weight:700}
+.confirm .bar-row .btn{flex:1}
+.steps{display:flex;gap:0;flex-wrap:wrap;margin-top:14px}
+.step{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-right:14px}
+.step i{font-style:normal;width:22px;height:22px;border-radius:999px;display:inline-grid;place-items:center;border:2px solid var(--line-2);font-size:11px}
+.step.done{color:var(--money-ink)} .step.done i{background:var(--money);border-color:var(--money);color:var(--on-money)}
+.step.cur{color:var(--ink)} .step.cur i{border-color:var(--accent);color:var(--accent-ink)}
+.step + .step::before{content:"";width:22px;height:2px;background:var(--line-2);margin-right:8px}
+.st{display:inline-flex}
+.suggest{border-top:1px solid var(--line);background:color-mix(in srgb,var(--money-soft) 60%,transparent)}
+.suggest .card-h{border-bottom:0;padding-bottom:8px}
+.suggest .t td,.suggest .t th{background:transparent}
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.fchip{border:1.5px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:11px;font-weight:800;color:var(--muted);cursor:pointer}
+.fchip.on{border-color:var(--ink-2);color:var(--ink);background:var(--surface-2)}
+.link{background:none;border:0;color:var(--accent-ink);font-weight:800;cursor:pointer;padding:0;font-size:13px}
+.pf-num{font-family:var(--mono);font-weight:800;font-size:12px}
+
+/* ── Vista previa (documento) ── */
+.modal{position:fixed;inset:0;background:var(--overlay);z-index:60;display:flex;justify-content:center;align-items:flex-start;overflow-y:auto;padding-top:max(24px,env(safe-area-inset-top,0px));padding-bottom:max(24px,env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.sheet{background:var(--paper);color:var(--paper-ink);width:100%;max-width:820px;border-radius:6px;box-shadow:0 20px 60px rgba(0,0,0,.35);padding:40px 44px;position:relative}
+.sheet .close{position:absolute;top:12px;right:12px;background:#f1f5f9;border:0;border-radius:10px;padding:8px;cursor:pointer;color:#0f172a;display:inline-flex}
+.doc-top{display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;border-bottom:2px solid #0f172a;padding-bottom:18px}
+.doc-top h2{margin:0;font-size:15px;font-weight:900;letter-spacing:.04em}
+.doc-top .muted{color:#64748b;font-size:12px;line-height:1.6}
+.doc-box{border:2px solid #b91c1c;color:#b91c1c;padding:12px 16px;text-align:center;font-weight:900;font-size:13px;letter-spacing:.04em;line-height:1.6;border-radius:4px}
+.doc-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 24px;font-size:12px;padding:16px 0;border-bottom:1px solid #e2e8f0;color:#334155}
+.doc-meta b{color:#0f172a}
+.doc-lines{width:100%;border-collapse:collapse;font-size:12px;margin-top:16px}
+.doc-lines th{text-align:left;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#64748b;border-bottom:1px solid #0f172a;padding:6px 6px}
+.doc-lines td{padding:7px 6px;border-bottom:1px solid #e2e8f0;color:#0f172a}
+.doc-lines .num{text-align:right;white-space:nowrap}
+.doc-tot{margin-left:auto;margin-top:16px;width:min(300px,100%);font-size:13px;display:flex;flex-direction:column;gap:4px;font-variant-numeric:tabular-nums}
+.doc-tot div{display:flex;justify-content:space-between}
+.doc-tot .tt{border-top:2px solid #0f172a;padding-top:6px;margin-top:4px;font-weight:900;font-size:15px}
+.doc-foot{margin-top:28px;font-size:11px;color:#64748b;line-height:1.6;border-top:1px solid #e2e8f0;padding-top:12px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));background:#0f172a;color:#fff;padding:12px 18px;border-radius:14px;font-size:13px;font-weight:700;z-index:80;box-shadow:0 10px 30px rgba(0,0,0,.25);max-width:calc(100% - 32px);display:flex;gap:8px;align-items:center}
+
+/* ── Responsivo ── */
+@media (max-width:1180px){
+  .ed{grid-template-columns:minmax(0,1fr)}
+  .ed-side{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:960px){
+  .app{grid-template-columns:minmax(0,1fr)}
+  .side{position:fixed;left:0;top:0;bottom:0;width:272px;height:100%;transform:translateX(-100%);transition:transform .2s ease;padding-top:max(18px,env(safe-area-inset-top,0px))}
+  .side.open{transform:none}
+  .scrim.open{display:block;position:fixed;inset:0;background:var(--overlay);z-index:25}
+  .btn.menu-btn{display:inline-flex}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .topbar .note{display:none}
+}
+@media (max-width:640px){
+  .content{padding-block:20px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .topbar{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+  .head h1{font-size:22px}
+  .fields{grid-template-columns:minmax(0,1fr)}
+  .fields .wide{grid-column:auto}
+  .ed-side{grid-template-columns:minmax(0,1fr)}
+  .sheet{padding:28px 20px}
+  .doc-meta{grid-template-columns:minmax(0,1fr)}
+  .kpi b{font-size:20px}
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="side" id="side" aria-label="Menú del WMS"></aside>
+  <div class="scrim" id="scrim"></div>
+  <div class="main">
+    <header class="topbar">
+      <button class="btn sm menu-btn" id="menuBtn" aria-label="Abrir menú"></button>
+      <span class="wms">WMS ENTERPRISE</span>
+      <span class="simchip">Simulación</span>
+      <span class="note">Datos de ejemplo. Nada de esto se guarda en el WMS.</span>
+      <span class="sp"></span>
+      <button class="btn sm" id="resetBtn"></button>
+    </header>
+    <main class="content" id="view"></main>
+  </div>
+</div>
+<div id="modal"></div>
+<div id="toast"></div>
+
+<script>
+(function(){
+'use strict';
+
+// ─── Íconos (trazos estilo lucide, como en el WMS) ───────────────────────
+const P = {
+  cube:'<path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/>',
+  grid:'<rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/>',
+  tag:'<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r="1"/>',
+  receipt:'<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6a2 2 0 1 0 0 4h4a2 2 0 1 1 0 4H8"/><path d="M12 17.5v-11"/>',
+  file:'<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 13h4"/><path d="M10 17h4"/>',
+  truck:'<path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/><path d="M15 18H9"/><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/><circle cx="17" cy="18" r="2"/><circle cx="7" cy="18" r="2"/>',
+  layers:'<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+  inb:'<path d="m7 7 10 10"/><path d="M17 7v10H7"/>',
+  outb:'<path d="M7 7h10v10"/><path d="M7 17 17 7"/>',
+  users:'<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  wrench:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>',
+  pen:'<path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/>',
+  plus:'<path d="M5 12h14"/><path d="M12 5v14"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  eye:'<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  import:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  left:'<path d="m12 19-7-7 7-7"/><path d="M19 12H5"/>',
+  menu:'<path d="M4 12h16"/><path d="M4 6h16"/><path d="M4 18h16"/>',
+  x:'<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+  refresh:'<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  alert:'<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 2-1.73Z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+  check:'<path d="M20 6 9 17l-5-5"/>',
+  info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+  link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
+  copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
+  send:'<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>'
+};
+const ic = (n, s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]||''}</svg>`;
+
+// ─── Utilidades ──────────────────────────────────────────────────────────
+const $ = (s, r=document) => r.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = v => { const n = parseFloat(v); return isFinite(n) ? n : 0; };
+const fmtCLP = new Intl.NumberFormat('es-CL', { style:'currency', currency:'CLP', maximumFractionDigits:0 });
+const clp = v => fmtCLP.format(Math.round(num(v)));
+const fmtN = new Intl.NumberFormat('es-CL', { maximumFractionDigits:2 });
+const qtyf = v => fmtN.format(num(v));
+const pct = v => `${fmtN.format(Math.round(num(v)*10)/10)}%`;
+const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const periodLabel = p => { if(!p) return '—'; const [y,m] = p.split('-'); const s = MONTHS[parseInt(m,10)-1] || ''; return s.charAt(0).toUpperCase()+s.slice(1)+' '+y; };
+const dateLabel = d => { if(!d) return '—'; const [y,m,dd] = d.split('-'); return `${dd}-${m}-${y}`; };
+const uid = () => Math.random().toString(36).slice(2,9);
+const roundUp10 = v => Math.ceil(v/10)*10;
+
+// ─── Datos de ejemplo (clientes y SKUs del modo demo del WMS) ────────────
+const CLIENTS = [
+  { id:'ACME', name:'ACME Corp', rut:'76.512.340-K', giro:'Venta de equipos computacionales', contact:'Juan Pérez', email:'juan@acme.cl', dir:'Av. Apoquindo 4501, Las Condes', terms:'30' },
+  { id:'RETAIL-X', name:'Retail Express', rut:'77.204.118-3', giro:'Comercio al por menor de vestuario', contact:'María López', email:'maria@retailx.cl', dir:'Av. Matta 820, Santiago', terms:'45' },
+  { id:'FARMA-SUR', name:'Farma del Sur', rut:'76.981.552-1', giro:'Distribución de productos farmacéuticos', contact:'Carlos Vega', email:'carlos@farmasur.cl', dir:'Camino a Melipilla 9120, Maipú', terms:'30' }
+];
+const clientById = id => CLIENTS.find(c => c.id === id) || { id, name:id, rut:'—', giro:'—', contact:'—', email:'—', dir:'—', terms:'30' };
+const termsLabel = t => t === '0' ? 'Contado' : `${t} días`;
+
+const TYPES = {
+  producto:   { label:'Producto',   ico:'cube' },
+  insumo:     { label:'Insumo',     ico:'layers' },
+  transporte: { label:'Transporte', ico:'truck' },
+  servicio:   { label:'Servicio',   ico:'wrench' },
+  otro:       { label:'Otro cargo', ico:'pen' }
+};
+const STATUS = {
+  BORRADOR:    { label:'Borrador',    cls:'mute' },
+  EN_REVISION: { label:'En revisión', cls:'warn' },
+  APROBADA:    { label:'Aprobada',    cls:'acc'  },
+  FACTURADA:   { label:'Facturada',   cls:'good' },
+  ANULADA:     { label:'Anulada',     cls:'bad'  }
+};
+const FLOW = ['BORRADOR','EN_REVISION','APROBADA','FACTURADA'];
+
+function seed(){
+  const L = (type, key, qty, price, cost, extra={}) => ({ id:uid(), type, key, qty, price, cost, disc:0, afecto:true, desc:'', uom:'', origin:'', ...extra });
+  const d = {
+    minMargin: 15,
+    nextPf: 49,
+    nextInvoice: 10241,
+    products: [
+      { sku:'LAPTOP-15PRO',    client:'ACME',      desc:'Laptop 15" Pro i7 16GB',     uom:'UN',     cost:820000, price:1049990 },
+      { sku:'MONITOR-27',      client:'ACME',      desc:'Monitor 27" 4K IPS',         uom:'UN',     cost:245000, price:329990 },
+      { sku:'TECLADO-MEC',     client:'ACME',      desc:'Teclado Mecánico RGB',       uom:'UN',     cost:32000,  price:49990 },
+      { sku:'MOUSE-WRLS',      client:'ACME',      desc:'Mouse Inalámbrico Ergonómico', uom:'UN',   cost:9800,   price:16990 },
+      { sku:'CABLE-USBC',      client:'ACME',      desc:'Cable USB-C 2m',             uom:'UN',     cost:2100,   price:5990 },
+      { sku:'CAMISA-M',        client:'RETAIL-X',  desc:'Camisa Algodón Talla M',     uom:'UN',     cost:6500,   price:14990 },
+      { sku:'JEANS-32',        client:'RETAIL-X',  desc:'Jeans Slim Fit 32',          uom:'UN',     cost:11200,  price:24990 },
+      { sku:'ZAPATILLA-42',    client:'RETAIL-X',  desc:'Zapatilla Running 42',       uom:'PAR',    cost:28500,  price:33990 },
+      { sku:'POLERA-L',        client:'RETAIL-X',  desc:'Polera Deportiva Talla L',   uom:'UN',     cost:4800,   price:0 },
+      { sku:'IBUPROFENO-400',  client:'FARMA-SUR', desc:'Ibuprofeno 400mg x 20',      uom:'CAJA',   cost:950,    price:1290 },
+      { sku:'PARACETAMOL-500', client:'FARMA-SUR', desc:'Paracetamol 500mg x 30',     uom:'CAJA',   cost:780,    price:890 },
+      { sku:'VITAMINA-C',      client:'FARMA-SUR', desc:'Vitamina C 1000mg x 60',     uom:'FRASCO', cost:4200,   price:7490 },
+      { sku:'ALCOHOL-GEL',     client:'FARMA-SUR', desc:'Alcohol Gel 500ml',          uom:'UN',     cost:1650,   price:0 }
+    ],
+    insumos: [
+      { code:'CAJA-403030',  cat:'embalaje',   desc:'Caja cartón 40x30x30',       uom:'UN',    cost:420,  price:690 },
+      { code:'CINTA-48',     cat:'embalaje',   desc:'Cinta de embalaje 48mm',     uom:'ROLLO', cost:1150, price:1790 },
+      { code:'FILM-STRETCH', cat:'embalaje',   desc:'Film stretch 50cm',          uom:'ROLLO', cost:6900, price:9900 },
+      { code:'BOLSA-BURB',   cat:'embalaje',   desc:'Bolsa burbuja 30x40',        uom:'UN',    cost:95,   price:0 },
+      { code:'ETIQ-10X15',   cat:'etiquetado', desc:'Etiqueta térmica 10x15 (500 u)', uom:'ROLLO', cost:7800, price:11500 },
+      { code:'PALLET-MAD',   cat:'pallets',    desc:'Pallet de madera 1,0 x 1,2', uom:'UN',    cost:6500, price:9500 },
+      { code:'ESQUINERO',    cat:'pallets',    desc:'Esquinero de cartón 1m',     uom:'UN',    cost:180,  price:350 }
+    ],
+    services: [
+      { code:'ALM-PAL-DIA', group:'Almacenaje', desc:'Almacenaje por posición pallet', uom:'PALLET-DÍA', cost:180,   price:290 },
+      { code:'ALM-M3-MES',  group:'Almacenaje', desc:'Almacenaje a granel',            uom:'M3-MES',     cost:2900,  price:4500 },
+      { code:'REC-PAL',     group:'Operación',  desc:'Recepción y ubicación',          uom:'PALLET',     cost:1900,  price:3200 },
+      { code:'PICK-LIN',    group:'Operación',  desc:'Picking',                        uom:'LÍNEA',      cost:210,   price:390 },
+      { code:'DES-PED',     group:'Operación',  desc:'Preparación y despacho de pedido', uom:'PEDIDO',   cost:1400,  price:2500 },
+      { code:'ETQ-UN',      group:'Operación',  desc:'Etiquetado',                     uom:'UN',         cost:45,    price:90 },
+      { code:'KIT-UN',      group:'Operación',  desc:'Armado de kit',                  uom:'KIT',        cost:380,   price:650 },
+      { code:'DEV-UN',      group:'Operación',  desc:'Devolución con inspección',      uom:'UN',         cost:900,   price:1500 },
+      { code:'TR-RM-URB',   group:'Transporte', desc:'Flete Santiago urbano (3/4)',    uom:'VIAJE',      cost:38000, price:55000 },
+      { code:'TR-RM-RUR',   group:'Transporte', desc:'Flete RM rural',                 uom:'VIAJE',      cost:52000, price:75000 },
+      { code:'TR-V-REG',    group:'Transporte', desc:'Flete V Región',                 uom:'VIAJE',      cost:98000, price:140000 },
+      { code:'TR-KG',       group:'Transporte', desc:'Envío courier por peso',         uom:'KG',         cost:420,   price:690 },
+      { code:'TR-PEON',     group:'Transporte', desc:'Peoneta adicional',              uom:'HORA',       cost:6500,  price:9000 }
+    ],
+    // Precio especial por cliente: reemplaza al precio de lista del SKU.
+    clientPrices: {
+      'ACME':      { 'MONITOR-27':315000, 'MOUSE-WRLS':15490 },
+      'RETAIL-X':  { 'JEANS-32':22990 },
+      'FARMA-SUR': { 'PARACETAMOL-500':870, 'IBUPROFENO-400':1250 }
+    },
+    // Guías de despacho del WMS con productos que se le venden al cliente.
+    // pf = prefactura en la que quedó incluida (null = pendiente de cobrar).
+    dispatches: [
+      { id:'GD-4931', num:4931, client:'RETAIL-X',  date:'2026-09-15', dest:'Tienda Mall Plaza Oeste',   lines:[{ sku:'CAMISA-M', qty:30 }], pf:'pf45' },
+      { id:'GD-5044', num:5044, client:'RETAIL-X',  date:'2026-10-04', dest:'Tienda centro',             lines:[{ sku:'JEANS-32', qty:25 }, { sku:'CAMISA-M', qty:40 }], pf:null },
+      { id:'GD-5052', num:5052, client:'ACME',      date:'2026-10-08', dest:'ACME oficina Las Condes',   lines:[{ sku:'MONITOR-27', qty:4 }], pf:'pf46' },
+      { id:'GD-5061', num:5061, client:'FARMA-SUR', date:'2026-10-03', dest:'Farmacia Maipú',            lines:[{ sku:'PARACETAMOL-500', qty:120 }, { sku:'IBUPROFENO-400', qty:80 }], pf:'pf48' },
+      { id:'GD-5077', num:5077, client:'FARMA-SUR', date:'2026-10-12', dest:'Farmacia Puente Alto',      lines:[{ sku:'VITAMINA-C', qty:40 }, { sku:'ALCOHOL-GEL', qty:60 }], pf:null },
+      { id:'GD-5088', num:5088, client:'ACME',      date:'2026-10-19', dest:'ACME sucursal Providencia', lines:[{ sku:'MOUSE-WRLS', qty:15 }, { sku:'TECLADO-MEC', qty:10 }, { sku:'CABLE-USBC', qty:40 }], pf:null },
+      { id:'GD-5090', num:5090, client:'FARMA-SUR', date:'2026-10-21', dest:'Farmacia Maipú',            lines:[{ sku:'IBUPROFENO-400', qty:150 }, { sku:'PARACETAMOL-500', qty:80 }], pf:null },
+      { id:'GD-5096', num:5096, client:'RETAIL-X',  date:'2026-10-23', dest:'Tienda Buin',               lines:[{ sku:'POLERA-L', qty:60 }, { sku:'ZAPATILLA-42', qty:12 }], pf:null },
+      { id:'GD-5101', num:5101, client:'ACME',      date:'2026-10-26', dest:'ACME oficina Las Condes',   lines:[{ sku:'LAPTOP-15PRO', qty:3 }], pf:null }
+    ],
+    prefacturas: []
+  };
+  const pf = (id, num, client, period, date, status, lines, extra={}) => ({ id, num, client, period, date, status, ref:'', terms:'30', notes:'', discount:0, ivaRate:19, lines, invoice:null, ...extra });
+  d.prefacturas = [
+    pf('pf41','PF-2026-0041','ACME','2026-09','2026-09-30','FACTURADA',[
+      L('servicio','ALM-PAL-DIA',600,290,180,{origin:'20 posiciones × 30 días'}),
+      L('servicio','DES-PED',52,2500,1400,{origin:'52 despachos cerrados'}),
+      L('servicio','PICK-LIN',188,390,210),
+      L('transporte','TR-RM-URB',6,55000,38000),
+      L('insumo','CAJA-403030',90,690,420)
+    ],{ ref:'OC-ACME-2291', invoice:{ num:10233, dte:33 } }),
+    pf('pf45','PF-2026-0045','RETAIL-X','2026-09','2026-09-30','FACTURADA',[
+      L('servicio','ALM-PAL-DIA',1260,290,180),
+      L('servicio','REC-PAL',22,3200,1900),
+      L('servicio','DES-PED',140,2500,1400),
+      L('producto','CAMISA-M',30,14990,6500,{ origin:'Guía de despacho N° 4931', gd:'GD-4931' }),
+      L('transporte','TR-V-REG',3,140000,98000)
+    ],{ terms:'45', invoice:{ num:10238, dte:33 } }),
+    pf('pf46','PF-2026-0046','ACME','2026-10','2026-10-27','APROBADA',[
+      L('servicio','ALM-PAL-DIA',620,290,180,{origin:'20 posiciones × 31 días'}),
+      L('servicio','DES-PED',47,2500,1400),
+      L('producto','MONITOR-27',4,315000,245000,{ origin:'Guía de despacho N° 5052', gd:'GD-5052' }),
+      L('transporte','TR-RM-URB',5,55000,38000)
+    ],{ ref:'OC-ACME-2350' }),
+    pf('pf47','PF-2026-0047','RETAIL-X','2026-10','2026-10-27','EN_REVISION',[
+      L('servicio','ALM-PAL-DIA',1302,290,180),
+      L('servicio','REC-PAL',18,3200,1900),
+      L('servicio','DES-PED',156,2500,1400),
+      L('servicio','ETQ-UN',2400,90,45,{ origin:'Etiquetado temporada verano' }),
+      L('transporte','TR-RM-RUR',4,75000,52000)
+    ],{ terms:'45' }),
+    pf('pf48','PF-2026-0048','FARMA-SUR','2026-10','2026-10-28','BORRADOR',[
+      L('servicio','ALM-PAL-DIA',434,290,180,{ origin:'14 posiciones × 31 días' }),
+      L('servicio','DES-PED',38,2500,1400,{ origin:'38 despachos cerrados en octubre' }),
+      L('servicio','PICK-LIN',212,390,210,{ origin:'212 líneas pickeadas' }),
+      L('insumo','CAJA-403030',85,690,420,{ origin:'Consumo en 38 documentos' }),
+      L('producto','PARACETAMOL-500',120,870,780,{ origin:'Guía de despacho N° 5061', gd:'GD-5061' }),
+      L('producto','IBUPROFENO-400',80,1250,950,{ origin:'Guía de despacho N° 5061', gd:'GD-5061' }),
+      L('transporte','TR-RM-URB',9,55000,38000,{ disc:10, origin:'9 viajes con guía de despacho' }),
+      L('otro','',1,18500,0,{ afecto:false, desc:'Reembolso de peajes y estacionamiento (no afecto)', uom:'GL' })
+    ],{ ref:'OC-FS-7781', notes:'Incluye flete con 10% de descuento acordado por volumen.' })
+  ];
+  // Completa descripción y unidad desde el catálogo.
+  d.prefacturas.forEach(p => p.lines.forEach(l => { const it = findItem(d, l.type, l.key); if (it) { l.desc = l.desc || it.desc; l.uom = l.uom || it.uom; } }));
+  return d;
+}
+
+const specialPrice = (d, client, sku) => { const v = ((d.clientPrices||{})[client]||{})[sku]; return num(v) > 0 ? num(v) : null; };
+function catalog(d, type, client){
+  if (type === 'producto')   return d.products.map(p => { const sp = client ? specialPrice(d, client, p.sku) : null;
+    return { key:p.sku, label:`${p.sku} · ${p.desc}${sp ? ' (precio cliente)' : ''}`, desc:p.desc, uom:p.uom, cost:p.cost, price: sp ?? p.price, client:p.client }; });
+  if (type === 'insumo')     return d.insumos.map(i => ({ key:i.code, label:`${i.code} · ${i.desc}`, desc:i.desc, uom:i.uom, cost:i.cost, price:i.price }));
+  if (type === 'transporte') return d.services.filter(s => s.group === 'Transporte').map(s => ({ key:s.code, label:`${s.code} · ${s.desc}`, desc:s.desc, uom:s.uom, cost:s.cost, price:s.price }));
+  if (type === 'servicio')   return d.services.filter(s => s.group !== 'Transporte').map(s => ({ key:s.code, label:`${s.code} · ${s.desc}`, desc:s.desc, uom:s.uom, cost:s.cost, price:s.price, group:s.group }));
+  return [];
+}
+function findItem(d, type, key, client){ return catalog(d, type, client).find(x => x.key === key); }
+
+// Estado de una guía según la prefactura que la incluye.
+function gdState(g){
+  const pf = g.pf && D.prefacturas.find(p => p.id === g.pf);
+  if (!pf || pf.status === 'ANULADA') return { key:'PEND', label:'Pendiente de cobro', cls:'warn' };
+  if (pf.status === 'FACTURADA') return { key:'FACT', label:`Facturada N° ${pf.invoice.num}`, cls:'good', pf };
+  return { key:'PF', label:`En ${pf.num}`, cls:'acc', pf };
+}
+const gdPending = g => gdState(g).key === 'PEND';
+const gdAmount = g => g.lines.reduce((a,x) => { const it = findItem(D, 'producto', x.sku, g.client); return a + (it ? it.price*x.qty : 0); }, 0);
+function gdLines(g){
+  return g.lines.map(x => { const it = findItem(D, 'producto', x.sku, g.client) || { desc:x.sku, uom:'UN', price:0, cost:0 };
+    return { id:uid(), type:'producto', key:x.sku, desc:it.desc, uom:it.uom, qty:x.qty, price:it.price, cost:it.cost, disc:0, afecto:true, origin:`Guía de despacho N° ${g.num}`, gd:g.id }; });
+}
+// Libera las guías que ya no tienen líneas en su prefactura.
+function syncGd(pf){
+  D.dispatches.forEach(g => { if (g.pf === pf.id && !pf.lines.some(l => l.gd === g.id)) g.pf = null; });
+}
+
+// Movimientos del período que el WMS ya registra (despachos, picking, almacenaje,
+// insumos consumidos en documentos, transporte). En la simulación son fijos.
+const SUGGEST = {
+  'FARMA-SUR': [
+    { type:'servicio',   key:'ALM-PAL-DIA', qty:434, origin:'14 posiciones ocupadas × 31 días' },
+    { type:'servicio',   key:'REC-PAL',     qty:6,   origin:'3 recepciones (OC-3301, OC-3318, OC-3340)' },
+    { type:'servicio',   key:'DES-PED',     qty:38,  origin:'38 despachos cerrados en octubre' },
+    { type:'servicio',   key:'PICK-LIN',    qty:212, origin:'212 líneas pickeadas en 9 olas' },
+    { type:'servicio',   key:'DEV-UN',      qty:14,  origin:'2 devoluciones inspeccionadas' },
+    { type:'insumo',     key:'CAJA-403030', qty:85,  origin:'Consumo registrado en 38 documentos' },
+    { type:'insumo',     key:'CINTA-48',    qty:12,  origin:'Consumo registrado en 38 documentos' },
+    { type:'insumo',     key:'ETIQ-10X15',  qty:2,   origin:'Consumo registrado en 38 documentos' },
+    { type:'transporte', key:'TR-RM-URB',   qty:9,   origin:'9 viajes con guía de despacho' },
+    { type:'transporte', key:'TR-V-REG',    qty:2,   origin:'2 envíos a Viña del Mar' }
+  ],
+  'ACME': [
+    { type:'servicio',   key:'ALM-PAL-DIA', qty:620, origin:'20 posiciones ocupadas × 31 días' },
+    { type:'servicio',   key:'REC-PAL',     qty:9,   origin:'Recepción FC-5180 restock monitores' },
+    { type:'servicio',   key:'DES-PED',     qty:47,  origin:'47 despachos cerrados en octubre' },
+    { type:'servicio',   key:'PICK-LIN',    qty:161, origin:'161 líneas pickeadas' },
+    { type:'insumo',     key:'CAJA-403030', qty:60,  origin:'Consumo registrado en 47 documentos' },
+    { type:'insumo',     key:'FILM-STRETCH',qty:4,   origin:'Consumo registrado en 9 recepciones' },
+    { type:'transporte', key:'TR-RM-URB',   qty:5,   origin:'5 viajes con guía de despacho' }
+  ],
+  'RETAIL-X': [
+    { type:'servicio',   key:'ALM-PAL-DIA', qty:1302, origin:'42 posiciones ocupadas × 31 días' },
+    { type:'servicio',   key:'REC-PAL',     qty:18,  origin:'Recepción GD-5100 temporada verano' },
+    { type:'servicio',   key:'DES-PED',     qty:156, origin:'156 despachos cerrados en octubre' },
+    { type:'servicio',   key:'ETQ-UN',      qty:2400,origin:'Etiquetado temporada verano' },
+    { type:'insumo',     key:'BOLSA-BURB',  qty:300, origin:'Consumo registrado en 156 documentos' },
+    { type:'transporte', key:'TR-RM-RUR',   qty:4,   origin:'4 viajes a tiendas de Buin y Talagante' }
+  ]
+};
+
+// ─── Estado (se guarda solo en este navegador) ───────────────────────────
+const KEY = 'wms-sim-prefacturacion-v2';
+function load(){ try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; } }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(D)); } catch(e){} }
+let D = load() || seed();
+const UI = {
+  view:'prefacturacion', preciosTab:'productos', clientFilter:'', bulkMargin:35, bulkScope:'sin-precio',
+  pfId:'pf48', pfFilter:'TODAS', showCosts:true, suggestOpen:false, suggestSel:{}, confirmVoid:false,
+  newClient:'', sideOpen:false, gdOpen:false, gdSel:{},
+  clientId:null, clientTab:'despachos', clientGdSel:{}
+};
+const VIEWS = ['clientes','precios','prefacturacion'];
+function readHash(){ const h = (location.hash||'').replace('#',''); if (VIEWS.includes(h)) UI.view = h; }
+
+function toast(msg, icon='check'){
+  const t = $('#toast');
+  t.innerHTML = `<div class="toast" role="status">${ic(icon,16)}${esc(msg)}</div>`;
+  clearTimeout(toast._t); toast._t = setTimeout(() => { t.innerHTML = ''; }, 2600);
+}
+
+// ─── Cálculos ─────────────────────────────────────────────────────────────
+const lineGross = l => num(l.qty) * num(l.price);
+const lineNet = l => Math.round(lineGross(l) * (1 - num(l.disc)/100));
+const lineCost = l => num(l.qty) * num(l.cost);
+function calc(pf){
+  let afecto = 0, exento = 0, cost = 0; const byType = {};
+  pf.lines.forEach(l => {
+    const n = lineNet(l);
+    if (l.afecto) afecto += n; else exento += n;
+    cost += lineCost(l);
+    byType[l.type] = (byType[l.type]||0) + n;
+  });
+  const g = Math.min(Math.max(num(pf.discount),0),100) / 100;
+  const afectoN = Math.round(afecto*(1-g)), exentoN = Math.round(exento*(1-g));
+  const discAmt = (afecto + exento) - (afectoN + exentoN);
+  const iva = Math.round(afectoN * num(pf.ivaRate) / 100);
+  const neto = afectoN + exentoN, total = neto + iva;
+  const margin = neto - cost, marginPct = neto ? margin/neto*100 : 0;
+  return { afecto, exento, afectoN, exentoN, discAmt, iva, neto, total, cost, margin, marginPct, byType };
+}
+const marginOf = (cost, price) => num(price) > 0 ? (num(price)-num(cost))/num(price)*100 : null;
+function marginClass(m){ if (m === null) return 'warn'; if (m < D.minMargin) return 'bad'; if (m < D.minMargin + 10) return 'warn'; return 'good'; }
+function issues(pf){
+  const out = [];
+  pf.lines.forEach((l,i) => {
+    const name = l.desc || `línea ${i+1}`;
+    if (num(l.price) <= 0) out.push({ lvl:'bad', msg:`${name}: sin precio` });
+    else if (num(l.qty) <= 0) out.push({ lvl:'bad', msg:`${name}: cantidad en cero` });
+    else if (num(l.cost) > 0 && lineNet(l) < lineCost(l)) out.push({ lvl:'bad', msg:`${name}: se cobra bajo el costo` });
+    else if (num(l.cost) > 0) { const m = (lineNet(l)-lineCost(l))/lineNet(l)*100; if (m < D.minMargin) out.push({ lvl:'warn', msg:`${name}: margen ${pct(m)} (mínimo ${D.minMargin}%)` }); }
+    if (!String(l.desc||'').trim()) out.push({ lvl:'bad', msg:`Línea ${i+1}: falta la descripción` });
+  });
+  return out;
+}
+
+// ─── Barra lateral (réplica del WMS, con la sección nueva) ───────────────
+function renderSide(){
+  const ctx = (icon, label) => `<button class="nav-btn ctx" data-act="ctx" title="Fuera de la simulación">${ic(icon)}<span>${label}</span></button>`;
+  const item = (view, icon, label) => `<button class="nav-btn ${UI.view===view?'on':''}" data-act="go" data-view="${view}" ${UI.view===view?'aria-current="page"':''}>${ic(icon)}<span>${label}</span></button>`;
+  $('#side').innerHTML = `
+    <div class="brand">${ic('cube',22)} WMS ENTERPRISE</div>
+    <div class="who"><small>Usuario activo</small><b>Administrador del Sistema</b><i>ADMIN</i></div>
+    <div class="nav-sec">Principal</div>
+    ${ctx('grid','Dashboard')}${ctx('cube','Stock Físico')}
+    <div class="nav-sec">Operaciones diarias</div>
+    ${ctx('inb','Recepciones (In)')}${ctx('outb','Despachos (Out)')}${ctx('layers','Insumos de Bodega')}
+    <div class="nav-sec">Transporte</div>
+    ${ctx('truck','Transporte')}
+    <div class="nav-sep"></div>
+    <div class="nav-sec">Comercial <span class="new">NUEVO</span></div>
+    ${item('clientes','users','Clientes')}
+    ${item('precios','tag','Costos y precios')}
+    ${item('prefacturacion','file','Prefacturación')}
+    <div class="nav-sep"></div>
+    <div class="nav-sec">Facturación actual</div>
+    ${ctx('receipt','Cobros a clientes')}
+  `;
+  $('#side').classList.toggle('open', UI.sideOpen);
+  $('#scrim').classList.toggle('open', UI.sideOpen);
+}
+
+// ─── Vista: Costos y precios ─────────────────────────────────────────────
+function preciosRows(){
+  if (UI.preciosTab === 'productos') return D.products.map((p,i) => ({...p, _i:i, _k:'products'})).filter(p => !UI.clientFilter || p.client === UI.clientFilter);
+  if (UI.preciosTab === 'insumos')   return D.insumos.map((p,i) => ({...p, _i:i, _k:'insumos'}));
+  return D.services.map((p,i) => ({...p, _i:i, _k:'services'}));
+}
+function kpisPrecios(){
+  const rows = preciosRows();
+  const priced = rows.filter(r => num(r.price) > 0);
+  const avg = priced.length ? priced.reduce((a,r) => a + marginOf(r.cost, r.price), 0)/priced.length : 0;
+  const low = priced.filter(r => marginOf(r.cost, r.price) < D.minMargin).length;
+  const none = rows.length - priced.length;
+  const label = { productos:'productos', insumos:'insumos', servicios:'servicios' }[UI.preciosTab];
+  return `
+    <div class="kpi hl"><small>Con precio de venta</small><b>${priced.length} / ${rows.length}</b><span>${label} en la lista</span></div>
+    <div class="kpi"><small>Margen promedio</small><b>${pct(avg)}</b><span>sobre el precio de venta</span></div>
+    <div class="kpi ${low?'bad':''}"><small>Bajo el margen mínimo</small><b>${low}</b><span>mínimo configurado: ${D.minMargin}%</span></div>
+    <div class="kpi ${none?'warn':''}"><small>Sin precio definido</small><b>${none}</b><span>no se pueden prefacturar</span></div>`;
+}
+function marginCell(cost, price){
+  const m = marginOf(cost, price);
+  if (m === null) return `<div class="mg"><span class="chip warn">Sin precio</span></div>`;
+  return `<div class="mg"><span class="chip ${marginClass(m)}">${pct(m)}</span><small>${clp(num(price)-num(cost))} por unidad</small></div>`;
+}
+function renderPrecios(){
+  const tab = UI.preciosTab;
+  const rows = preciosRows();
+  const moneyIn = (r, f) => `<input class="in num money" type="number" min="0" step="10" inputmode="numeric" id="p-${r._k}-${r._i}-${f}" data-pk="${r._k}" data-pi="${r._i}" data-pf="${f}" value="${num(r[f])}" aria-label="${f==='cost'?'Costo':'Precio'} ${esc(r.sku||r.code)}">`;
+  let head, body;
+  if (tab === 'productos') {
+    head = `<tr><th>SKU</th><th>Descripción</th><th>Cliente</th><th>UM</th><th class="num">Costo unitario</th><th class="num">Precio venta (neto)</th><th class="num">Precio con IVA</th><th class="num">Margen</th></tr>`;
+    body = rows.map(r => `<tr>
+      <td class="code">${esc(r.sku)}</td><td>${esc(r.desc)}</td><td><span class="chip mute">${esc(r.client)}</span></td><td class="sub">${esc(r.uom)}</td>
+      <td class="num">${moneyIn(r,'cost')}</td><td class="num">${moneyIn(r,'price')}</td>
+      <td class="num sub" data-iva="${r._k}-${r._i}">${num(r.price)?clp(num(r.price)*1.19):'—'}</td>
+      <td class="num" data-m="${r._k}-${r._i}">${marginCell(r.cost, r.price)}</td></tr>`).join('');
+  } else if (tab === 'insumos') {
+    head = `<tr><th>Código</th><th>Insumo</th><th>Categoría</th><th>UM</th><th class="num">Costo (de Insumos de Bodega)</th><th class="num">Precio de cobro</th><th class="num">Precio con IVA</th><th class="num">Margen</th></tr>`;
+    body = rows.map(r => `<tr>
+      <td class="code">${esc(r.code)}</td><td>${esc(r.desc)}</td><td><span class="chip mute">${esc(r.cat)}</span></td><td class="sub">${esc(r.uom)}</td>
+      <td class="num">${moneyIn(r,'cost')}</td><td class="num">${moneyIn(r,'price')}</td>
+      <td class="num sub" data-iva="${r._k}-${r._i}">${num(r.price)?clp(num(r.price)*1.19):'—'}</td>
+      <td class="num" data-m="${r._k}-${r._i}">${marginCell(r.cost, r.price)}</td></tr>`).join('');
+  } else {
+    head = `<tr><th>Código</th><th>Servicio</th><th>Unidad de cobro</th><th class="num">Costo</th><th class="num">Tarifa (neto)</th><th class="num">Tarifa con IVA</th><th class="num">Margen</th></tr>`;
+    let g = '';
+    body = rows.map(r => {
+      const grp = r.group !== g ? `<tr class="grp"><td colspan="7">${esc(r.group)}</td></tr>` : ''; g = r.group;
+      return `${grp}<tr>
+        <td class="code">${esc(r.code)}</td><td>${esc(r.desc)}</td><td><span class="chip mute">${esc(r.uom)}</span></td>
+        <td class="num">${moneyIn(r,'cost')}</td><td class="num">${moneyIn(r,'price')}</td>
+        <td class="num sub" data-iva="${r._k}-${r._i}">${num(r.price)?clp(num(r.price)*1.19):'—'}</td>
+        <td class="num" data-m="${r._k}-${r._i}">${marginCell(r.cost, r.price)}</td></tr>`;
+    }).join('');
+  }
+  const tabs = [['productos','Productos'],['insumos','Insumos'],['servicios','Servicios y transporte']];
+  const note = {
+    productos:'El costo y el precio se agregan a la ficha de cada SKU. Si un cliente tiene un precio especial, se define en su lista de precios y reemplaza este.',
+    insumos:'El costo ya existe hoy en el módulo Insumos de Bodega. Aquí solo se agrega el precio al que se le cobra al cliente.',
+    servicios:'Estas tarifas reemplazarían a las tarifas sueltas de "Cobros a clientes" (pallet por día, entrada y salida) y suman transporte y servicios de valor agregado.'
+  }[tab];
+  return `
+    <div class="head">
+      <div>
+        <div class="eyebrow">Comercial</div>
+        <h1>Costos y precios</h1>
+        <p>Lista de precios vigente desde el 01-10-2026, en pesos chilenos y sin IVA. Edita los valores para ver cómo cambia el margen.</p>
+      </div>
+      <div class="tabs" role="tablist">${tabs.map(([id,l]) => `<button class="tab ${tab===id?'on':''}" role="tab" aria-selected="${tab===id}" data-act="ptab" data-tab="${id}">${l}</button>`).join('')}</div>
+    </div>
+    <div class="kpis" id="kpis">${kpisPrecios()}</div>
+    <div class="card">
+      <div class="card-h">
+        <h3>${tabs.find(t => t[0]===tab)[1]} (${rows.length})</h3>
+        ${tab==='productos' ? `<select class="in" id="clientFilter" style="width:auto" aria-label="Filtrar por cliente"><option value="">Todos los clientes</option>${CLIENTS.map(c => `<option value="${c.id}" ${UI.clientFilter===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>` : ''}
+        <span class="sp" style="flex:1"></span>
+        <div class="bar-row">
+          <label class="sub" for="minMargin">Margen mínimo</label>
+          <input class="in num pct" type="number" min="0" max="90" id="minMargin" value="${D.minMargin}"><span class="sub">%</span>
+        </div>
+      </div>
+      <div class="card-b" style="padding-bottom:0">
+        <div class="bar-row" style="background:var(--surface-2);border-radius:14px;padding:10px 12px">
+          <span class="sub" style="font-weight:700">Calcular precio con margen</span>
+          <input class="in num pct" type="number" min="1" max="90" id="bulkMargin" value="${UI.bulkMargin}" aria-label="Margen objetivo"><span class="sub">%</span>
+          <select class="in" id="bulkScope" style="width:auto" aria-label="A qué filas aplicar">
+            <option value="sin-precio" ${UI.bulkScope==='sin-precio'?'selected':''}>solo a los que no tienen precio</option>
+            <option value="bajo" ${UI.bulkScope==='bajo'?'selected':''}>a los que están bajo el mínimo</option>
+            <option value="todos" ${UI.bulkScope==='todos'?'selected':''}>a todos los de esta lista</option>
+          </select>
+          <button class="btn money sm" data-act="bulk">Aplicar</button>
+        </div>
+      </div>
+      <div class="scroll" style="margin-top:12px"><table class="t"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+    </div>
+    <div class="note-box">${ic('info',18)}<span>${note}</span></div>`;
+}
+
+// ─── Vista: Prefacturación (listado) ─────────────────────────────────────
+function renderPfList(){
+  const all = D.prefacturas.slice().sort((a,b) => b.num.localeCompare(a.num));
+  const list = UI.pfFilter === 'TODAS' ? all : all.filter(p => p.status === UI.pfFilter);
+  const sum = st => all.filter(p => p.status === st).reduce((a,p) => a + calc(p).total, 0);
+  const cnt = st => all.filter(p => p.status === st).length;
+  const billedOct = all.filter(p => p.status === 'FACTURADA' && p.period === '2026-10').reduce((a,p) => a + calc(p).total, 0);
+  const rows = list.map(p => { const c = calc(p); const s = STATUS[p.status]; return `<tr>
+      <td><button class="link pf-num" data-act="open" data-id="${p.id}">${esc(p.num)}</button></td>
+      <td><b>${esc(clientById(p.client).name)}</b><div class="sub">${esc(clientById(p.client).rut)}</div></td>
+      <td>${periodLabel(p.period)}</td><td class="sub">${dateLabel(p.date)}</td>
+      <td><span class="chip ${s.cls}">${s.label}</span>${p.invoice ? `<div class="sub" style="margin-top:4px">Factura N° ${p.invoice.num}</div>` : ''}</td>
+      <td class="num">${p.lines.length}</td>
+      <td class="num">${clp(c.neto)}</td><td class="num">${clp(c.iva)}</td><td class="num"><b>${clp(c.total)}</b></td>
+      <td class="num"><button class="btn sm" data-act="open" data-id="${p.id}">Abrir</button></td></tr>`; }).join('');
+  const filters = ['TODAS', ...Object.keys(STATUS)];
+  return `
+    <div class="head">
+      <div>
+        <div class="eyebrow">Comercial</div>
+        <h1>Prefacturación</h1>
+        <p>Arma el borrador de lo que se le va a cobrar a cada cliente, revísalo y apruébalo antes de emitir la factura. Una prefactura no tiene valor tributario.</p>
+      </div>
+      <div class="bar-row">
+        <select class="in" id="newClient" style="width:auto" aria-label="Cliente de la nueva prefactura">
+          <option value="">Elige un cliente…</option>${CLIENTS.map(c => `<option value="${c.id}" ${UI.newClient===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}
+        </select>
+        <button class="btn money" data-act="new">${ic('plus',16)} Nueva prefactura</button>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi hl"><small>Listas para facturar</small><b>${clp(sum('APROBADA'))}</b><span>${cnt('APROBADA')} aprobada(s)</span></div>
+      <div class="kpi warn"><small>En revisión</small><b>${clp(sum('EN_REVISION'))}</b><span>${cnt('EN_REVISION')} por revisar</span></div>
+      <div class="kpi"><small>En borrador</small><b>${clp(sum('BORRADOR'))}</b><span>${cnt('BORRADOR')} sin enviar</span></div>
+      <div class="kpi"><small>Facturado de octubre</small><b>${clp(billedOct)}</b><span>total con IVA</span></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Prefacturas</h3><span style="flex:1"></span>
+        <div class="filters">${filters.map(f => `<button class="fchip ${UI.pfFilter===f?'on':''}" data-act="pff" data-f="${f}">${f==='TODAS'?'Todas':STATUS[f].label}</button>`).join('')}</div>
+      </div>
+      <div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Cliente</th><th>Período</th><th>Fecha</th><th>Estado</th><th class="num">Líneas</th><th class="num">Neto</th><th class="num">IVA</th><th class="num">Total</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="10"><div class="empty"><b>No hay prefacturas en este estado</b>Cambia el filtro o crea una nueva.</div></td></tr>`}</tbody></table></div>
+    </div>`;
+}
+
+// ─── Vista: Prefacturación (editor) ──────────────────────────────────────
+const currentPf = () => D.prefacturas.find(p => p.id === UI.pfId);
+function lineRow(l, editable){
+  const T = TYPES[l.type];
+  const dis = editable ? '' : 'disabled';
+  const pf = currentPf();
+  const cat = catalog(D, l.type, pf.client);
+  let opts = '';
+  if (l.type === 'producto') {
+    const mine = cat.filter(x => x.client === pf.client), other = cat.filter(x => x.client !== pf.client);
+    opts = `<optgroup label="Productos de ${esc(clientById(pf.client).name)}">${mine.map(x => `<option value="${x.key}" ${x.key===l.key?'selected':''}>${esc(x.label)}</option>`).join('')}</optgroup>` +
+           (other.length ? `<optgroup label="Otros clientes">${other.map(x => `<option value="${x.key}" ${x.key===l.key?'selected':''}>${esc(x.label)}</option>`).join('')}</optgroup>` : '');
+  } else opts = cat.map(x => `<option value="${x.key}" ${x.key===l.key?'selected':''}>${esc(x.label)}</option>`).join('');
+  const item = l.type === 'otro' ? '' : `<select class="in" data-lf="key" id="lk-${l.id}" ${dis} aria-label="Ítem del catálogo"><option value="">Elegir del catálogo…</option>${opts}</select>`;
+  const under = num(l.cost) > 0 && num(l.price) > 0 && lineNet(l) < lineCost(l);
+  return `<tr data-line="${l.id}">
+    <td><span class="tchip ty-${l.type}">${ic(T.ico,14)}${T.label}</span></td>
+    <td class="c-item"><div class="stack">${item}<input class="in" data-lf="desc" id="ld-${l.id}" value="${esc(l.desc)}" placeholder="Descripción que verá el cliente" ${dis} aria-label="Descripción">
+      ${l.origin ? `<span class="origin">${ic('link',12)}${esc(l.origin)}</span>` : ''}</div></td>
+    <td class="num"><input class="in num qty" type="number" min="0" step="any" data-lf="qty" id="lq-${l.id}" value="${num(l.qty)}" ${dis} aria-label="Cantidad"></td>
+    <td><input class="in uom" data-lf="uom" id="lu-${l.id}" value="${esc(l.uom)}" ${dis} aria-label="Unidad"></td>
+    <td class="num"><input class="in num money" type="number" min="0" step="10" data-lf="price" id="lp-${l.id}" value="${num(l.price)}" ${dis} aria-label="Precio unitario"><span class="flag" data-flag ${under?'':'hidden'}>Bajo el costo</span></td>
+    <td class="num"><input class="in num pct" type="number" min="0" max="100" data-lf="disc" id="lc-${l.id}" value="${num(l.disc)}" ${dis} aria-label="Descuento %"></td>
+    <td class="ctr"><input type="checkbox" data-lf="afecto" id="la-${l.id}" ${l.afecto?'checked':''} ${dis} aria-label="Afecto a IVA" style="width:16px;height:16px;accent-color:var(--accent)"></td>
+    <td class="num" data-sub><b>${clp(lineNet(l))}</b></td>
+    ${UI.showCosts ? `<td class="num internal" data-mg>${lineMarginHtml(l)}</td>` : ''}
+    <td>${editable ? `<button class="icon-btn" data-act="del-line" aria-label="Quitar línea">${ic('trash',16)}</button>` : ''}</td>
+  </tr>`;
+}
+function lineMarginHtml(l){
+  if (!num(l.cost)) return `<span class="sub">sin costo</span>`;
+  const n = lineNet(l), c = lineCost(l); const m = n ? (n-c)/n*100 : 0;
+  return `<div class="mg"><span class="chip ${n? marginClass(m) : 'warn'}">${n?pct(m):'—'}</span><small>costo ${clp(c)}</small></div>`;
+}
+function suggestHtml(pf){
+  const list = (SUGGEST[pf.client] || []).map((s,i) => ({...s, i, it:findItem(D, s.type, s.key, pf.client)})).filter(s => s.it);
+  if (!list.length) return '';
+  const already = s => pf.lines.some(l => l.type === s.type && l.key === s.key);
+  const rows = list.map(s => {
+    const on = UI.suggestSel[s.i] ?? !already(s);
+    return `<tr>
+      <td class="ctr"><input type="checkbox" data-sg="${s.i}" id="sg-${s.i}" ${on?'checked':''} style="width:16px;height:16px;accent-color:var(--money)" aria-label="Incluir"></td>
+      <td><span class="tchip ty-${s.type}">${ic(TYPES[s.type].ico,14)}${TYPES[s.type].label}</span></td>
+      <td><b>${esc(s.it.desc)}</b><div class="origin">${ic('link',12)}${esc(s.origin)}</div></td>
+      <td class="num">${qtyf(s.qty)} <span class="sub">${esc(s.it.uom)}</span></td>
+      <td class="num">${clp(s.it.price)}</td><td class="num"><b>${clp(s.qty*s.it.price)}</b></td>
+      <td>${already(s) ? '<span class="chip warn">Ya está en la prefactura</span>' : ''}</td></tr>`;
+  }).join('');
+  const n = list.filter(s => UI.suggestSel[s.i] ?? !already(s)).length;
+  return `<div class="suggest">
+    <div class="card-h"><h3>Movimientos de ${periodLabel(pf.period).toLowerCase()} registrados en el WMS</h3><span style="flex:1"></span>
+      <button class="btn sm ghost" data-act="sg-close">Cerrar</button>
+      <button class="btn sm money" data-act="sg-add" ${n?'':'disabled'}>${ic('plus',14)} Agregar ${n} línea${n===1?'':'s'}</button></div>
+    <div class="scroll"><table class="t"><thead><tr><th></th><th>Tipo</th><th>Concepto y origen</th><th class="num">Cantidad</th><th class="num">Precio lista</th><th class="num">Subtotal</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+function stepsHtml(pf){
+  if (pf.status === 'ANULADA') return `<div class="steps"><span class="chip bad">${ic('x',12)} Prefactura anulada</span></div>`;
+  const idx = FLOW.indexOf(pf.status);
+  return `<div class="steps" aria-label="Etapas">${FLOW.map((s,i) => `<div class="step ${i<idx || pf.status==='FACTURADA' ? 'done' : i===idx ? 'cur' : ''}"><i>${i<idx || pf.status==='FACTURADA' ? '✓' : i+1}</i>${STATUS[s].label}</div>`).join('')}</div>`;
+}
+function actionsHtml(pf){
+  const st = pf.status;
+  if (UI.confirmVoid) return `<div class="confirm">¿Anular ${esc(pf.num)}? Quedará en el historial y no se podrá facturar.<div class="bar-row"><button class="btn sm" data-act="void-no">No, volver</button><button class="btn sm danger" data-act="void-yes">Sí, anular</button></div></div>`;
+  const prev = `<button class="btn" data-act="preview">${ic('eye',16)} Vista previa para el cliente</button>`;
+  if (st === 'BORRADOR') return `<button class="btn accent" data-act="to-review">${ic('send',16)} Enviar a revisión</button><button class="btn" data-act="save">Guardar borrador</button>${prev}<button class="btn danger ghost" data-act="void">Anular</button>`;
+  if (st === 'EN_REVISION') return `<button class="btn money" data-act="approve">${ic('check',16)} Aprobar</button><button class="btn" data-act="to-draft">Devolver a borrador</button>${prev}<button class="btn danger ghost" data-act="void">Anular</button>`;
+  if (st === 'APROBADA') return `<button class="btn money" data-act="invoice">${ic('receipt',16)} Emitir factura</button><button class="btn" data-act="to-review-back">Volver a revisión</button>${prev}`;
+  if (st === 'FACTURADA') return `<div class="note-box" style="background:var(--money-soft);color:var(--money-ink)">${ic('check',18)}<span>Facturada con la factura electrónica N° <b>${pf.invoice.num}</b> (DTE ${pf.invoice.dte}). Es una simulación: no se envió nada al SII.</span></div>${prev}<button class="btn" data-act="dup">${ic('copy',16)} Duplicar para el próximo mes</button>`;
+  return `${prev}<button class="btn" data-act="dup">${ic('copy',16)} Duplicar como borrador nuevo</button>`;
+}
+function mixHtml(c){
+  const tot = Object.values(c.byType).reduce((a,b) => a+b, 0) || 1;
+  const keys = Object.keys(TYPES).filter(k => c.byType[k]);
+  if (!keys.length) return `<span class="sub">Sin líneas todavía.</span>`;
+  return `<div class="bar">${keys.map(k => `<span class="ty-${k}" style="width:${c.byType[k]/tot*100}%"></span>`).join('')}</div>
+    <ul>${keys.map(k => `<li><span class="ty-${k}"><i class="dot"></i>${TYPES[k].label}</span><span>${clp(c.byType[k])}</span></li>`).join('')}</ul>`;
+}
+function alertsHtml(pf){
+  const is = issues(pf);
+  if (!pf.lines.length) return `<div>${ic('alert',14)}<span>Agrega al menos una línea.</span></div>`;
+  if (!is.length) return `<div class="ok">${ic('check',14)}<span>Sin observaciones. Todas las líneas tienen precio y margen sobre el mínimo.</span></div>`;
+  return is.map(i => `<div class="${i.lvl}">${ic('alert',14)}<span>${esc(i.msg)}</span></div>`).join('');
+}
+function renderEditor(){
+  const pf = currentPf();
+  if (!pf) { UI.pfId = null; return renderPfList(); }
+  const c = calc(pf), cl = clientById(pf.client);
+  const ed = pf.status === 'BORRADOR';
+  const dis = ed ? '' : 'disabled';
+  const s = STATUS[pf.status];
+  const pendCount = D.dispatches.filter(g => g.client === pf.client && gdPending(g)).length;
+  const addBtns = Object.entries(TYPES).map(([k,T]) => `<button class="btn sm add-btn ty-${k}" data-act="add" data-type="${k}" ${dis}>${ic('plus',14)} ${T.label}</button>`).join('');
+  return `
+    <div class="head">
+      <div style="min-width:0">
+        <button class="back" data-act="list">${ic('left',14)} Todas las prefacturas</button>
+        <h1>Prefactura <span class="pf-num" style="font-size:.8em">${esc(pf.num)}</span> <span class="chip ${s.cls}" style="font-size:11px">${s.label}</span></h1>
+        <p>${esc(cl.name)} · ${periodLabel(pf.period)}${ed ? '' : ' · Para modificarla, devuélvela a borrador.'}</p>
+        ${stepsHtml(pf)}
+      </div>
+    </div>
+    <div class="ed">
+      <div class="ed-main">
+        <div class="card">
+          <div class="card-h"><h3>Datos del cobro</h3></div>
+          <div class="card-b fields">
+            <div class="field"><label for="f-client">Cliente</label><select class="in" id="f-client" data-hf="client" ${dis}>${CLIENTS.map(x => `<option value="${x.id}" ${x.id===pf.client?'selected':''}>${esc(x.name)}</option>`).join('')}</select><span class="sub">RUT ${esc(cl.rut)}</span></div>
+            <div class="field"><label for="f-period">Período facturado</label><input class="in" type="month" id="f-period" data-hf="period" value="${esc(pf.period)}" ${dis}></div>
+            <div class="field"><label for="f-date">Fecha</label><input class="in" type="date" id="f-date" data-hf="date" value="${esc(pf.date)}" ${dis}></div>
+            <div class="field"><label for="f-ref">OC o referencia del cliente</label><input class="in" id="f-ref" data-hf="ref" value="${esc(pf.ref)}" placeholder="Ej: OC-4471" ${dis}></div>
+            <div class="field"><label for="f-terms">Condición de pago</label><select class="in" id="f-terms" data-hf="terms" ${dis}>${[['0','Contado'],['15','15 días'],['30','30 días'],['45','45 días'],['60','60 días']].map(([v,l]) => `<option value="${v}" ${pf.terms===v?'selected':''}>${l}</option>`).join('')}</select></div>
+            <div class="field"><label>Contacto</label><input class="in" value="${esc(cl.contact)}" disabled></div>
+            <div class="field wide"><label for="f-notes">Observaciones (salen en el documento)</label><textarea class="in" id="f-notes" data-hf="notes" rows="2" ${dis}>${esc(pf.notes)}</textarea></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-h">
+            <h3>Detalle de cobros (${pf.lines.length})</h3>
+            <span style="flex:1"></span>
+            <label class="toggle"><input type="checkbox" id="showCosts" ${UI.showCosts?'checked':''}> Ver costo y margen (interno)</label>
+          </div>
+          <div class="card-b" style="display:flex;flex-direction:column;gap:12px">
+            <div class="add-row"><span class="sub" style="font-weight:700">Agregar:</span>${addBtns}
+              <span style="flex:1"></span>
+              <button class="btn sm" data-act="gd-open" ${dis}>${ic('outb',14)} Desde guía de despacho${pendCount ? ` <span class="chip warn">${pendCount}</span>` : ''}</button>
+              <button class="btn sm money" data-act="sg-open" ${dis}>${ic('import',14)} Traer movimientos del período</button>
+            </div>
+          </div>
+          ${UI.gdOpen && ed ? gdPanelHtml(pf) : ''}
+          ${UI.suggestOpen && ed ? suggestHtml(pf) : ''}
+          <div class="scroll"><table class="t lines">
+            <thead><tr><th>Tipo</th><th>Concepto</th><th class="num">Cant.</th><th>UM</th><th class="num">Precio unit.</th><th class="num">Desc. %</th><th class="ctr">IVA</th><th class="num">Subtotal</th>${UI.showCosts ? '<th class="num internal">Margen</th>' : ''}<th></th></tr></thead>
+            <tbody>${pf.lines.map(l => lineRow(l, ed)).join('') || `<tr><td colspan="10"><div class="empty"><b>Esta prefactura no tiene líneas</b>Agrega productos, insumos, transporte o servicios, o trae los movimientos del período desde el WMS.</div></td></tr>`}</tbody>
+          </table></div>
+        </div>
+      </div>
+      <aside class="ed-side">
+        <div class="card">
+          <div class="card-h"><h3>Totales</h3></div>
+          <div class="tot">
+            <div class="r"><span>Subtotal afecto</span><span id="t-afecto">${clp(c.afecto)}</span></div>
+            <div class="r"><span>Subtotal exento</span><span id="t-exento">${clp(c.exento)}</span></div>
+            <div class="r"><label for="f-discount">Descuento global <input class="in num" type="number" min="0" max="100" id="f-discount" data-hf="discount" value="${num(pf.discount)}" ${dis}> %</label><span id="t-disc">− ${clp(c.discAmt)}</span></div>
+            <div class="hr"></div>
+            <div class="r neto"><span>Neto</span><b id="t-neto">${clp(c.neto)}</b></div>
+            <div class="r"><label for="f-iva">IVA <input class="in num" type="number" min="0" max="100" id="f-iva" data-hf="ivaRate" value="${num(pf.ivaRate)}" ${dis}> %</label><span id="t-iva">${clp(c.iva)}</span></div>
+            <div class="hr"></div>
+            <div class="r big"><span>Total</span><b id="t-total">${clp(c.total)}</b></div>
+            ${UI.showCosts ? `<div class="intl"><small>Interno, no lo ve el cliente</small>
+              <div class="r"><span>Costo estimado</span><span id="t-cost">${clp(c.cost)}</span></div>
+              <div class="r"><span>Margen</span><b id="t-margin">${clp(c.margin)} · ${pct(c.marginPct)}</b></div></div>` : ''}
+          </div>
+        </div>
+        <div class="card"><div class="card-h"><h3>Composición</h3></div><div class="card-b mix" id="t-mix">${mixHtml(c)}</div></div>
+        <div class="card"><div class="card-h"><h3>Revisión</h3></div><div class="card-b alerts" id="t-alerts">${alertsHtml(pf)}</div></div>
+        <div class="card"><div class="card-b actions">${actionsHtml(pf)}</div></div>
+      </aside>
+    </div>`;
+}
+
+function refreshFigures(){
+  const pf = currentPf(); if (!pf) return;
+  const c = calc(pf);
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('t-afecto', clp(c.afecto)); set('t-exento', clp(c.exento)); set('t-disc', '− ' + clp(c.discAmt));
+  set('t-neto', clp(c.neto)); set('t-iva', clp(c.iva)); set('t-total', clp(c.total));
+  set('t-cost', clp(c.cost)); set('t-margin', `${clp(c.margin)} · ${pct(c.marginPct)}`);
+  const mix = $('#t-mix'); if (mix) mix.innerHTML = mixHtml(c);
+  const al = $('#t-alerts'); if (al) al.innerHTML = alertsHtml(pf);
+}
+
+// ─── Guías de despacho ───────────────────────────────────────────────────
+const gdProducts = g => g.lines.map(x => `${esc(x.sku)} × ${qtyf(x.qty)}`).join('<br>');
+function gdPanelHtml(pf){
+  const pend = D.dispatches.filter(g => g.client === pf.client && gdPending(g)).sort((a,b) => a.date.localeCompare(b.date));
+  const done = D.dispatches.filter(g => g.client === pf.client && !gdPending(g)).length;
+  const sel = g => UI.gdSel[g.id] ?? true;
+  const n = pend.filter(sel).length;
+  const rows = pend.map(g => `<tr>
+      <td class="ctr"><input type="checkbox" data-gd="${g.id}" id="gd-${g.id}" ${sel(g)?'checked':''} style="width:16px;height:16px;accent-color:var(--money)" aria-label="Incluir guía ${g.num}"></td>
+      <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td>${esc(g.dest)}</td>
+      <td class="code">${gdProducts(g)}</td><td class="num"><b>${clp(gdAmount(g))}</b></td></tr>`).join('');
+  return `<div class="suggest">
+    <div class="card-h"><h3>Guías de despacho pendientes de cobro · ${esc(clientById(pf.client).name)}</h3><span style="flex:1"></span>
+      <button class="btn sm ghost" data-act="gd-close">Cerrar</button>
+      <button class="btn sm money" data-act="gd-add" ${n?'':'disabled'}>${ic('plus',14)} Agregar ${n} guía${n===1?'':'s'}</button></div>
+    ${pend.length ? `<div class="scroll"><table class="t"><thead><tr><th></th><th>Guía</th><th>Fecha</th><th>Destino</th><th>Productos</th><th class="num">Neto a precio cliente</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : `<div class="empty"><b>No hay guías pendientes</b>Todas las guías de este cliente ya están en una prefactura o facturadas.</div>`}
+    <div class="card-b sub" style="padding-top:8px">Cada producto despachado entra como una línea con el precio del cliente. ${done ? `${done} guía${done===1?' ya está':'s ya están'} en otra prefactura o facturada${done===1?'':'s'}.` : ''}</div>
+  </div>`;
+}
+function newPfFromGuides(client, guides){
+  const n = D.nextPf++; const id = 'pf' + n + uid();
+  const pf = { id, num:`PF-2026-${String(n).padStart(4,'0')}`, client, period:'2026-10', date:'2026-10-28', status:'BORRADOR', ref:'', terms:clientById(client).terms, notes:'', discount:0, ivaRate:19, lines:[], invoice:null };
+  guides.forEach(g => { pf.lines.push(...gdLines(g)); g.pf = id; });
+  D.prefacturas.push(pf);
+  return pf;
+}
+
+// ─── Vista: Clientes ─────────────────────────────────────────────────────
+function renderClientes(){
+  if (UI.clientId) return renderClientDetail();
+  const pend = D.dispatches.filter(gdPending);
+  const rows = CLIENTS.map(c => {
+    const gp = pend.filter(g => g.client === c.id);
+    const sp = Object.keys(D.clientPrices[c.id] || {}).length;
+    const open = D.prefacturas.filter(p => p.client === c.id && ['BORRADOR','EN_REVISION','APROBADA'].includes(p.status)).length;
+    return `<tr>
+      <td><button class="link" data-act="cl-open" data-id="${c.id}"><b>${esc(c.name)}</b></button><div class="sub">${esc(c.giro)}</div></td>
+      <td class="code">${esc(c.rut)}</td><td>${termsLabel(c.terms)}</td>
+      <td class="num">${gp.length ? `<span class="chip warn">${gp.length} pendiente${gp.length===1?'':'s'}</span>` : '<span class="sub">al día</span>'}</td>
+      <td class="num"><b>${clp(gp.reduce((a,g) => a + gdAmount(g), 0))}</b></td>
+      <td class="num">${sp}</td><td class="num">${open}</td>
+      <td class="num"><button class="btn sm" data-act="cl-open" data-id="${c.id}">Ver cliente</button></td></tr>`;
+  }).join('');
+  return `
+    <div class="head"><div>
+      <div class="eyebrow">Comercial</div>
+      <h1>Clientes</h1>
+      <p>Condiciones comerciales de cada cliente, sus precios especiales y los productos que se le despacharon con guía y todavía no se le cobran.</p>
+    </div></div>
+    <div class="kpis">
+      <div class="kpi hl"><small>Por cobrar en guías</small><b>${clp(pend.reduce((a,g) => a + gdAmount(g), 0))}</b><span>neto, a precio de cada cliente</span></div>
+      <div class="kpi warn"><small>Guías pendientes</small><b>${pend.length}</b><span>despachadas y sin prefactura</span></div>
+      <div class="kpi"><small>Clientes</small><b>${CLIENTS.length}</b><span>con cuenta comercial</span></div>
+      <div class="kpi"><small>Precios especiales</small><b>${Object.values(D.clientPrices).reduce((a,o) => a + Object.keys(o).length, 0)}</b><span>reemplazan el precio de lista</span></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h3>Clientes (${CLIENTS.length})</h3></div>
+      <div class="scroll"><table class="t"><thead><tr><th>Cliente</th><th>RUT</th><th>Pago</th><th class="num">Guías sin cobrar</th><th class="num">Monto pendiente</th><th class="num">Precios especiales</th><th class="num">Prefacturas abiertas</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+    </div>`;
+}
+function spMarginHtml(p, cid){
+  const sp = specialPrice(D, cid, p.sku); const eff = sp ?? num(p.price);
+  return marginCell(p.cost, eff);
+}
+function renderClientDetail(){
+  const c = clientById(UI.clientId);
+  const tab = UI.clientTab;
+  const guides = D.dispatches.filter(g => g.client === c.id).sort((a,b) => b.date.localeCompare(a.date));
+  const pend = guides.filter(gdPending);
+  const sel = g => UI.clientGdSel[g.id] ?? false;
+  const nSel = pend.filter(sel).length;
+  const pfs = D.prefacturas.filter(p => p.client === c.id).sort((a,b) => b.num.localeCompare(a.num));
+  const tabs = [['despachos',`Guías de despacho (${guides.length})`],['precios','Precios del cliente'],['prefacturas',`Prefacturas (${pfs.length})`]];
+  let body = '';
+  if (tab === 'despachos') {
+    const rows = guides.map(g => { const st = gdState(g); return `<tr>
+      <td class="ctr">${st.key==='PEND' ? `<input type="checkbox" data-cgd="${g.id}" id="cgd-${g.id}" ${sel(g)?'checked':''} style="width:16px;height:16px;accent-color:var(--money)" aria-label="Seleccionar guía ${g.num}">` : ''}</td>
+      <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td>${esc(g.dest)}</td>
+      <td class="code">${gdProducts(g)}</td><td class="num"><b>${clp(gdAmount(g))}</b></td>
+      <td>${st.pf ? `<button class="chip ${st.cls}" style="cursor:pointer" data-act="open" data-id="${st.pf.id}">${esc(st.label)}</button>` : `<span class="chip ${st.cls}">${esc(st.label)}</span>`}</td></tr>`; }).join('');
+    body = `<div class="card-b" style="padding-bottom:12px"><div class="bar-row">
+        <span class="sub">${pend.length ? `${pend.length} guía${pend.length===1?'':'s'} sin cobrar por ${clp(pend.reduce((a,g) => a + gdAmount(g), 0))} neto.` : 'Todas las guías de este cliente ya están cobradas o en una prefactura.'}</span>
+        <span style="flex:1"></span>
+        ${pend.length ? `<button class="btn sm" data-act="cgd-all">Seleccionar pendientes</button>` : ''}
+        <button class="btn money" data-act="cl-prefact" ${nSel?'':'disabled'}>${ic('file',16)} Prefacturar ${nSel ? nSel+' ' : ''}guía${nSel===1?'':'s'}</button>
+      </div></div>
+      <div class="scroll"><table class="t"><thead><tr><th></th><th>Guía</th><th>Fecha</th><th>Destino</th><th>Productos despachados</th><th class="num">Neto a precio cliente</th><th>Estado de cobro</th></tr></thead><tbody>${rows || `<tr><td colspan="7"><div class="empty"><b>Sin guías de despacho</b>Cuando se cierre un despacho de este cliente aparecerá aquí.</div></td></tr>`}</tbody></table></div>`;
+  } else if (tab === 'precios') {
+    const prods = D.products.filter(p => p.client === c.id);
+    body = `<div class="scroll"><table class="t"><thead><tr><th>SKU</th><th>Descripción</th><th>UM</th><th class="num">Costo</th><th class="num">Precio de lista</th><th class="num">Precio para ${esc(c.name)}</th><th class="num">Margen</th></tr></thead><tbody>
+      ${prods.map(p => { const sp = specialPrice(D, c.id, p.sku); return `<tr>
+        <td class="code">${esc(p.sku)}</td><td>${esc(p.desc)}</td><td class="sub">${esc(p.uom)}</td>
+        <td class="num">${clp(p.cost)}</td><td class="num">${num(p.price) ? clp(p.price) : '<span class="chip warn">Sin precio</span>'}</td>
+        <td class="num"><input class="in num money" type="number" min="0" step="10" data-sp="${esc(p.sku)}" id="sp-${esc(p.sku)}" value="${sp ?? ''}" placeholder="usa lista" aria-label="Precio especial ${esc(p.sku)}"></td>
+        <td class="num" data-spm="${esc(p.sku)}">${spMarginHtml(p, c.id)}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      <div class="card-b"><div class="note-box">${ic('info',18)}<span>Deja el campo vacío para usar el precio de lista. El precio del cliente se aplica a las líneas nuevas; las prefacturas ya armadas mantienen su precio.</span></div></div>`;
+  } else {
+    body = `<div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Período</th><th>Estado</th><th class="num">Neto</th><th class="num">Total</th><th></th></tr></thead><tbody>
+      ${pfs.map(p => { const k = calc(p); const s = STATUS[p.status]; return `<tr><td class="pf-num">${esc(p.num)}</td><td>${periodLabel(p.period)}</td><td><span class="chip ${s.cls}">${s.label}</span></td><td class="num">${clp(k.neto)}</td><td class="num"><b>${clp(k.total)}</b></td><td class="num"><button class="btn sm" data-act="open" data-id="${p.id}">Abrir</button></td></tr>`; }).join('') || `<tr><td colspan="6"><div class="empty"><b>Sin prefacturas</b>Selecciona guías pendientes y prefactúralas.</div></td></tr>`}
+      </tbody></table></div>`;
+  }
+  return `
+    <div class="head"><div style="min-width:0">
+      <button class="back" data-act="cl-list">${ic('left',14)} Todos los clientes</button>
+      <h1>${esc(c.name)}</h1>
+      <p>RUT ${esc(c.rut)} · ${esc(c.giro)}</p>
+    </div></div>
+    <div class="card"><div class="card-b fields">
+      <div class="field"><label>Dirección de facturación</label><span>${esc(c.dir)}</span></div>
+      <div class="field"><label>Contacto</label><span>${esc(c.contact)} · ${esc(c.email)}</span></div>
+      <div class="field"><label>Condición de pago</label><span>${termsLabel(c.terms)}</span></div>
+    </div></div>
+    <div class="tabs" role="tablist" style="align-self:flex-start">${tabs.map(([id,l]) => `<button class="tab ${tab===id?'on':''}" role="tab" aria-selected="${tab===id}" data-act="ctab" data-tab="${id}">${l}</button>`).join('')}</div>
+    <div class="card">${body}</div>`;
+}
+
+// ─── Vista previa del documento ──────────────────────────────────────────
+function renderPreview(){
+  const pf = currentPf(); if (!pf) return;
+  const c = calc(pf), cl = clientById(pf.client);
+  const terms = pf.terms === '0' ? 'Contado' : `${pf.terms} días`;
+  $('#modal').innerHTML = `<div class="modal" data-act="close-bg" role="dialog" aria-modal="true" aria-label="Vista previa de la prefactura">
+    <div class="sheet">
+      <button class="close" data-act="close" aria-label="Cerrar vista previa">${ic('x',18)}</button>
+      <div class="doc-top">
+        <div><h2>OPERADOR LOGÍSTICO (TU EMPRESA)</h2><div class="muted">Servicios de almacenaje, distribución y transporte<br>Bodega Central · Av. Américo Vespucio 1501, Quilicura</div></div>
+        <div class="doc-box">PREFACTURA<br>N° ${esc(pf.num)}<br><span style="font-size:10px;font-weight:700">DOCUMENTO SIN VALOR TRIBUTARIO</span></div>
+      </div>
+      <div class="doc-meta">
+        <div><b>Señor(es):</b> ${esc(cl.name)}</div><div><b>Fecha:</b> ${dateLabel(pf.date)}</div>
+        <div><b>RUT:</b> ${esc(cl.rut)}</div><div><b>Período:</b> ${periodLabel(pf.period)}</div>
+        <div><b>Giro:</b> ${esc(cl.giro)}</div><div><b>Condición de pago:</b> ${terms}</div>
+        <div><b>Dirección:</b> ${esc(cl.dir)}</div><div><b>Referencia:</b> ${esc(pf.ref || '—')}</div>
+      </div>
+      <div style="overflow-x:auto"><table class="doc-lines"><thead><tr><th>Descripción</th><th class="num">Cant.</th><th>UM</th><th class="num">P. unitario</th><th class="num">Desc.</th><th class="num">Total</th></tr></thead>
+      <tbody>${pf.lines.map(l => `<tr><td>${esc(l.desc)}${l.afecto ? '' : ' <span style="color:#64748b">(exento)</span>'}</td><td class="num">${qtyf(l.qty)}</td><td>${esc(l.uom)}</td><td class="num">${clp(l.price)}</td><td class="num">${num(l.disc) ? pct(l.disc) : ''}</td><td class="num">${clp(lineNet(l))}</td></tr>`).join('')}</tbody></table></div>
+      <div class="doc-tot">
+        ${c.discAmt ? `<div><span>Descuento global (${pct(pf.discount)})</span><span>− ${clp(c.discAmt)}</span></div>` : ''}
+        <div><span>Monto neto</span><span>${clp(c.afectoN)}</span></div>
+        <div><span>Monto exento</span><span>${clp(c.exentoN)}</span></div>
+        <div><span>IVA (${pct(pf.ivaRate)})</span><span>${clp(c.iva)}</span></div>
+        <div class="tt"><span>TOTAL</span><span>${clp(c.total)}</span></div>
+      </div>
+      ${pf.notes ? `<div class="doc-foot"><b>Observaciones:</b> ${esc(pf.notes)}</div>` : ''}
+      <div class="doc-foot">Esta prefactura es un detalle previo para revisión del cliente. Una vez aprobada se emite la factura electrónica correspondiente (DTE 33, o DTE 34 si todo el cobro es exento).</div>
+    </div></div>`;
+  $('.modal .close').focus();
+}
+
+// ─── Render principal ────────────────────────────────────────────────────
+function render(){
+  renderSide();
+  $('#menuBtn').innerHTML = ic('menu',18);
+  $('#resetBtn').innerHTML = `${ic('refresh',14)} Restablecer simulación`;
+  const v = $('#view');
+  if (UI.view === 'precios') v.innerHTML = renderPrecios();
+  else if (UI.view === 'clientes') v.innerHTML = renderClientes();
+  else v.innerHTML = UI.pfId ? renderEditor() : renderPfList();
+}
+
+// ─── Acciones ────────────────────────────────────────────────────────────
+function newLine(type){
+  const pf = currentPf();
+  const cat = catalog(D, type, pf.client);
+  const it = type === 'producto' ? (cat.find(x => x.client === pf.client) || cat[0]) : cat[0];
+  return { id:uid(), type, key: it ? it.key : '', desc: it ? it.desc : '', uom: it ? it.uom : 'GL', qty:1, price: it ? it.price : 0, cost: it ? it.cost : 0, disc:0, afecto:true, origin:'' };
+}
+function go(view){ if (view === 'clientes') UI.clientId = null; UI.view = view; UI.sideOpen = false; UI.confirmVoid = false; if (location.hash !== '#'+view) history.replaceState(null, '', '#'+view); render(); window.scrollTo(0,0); }
+function setStatus(st, msg){ const pf = currentPf(); pf.status = st; UI.confirmVoid = false; UI.suggestOpen = false; save(); render(); toast(msg); }
+
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  if (a === 'close-bg' && e.target !== b) return;
+  const pf = currentPf();
+  switch(a){
+    case 'go': go(b.dataset.view); break;
+    case 'ctx': toast('Esta simulación solo incluye la sección Comercial.', 'info'); break;
+    case 'ptab': UI.preciosTab = b.dataset.tab; render(); break;
+    case 'bulk': {
+      const m = Math.min(Math.max(num(UI.bulkMargin),1),90)/100; let n = 0;
+      preciosRows().forEach(r => {
+        const src = D[r._k][r._i]; const cur = marginOf(src.cost, src.price);
+        const apply = UI.bulkScope === 'todos' || (UI.bulkScope === 'sin-precio' && !num(src.price)) || (UI.bulkScope === 'bajo' && cur !== null && cur < D.minMargin);
+        if (apply && num(src.cost) > 0) { src.price = roundUp10(src.cost/(1-m)); n++; }
+      });
+      save(); render(); toast(n ? `Precio recalculado en ${n} fila${n===1?'':'s'}` : 'No había filas que cumplieran la condición', n ? 'check' : 'info'); break;
+    }
+    case 'pff': UI.pfFilter = b.dataset.f; render(); break;
+    case 'open': if (UI.view !== 'prefacturacion') { UI.view = 'prefacturacion'; history.replaceState(null, '', '#prefacturacion'); } UI.pfId = b.dataset.id; UI.gdOpen = false; UI.gdSel = {}; UI.suggestOpen = false; UI.confirmVoid = false; UI.suggestSel = {}; render(); window.scrollTo(0,0); break;
+    case 'list': UI.pfId = null; UI.confirmVoid = false; render(); window.scrollTo(0,0); break;
+    case 'new': {
+      if (!UI.newClient) { toast('Elige primero el cliente de la prefactura.', 'info'); $('#newClient')?.focus(); break; }
+      const n = D.nextPf++; const id = 'pf' + n + uid();
+      D.prefacturas.push({ id, num:`PF-2026-${String(n).padStart(4,'0')}`, client:UI.newClient, period:'2026-10', date:'2026-10-28', status:'BORRADOR', ref:'', terms:clientById(UI.newClient).terms, notes:'', discount:0, ivaRate:19, lines:[], invoice:null });
+      UI.pfId = id; UI.newClient = ''; UI.suggestOpen = true; UI.suggestSel = {}; save(); render(); toast('Prefactura creada en borrador'); break;
+    }
+    case 'add': pf.lines.push(newLine(b.dataset.type)); save(); render(); { const last = pf.lines[pf.lines.length-1]; const el = document.getElementById('lq-'+last.id); if (el) { el.focus(); el.select(); } } break;
+    case 'del-line': { const id = b.closest('[data-line]').dataset.line; pf.lines = pf.lines.filter(l => l.id !== id); syncGd(pf); save(); render(); toast('Línea quitada', 'trash'); break; }
+    case 'sg-open': UI.suggestOpen = true; UI.gdOpen = false; UI.suggestSel = {}; render(); break;
+    case 'gd-open': UI.gdOpen = true; UI.suggestOpen = false; UI.gdSel = {}; render(); break;
+    case 'gd-close': UI.gdOpen = false; render(); break;
+    case 'gd-add': {
+      const gs = D.dispatches.filter(g => g.client === pf.client && gdPending(g) && (UI.gdSel[g.id] ?? true));
+      let n = 0; gs.forEach(g => { const ls = gdLines(g); pf.lines.push(...ls); n += ls.length; g.pf = pf.id; });
+      UI.gdOpen = false; UI.gdSel = {}; save(); render(); toast(`${gs.length} guía${gs.length===1?'':'s'} agregada${gs.length===1?'':'s'} (${n} producto${n===1?'':'s'})`); break;
+    }
+    case 'cl-open': UI.clientId = b.dataset.id; UI.clientTab = 'despachos'; UI.clientGdSel = {}; render(); window.scrollTo(0,0); break;
+    case 'cl-list': UI.clientId = null; render(); window.scrollTo(0,0); break;
+    case 'ctab': UI.clientTab = b.dataset.tab; render(); break;
+    case 'cgd-all': D.dispatches.filter(g => g.client === UI.clientId && gdPending(g)).forEach(g => { UI.clientGdSel[g.id] = true; }); render(); break;
+    case 'cl-prefact': {
+      const gs = D.dispatches.filter(g => g.client === UI.clientId && gdPending(g) && UI.clientGdSel[g.id]);
+      if (!gs.length) break;
+      const np = newPfFromGuides(UI.clientId, gs);
+      UI.clientGdSel = {}; UI.view = 'prefacturacion'; history.replaceState(null, '', '#prefacturacion');
+      UI.pfId = np.id; UI.gdOpen = false; UI.suggestOpen = false; UI.confirmVoid = false;
+      save(); render(); window.scrollTo(0,0); toast(`${np.num} creada con ${gs.length} guía${gs.length===1?'':'s'} de despacho`); break;
+    }
+    case 'sg-close': UI.suggestOpen = false; render(); break;
+    case 'sg-add': {
+      const already = s => pf.lines.some(l => l.type === s.type && l.key === s.key);
+      let n = 0;
+      (SUGGEST[pf.client] || []).forEach((s,i) => {
+        const on = UI.suggestSel[i] ?? !already(s); const it = findItem(D, s.type, s.key, pf.client);
+        if (on && it) { pf.lines.push({ id:uid(), type:s.type, key:s.key, desc:it.desc, uom:it.uom, qty:s.qty, price:it.price, cost:it.cost, disc:0, afecto:true, origin:s.origin }); n++; }
+      });
+      UI.suggestOpen = false; UI.suggestSel = {}; save(); render(); toast(`${n} línea${n===1?'':'s'} agregada${n===1?'':'s'} desde el WMS`); break;
+    }
+    case 'save': save(); toast('Borrador guardado'); break;
+    case 'to-review': {
+      const bad = issues(pf).filter(i => i.lvl === 'bad');
+      if (!pf.lines.length) { toast('Agrega al menos una línea antes de enviarla.', 'alert'); break; }
+      if (bad.length) { toast(`Corrige ${bad.length} observación${bad.length===1?'':'es'} marcada${bad.length===1?'':'s'} en rojo antes de enviarla.`, 'alert'); break; }
+      setStatus('EN_REVISION', 'Enviada a revisión'); break;
+    }
+    case 'to-draft': setStatus('BORRADOR', 'Devuelta a borrador'); break;
+    case 'to-review-back': setStatus('EN_REVISION', 'Devuelta a revisión'); break;
+    case 'approve': setStatus('APROBADA', 'Prefactura aprobada'); break;
+    case 'invoice': {
+      const c = calc(pf);
+      pf.invoice = { num: D.nextInvoice++, dte: c.afectoN === 0 && c.exentoN > 0 ? 34 : 33 };
+      setStatus('FACTURADA', `Factura N° ${pf.invoice.num} emitida (simulada)`); break;
+    }
+    case 'void': UI.confirmVoid = true; render(); break;
+    case 'void-no': UI.confirmVoid = false; render(); break;
+    case 'void-yes': D.dispatches.forEach(g => { if (g.pf === pf.id) g.pf = null; }); setStatus('ANULADA', 'Prefactura anulada. Sus guías de despacho quedan pendientes de cobro.'); break;
+    case 'dup': {
+      const n = D.nextPf++; const id = 'pf' + n + uid();
+      const [y,m] = pf.period.split('-').map(Number); const nm = m === 12 ? `${y+1}-01` : `${y}-${String(m+1).padStart(2,'0')}`;
+      D.prefacturas.push({ ...JSON.parse(JSON.stringify(pf)), id, num:`PF-2026-${String(n).padStart(4,'0')}`, status:'BORRADOR', invoice:null, period: pf.status === 'FACTURADA' ? nm : pf.period, date:'2026-10-28', lines: pf.lines.filter(l => !l.gd).map(l => ({...l, id:uid(), origin:''})) });
+      UI.pfId = id; save(); render(); window.scrollTo(0,0); toast('Copia creada en borrador'); break;
+    }
+    case 'preview': renderPreview(); break;
+    case 'close': case 'close-bg': $('#modal').innerHTML = ''; break;
+  }
+});
+
+document.addEventListener('input', e => {
+  const t = e.target;
+  // Costos y precios
+  if (t.dataset.pk) {
+    const r = D[t.dataset.pk][+t.dataset.pi]; r[t.dataset.pf] = num(t.value);
+    const k = `${t.dataset.pk}-${t.dataset.pi}`;
+    const mc = document.querySelector(`[data-m="${k}"]`); if (mc) mc.innerHTML = marginCell(r.cost, r.price);
+    const iv = document.querySelector(`[data-iva="${k}"]`); if (iv) iv.textContent = num(r.price) ? clp(num(r.price)*1.19) : '—';
+    $('#kpis').innerHTML = kpisPrecios(); save(); return;
+  }
+  if (t.id === 'minMargin') { D.minMargin = num(t.value); $('#kpis').innerHTML = kpisPrecios(); preciosRows().forEach(r => { const mc = document.querySelector(`[data-m="${r._k}-${r._i}"]`); if (mc) mc.innerHTML = marginCell(r.cost, r.price); }); save(); return; }
+  if (t.id === 'bulkMargin') { UI.bulkMargin = num(t.value); return; }
+  if (t.dataset.sp !== undefined && UI.clientId) {
+    const cp = D.clientPrices[UI.clientId] = D.clientPrices[UI.clientId] || {};
+    if (num(t.value) > 0) cp[t.dataset.sp] = num(t.value); else delete cp[t.dataset.sp];
+    const p = D.products.find(x => x.sku === t.dataset.sp);
+    const cell = document.querySelector(`[data-spm="${t.dataset.sp}"]`); if (cell && p) cell.innerHTML = spMarginHtml(p, UI.clientId);
+    save(); return;
+  }
+  // Prefactura: encabezado
+  const pf = currentPf();
+  if (t.dataset.hf && pf) {
+    const f = t.dataset.hf;
+    if (f === 'client') return; // se maneja en change
+    pf[f] = (f === 'discount' || f === 'ivaRate') ? num(t.value) : t.value;
+    save(); refreshFigures(); return;
+  }
+  // Prefactura: líneas
+  if (t.dataset.lf && pf) {
+    const row = t.closest('[data-line]'); const l = pf.lines.find(x => x.id === row.dataset.line); if (!l) return;
+    const f = t.dataset.lf;
+    if (f === 'key' || f === 'afecto') return; // se manejan en change
+    l[f] = (f === 'qty' || f === 'price' || f === 'disc') ? num(t.value) : t.value;
+    row.querySelector('[data-sub]').innerHTML = `<b>${clp(lineNet(l))}</b>`;
+    const mg = row.querySelector('[data-mg]'); if (mg) mg.innerHTML = lineMarginHtml(l);
+    const fl = row.querySelector('[data-flag]'); if (fl) fl.hidden = !(num(l.cost) > 0 && num(l.price) > 0 && lineNet(l) < lineCost(l));
+    save(); refreshFigures();
+  }
+});
+
+document.addEventListener('change', e => {
+  const t = e.target; const pf = currentPf();
+  if (t.id === 'clientFilter') { UI.clientFilter = t.value; render(); return; }
+  if (t.id === 'bulkScope') { UI.bulkScope = t.value; return; }
+  if (t.id === 'newClient') { UI.newClient = t.value; return; }
+  if (t.id === 'showCosts') { UI.showCosts = t.checked; render(); return; }
+  if (t.dataset.sg !== undefined) { UI.suggestSel[+t.dataset.sg] = t.checked; render(); return; }
+  if (t.dataset.gd !== undefined) { UI.gdSel[t.dataset.gd] = t.checked; render(); return; }
+  if (t.dataset.cgd !== undefined) { UI.clientGdSel[t.dataset.cgd] = t.checked; render(); return; }
+  if (t.dataset.hf === 'client' && pf) { pf.lines = pf.lines.filter(l => !l.gd); syncGd(pf); pf.client = t.value; pf.terms = clientById(pf.client).terms; UI.suggestOpen = false; UI.gdOpen = false; UI.suggestSel = {}; UI.gdSel = {}; save(); render(); toast(`Cliente cambiado a ${clientById(pf.client).name}. Se quitaron las líneas de guías del cliente anterior.`, 'info'); return; }
+  if (t.dataset.lf && pf) {
+    const row = t.closest('[data-line]'); const l = pf.lines.find(x => x.id === row.dataset.line); if (!l) return;
+    if (t.dataset.lf === 'key') {
+      const it = findItem(D, l.type, t.value, pf.client); l.key = t.value;
+      if (it) { l.desc = it.desc; l.uom = it.uom; l.price = it.price; l.cost = it.cost; }
+      save(); render(); return;
+    }
+    if (t.dataset.lf === 'afecto') { l.afecto = t.checked; save(); refreshFigures(); return; }
+  }
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#modal').innerHTML) $('#modal').innerHTML = ''; else if (UI.sideOpen) { UI.sideOpen = false; renderSide(); } } });
+$('#menuBtn').addEventListener('click', () => { UI.sideOpen = !UI.sideOpen; renderSide(); });
+$('#scrim').addEventListener('click', () => { UI.sideOpen = false; renderSide(); });
+$('#resetBtn').addEventListener('click', () => { D = seed(); save(); UI.pfId = 'pf48'; UI.pfFilter = 'TODAS'; UI.suggestOpen = false; UI.gdOpen = false; UI.gdSel = {}; UI.clientGdSel = {}; UI.confirmVoid = false; render(); toast('Simulación restablecida con los datos de ejemplo', 'refresh'); });
+window.addEventListener('hashchange', () => { readHash(); render(); });
+
+readHash();
+if (!currentPf()) UI.pfId = null;
+render();
+})();
+</script>
+</body>
+</html>
