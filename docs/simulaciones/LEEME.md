@@ -23,5 +23,23 @@ Hay dos tipos de cliente, y cada uno se cobra distinto:
   borrador → revisión → aprobada → facturada. Las líneas que se pueden agregar dependen del tipo de
   cliente.
 
+### Fletes de venta
+
+El flete de cada guía de venta se calcula con el método asignado al cliente (se elige en su ficha),
+según la zona de destino y lo que lleva la guía:
+
+| Método | Cómo se calcula |
+|---|---|
+| Por viaje | Precio fijo por zona, camión dedicado |
+| Por kilo cobrable | Kilos × tarifa de la zona; se cobra el mayor entre el peso real y el volumétrico (m³ × 250) |
+| Por bulto | Bultos × tarifa de la zona |
+| Por pallet | Pallets (1,44 m³ cada uno) × tarifa de la zona |
+| % del valor | Porcentaje del valor neto de la mercadería |
+| Incluido sobre un monto | Sin cobro si la compra supera el monto; si no, se cobra con otro método |
+
+Kilo, bulto y % del valor tienen un cobro mínimo por envío. En **Costos y precios → Fletes de venta** se
+editan las tarifas, el costo interno y se comparan los seis métodos sobre una misma guía o un envío
+ingresado a mano.
+
 Cada listado tiene filtros: búsqueda por texto, tipo de cliente, cliente, período, estado, categoría,
 margen y rango de fechas, según corresponda.
