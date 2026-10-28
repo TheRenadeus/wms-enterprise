@@ -37,6 +37,14 @@ según la zona de destino y lo que lleva la guía:
 | % del valor | Porcentaje del valor neto de la mercadería |
 | Incluido sobre un monto | Sin cobro si la compra supera el monto; si no, se cobra con otro método |
 
+**Zona de destino:** cada cliente de venta tiene direcciones de despacho con comuna, y cada comuna
+pertenece a una zona (tabla editable en Fletes de venta). La guía toma la zona de la comuna; si la
+comuna no tiene zona, la guía no se puede cobrar hasta asignarla, o se elige la zona a mano en la guía.
+
+**Peso y volumen:** salen de la ficha de cada SKU, con los mismos campos que ya tiene el WMS (peso en kg;
+largo, ancho y alto en cm). Se ven y editan en Productos para venta → Peso y medidas. Un producto sin
+medidas no suma volumen y la simulación lo advierte.
+
 Kilo, bulto y % del valor tienen un cobro mínimo por envío. En **Costos y precios → Fletes de venta** se
 editan las tarifas, el costo interno y se comparan los seis métodos sobre una misma guía o un envío
 ingresado a mano.

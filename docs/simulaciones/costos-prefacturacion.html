@@ -237,6 +237,11 @@ select.in{padding-right:28px}
 .kind-card p{margin:0;line-height:1.45}
 .kind-card .big{font-size:24px;font-weight:900;font-variant-numeric:tabular-nums;margin-top:2px}
 .tr-note{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);margin-top:3px}
+.zsel{margin-top:6px;width:auto;max-width:100%;padding-block:4px;font-size:12px}
+.zsel.bad{border-color:var(--bad);color:var(--bad)}
+.chip.com{text-transform:none;letter-spacing:0;font-size:12px;font-weight:700;padding:3px 4px 3px 10px}
+.chip .x{border:0;background:transparent;color:inherit;cursor:pointer;padding:2px;border-radius:999px;display:inline-flex}
+.chip .x:hover{background:var(--bad-soft);color:var(--bad)}
 .fields.four{grid-template-columns:repeat(4,minmax(0,1fr))}
 .fields .span2{grid-column:span 2}
 .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 20px;padding:16px 20px;border-bottom:1px solid var(--line)}
@@ -418,16 +423,17 @@ function seed(){
     minMargin: 15,
     nextPf: 50,
     nextInvoice: 10241,
-    // Productos propios que se venden a los clientes de venta (kg y m³ por unidad, para el flete).
+    // Productos propios que se venden a los clientes de venta. Peso (kg) y medidas (cm) son
+    // los mismos campos de la ficha de SKU del WMS; el flete los usa.
     products: [
-      { sku:'OFIC-PAPEL-A4',  cat:'Oficina', desc:'Resma papel carta 75 g (500 hojas)',    uom:'UN',    cost:3200, price:4990,  kg:2.5,  m3:0.003 },
-      { sku:'OFIC-TONER-85A', cat:'Oficina', desc:'Tóner 85A compatible',                  uom:'UN',    cost:9800, price:16990, kg:0.9,  m3:0.004 },
-      { sku:'ASEO-CLORO-5L',  cat:'Aseo',    desc:'Cloro gel 5 L',                         uom:'BIDÓN', cost:2900, price:4590,  kg:5.4,  m3:0.006 },
-      { sku:'ASEO-TOALLA-6',  cat:'Aseo',    desc:'Toalla de papel industrial (6 rollos)', uom:'PAQ',   cost:7400, price:10990, kg:4.8,  m3:0.045 },
-      { sku:'EPP-GUANTE-NIT', cat:'EPP',     desc:'Guante de nitrilo (caja 100)',          uom:'CAJA',  cost:4100, price:6490,  kg:0.7,  m3:0.003 },
-      { sku:'EPP-KN95-20',    cat:'EPP',     desc:'Mascarilla KN95 (caja 20)',             uom:'CAJA',  cost:5200, price:5690,  kg:0.4,  m3:0.004 },
-      { sku:'EPP-CASCO',      cat:'EPP',     desc:'Casco de seguridad con ajuste',         uom:'UN',    cost:4900, price:8990,  kg:0.45, m3:0.012 },
-      { sku:'BEB-AGUA-6',     cat:'Bebidas', desc:'Agua mineral 1,5 L (pack 6)',           uom:'PACK',  cost:2600, price:0,     kg:9.3,  m3:0.012 }
+      { sku:'OFIC-PAPEL-A4',  cat:'Oficina', desc:'Resma papel carta 75 g (500 hojas)',    uom:'UN',    cost:3200, price:4990,  weight:2.5,  length:30, width:21.5, height:5 },
+      { sku:'OFIC-TONER-85A', cat:'Oficina', desc:'Tóner 85A compatible',                  uom:'UN',    cost:9800, price:16990, weight:0.9,  length:36, width:12,   height:10 },
+      { sku:'ASEO-CLORO-5L',  cat:'Aseo',    desc:'Cloro gel 5 L',                         uom:'BIDÓN', cost:2900, price:4590,  weight:5.4,  length:19, width:14,   height:29 },
+      { sku:'ASEO-TOALLA-6',  cat:'Aseo',    desc:'Toalla de papel industrial (6 rollos)', uom:'PAQ',   cost:7400, price:10990, weight:4.8,  length:40, width:28,   height:40 },
+      { sku:'EPP-GUANTE-NIT', cat:'EPP',     desc:'Guante de nitrilo (caja 100)',          uom:'CAJA',  cost:4100, price:6490,  weight:0.7,  length:24, width:12.5, height:9.5 },
+      { sku:'EPP-KN95-20',    cat:'EPP',     desc:'Mascarilla KN95 (caja 20)',             uom:'CAJA',  cost:5200, price:5690,  weight:0.4,  length:20, width:12,   height:15 },
+      { sku:'EPP-CASCO',      cat:'EPP',     desc:'Casco de seguridad con ajuste',         uom:'UN',    cost:4900, price:8990,  weight:0.45, length:28, width:22,   height:19 },
+      { sku:'BEB-AGUA-6',     cat:'Bebidas', desc:'Agua mineral 1,5 L (pack 6)',           uom:'PACK',  cost:2600, price:0,     weight:9.3,  length:0,  width:0,    height:0 }
     ],
     insumos: [
       { code:'CAJA-403030',  cat:'embalaje',   desc:'Caja cartón 40x30x30',       uom:'UN',    cost:420,  price:690 },
@@ -469,10 +475,34 @@ function seed(){
       },
       factor: 250,
       threshold: 300000,
-      gratisBase: 'kilo'
+      gratisBase: 'kilo',
+      // Zona de flete de cada comuna de destino.
+      comunas: {
+        'Santiago':'URB', 'Providencia':'URB', 'Las Condes':'URB', 'Ñuñoa':'URB', 'La Florida':'URB', 'Puente Alto':'URB',
+        'Maipú':'URB', 'Quilicura':'URB', 'San Bernardo':'URB',
+        'Pirque':'RUR', 'Buin':'RUR', 'Talagante':'RUR', 'Colina':'RUR', 'Lampa':'RUR', 'Melipilla':'RUR',
+        'Valparaíso':'V', 'Viña del Mar':'V', 'San Antonio':'V', 'Quillota':'V',
+        'Rancagua':'SUR', 'Talca':'SUR', 'Concepción':'SUR', 'Chillán':'SUR'
+      }
     },
     // Método de cobro de flete de cada cliente de venta.
     clientFreight: { 'LOS-ALAMOS':'viaje', 'CLINICA-SE':'kilo', 'DON-PEDRO':'gratis' },
+    // Direcciones de despacho de los clientes de venta; la comuna define la zona del flete.
+    addresses: {
+      'LOS-ALAMOS': [
+        { id:'A1', label:'Obra Edificio Vista Cordillera', dir:'Av. Gabriela Poniente 1200', comuna:'Puente Alto' },
+        { id:'A2', label:'Obra Condominio Los Robles',     dir:'Camino El Principal 3400',   comuna:'Pirque' },
+        { id:'A3', label:'Obra Parque Lo Aguirre',         dir:'Ruta 68 km 18',              comuna:'Pudahuel' }
+      ],
+      'CLINICA-SE': [
+        { id:'B1', label:'Bodega central', dir:'Av. Irarrázaval 3120',                  comuna:'Ñuñoa' },
+        { id:'B2', label:'Sede Rancagua',  dir:"Av. Libertador Bernardo O'Higgins 850", comuna:'Rancagua' },
+        { id:'B3', label:'Administración', dir:'Av. Providencia 1650',                  comuna:'Providencia' }
+      ],
+      'DON-PEDRO': [
+        { id:'C1', label:'Local', dir:'Av. Concha y Toro 1450', comuna:'Puente Alto' }
+      ]
+    },
     // Precio o tarifa especial por cliente: reemplaza al de la lista general.
     clientPrices: {
       'CLINICA-SE': { 'EPP-GUANTE-NIT':5990 },
@@ -480,17 +510,18 @@ function seed(){
       'RETAIL-X':   { 'ALM-PAL-DIA':260 },
       'FARMA-SUR':  { 'DES-PED':2300 }
     },
-    // Guías de despacho de productos vendidos. tr = zona de destino del flete (null: retira el cliente).
-    // pf = prefactura en la que quedó incluida (null = pendiente de cobro).
+    // Guías de despacho de productos vendidos. addr = dirección de despacho (null: retira el cliente);
+    // zoneMan = zona elegida a mano (null: la de la comuna); pf = prefactura que la incluye (null: pendiente).
     dispatches: [
-      { id:'GD-4952', num:4952, client:'CLINICA-SE', date:'2026-09-18', dest:'Clínica Santa Elena, bodega central', lines:[{ sku:'EPP-GUANTE-NIT', qty:40 }, { sku:'EPP-KN95-20', qty:30 }, { sku:'ASEO-TOALLA-6', qty:10 }], tr:{ zone:'URB' }, pf:'pf43' },
-      { id:'GD-5071', num:5071, client:'LOS-ALAMOS', date:'2026-10-10', dest:'Obra Edificio Vista Cordillera, Puente Alto', lines:[{ sku:'EPP-CASCO', qty:20 }, { sku:'EPP-GUANTE-NIT', qty:15 }, { sku:'EPP-KN95-20', qty:10 }], tr:{ zone:'URB' }, pf:'pf49' },
-      { id:'GD-5083', num:5083, client:'LOS-ALAMOS', date:'2026-10-17', dest:'Obra Condominio Los Robles, Pirque', lines:[{ sku:'BEB-AGUA-6', qty:30 }, { sku:'EPP-CASCO', qty:5 }], tr:{ zone:'RUR' }, pf:null },
-      { id:'GD-5094', num:5094, client:'CLINICA-SE', date:'2026-10-22', dest:'Clínica Santa Elena, bodega central', lines:[{ sku:'EPP-GUANTE-NIT', qty:60 }, { sku:'ASEO-CLORO-5L', qty:24 }, { sku:'ASEO-TOALLA-6', qty:20 }], tr:{ zone:'URB' }, pf:null },
-      { id:'GD-5097', num:5097, client:'CLINICA-SE', date:'2026-10-23', dest:'Clínica Santa Elena, sede Rancagua', lines:[{ sku:'ASEO-TOALLA-6', qty:30 }, { sku:'ASEO-CLORO-5L', qty:10 }], tr:{ zone:'SUR' }, pf:null },
-      { id:'GD-5099', num:5099, client:'DON-PEDRO',  date:'2026-10-24', dest:'Minimarket Don Pedro, Puente Alto', lines:[{ sku:'OFIC-PAPEL-A4', qty:50 }, { sku:'ASEO-CLORO-5L', qty:12 }], tr:{ zone:'URB' }, pf:null },
-      { id:'GD-5102', num:5102, client:'DON-PEDRO',  date:'2026-10-26', dest:'Retira el cliente en bodega', lines:[{ sku:'ASEO-TOALLA-6', qty:4 }], tr:null, pf:null },
-      { id:'GD-5104', num:5104, client:'CLINICA-SE', date:'2026-10-27', dest:'Clínica Santa Elena, administración', lines:[{ sku:'OFIC-TONER-85A', qty:6 }], tr:{ zone:'URB' }, pf:null }
+      { id:'GD-4952', num:4952, client:'CLINICA-SE', date:'2026-09-18', addr:'B1', zoneMan:null, lines:[{ sku:'EPP-GUANTE-NIT', qty:40 }, { sku:'EPP-KN95-20', qty:30 }, { sku:'ASEO-TOALLA-6', qty:10 }], pf:'pf43' },
+      { id:'GD-5071', num:5071, client:'LOS-ALAMOS', date:'2026-10-10', addr:'A1', zoneMan:null, lines:[{ sku:'EPP-CASCO', qty:20 }, { sku:'EPP-GUANTE-NIT', qty:15 }, { sku:'EPP-KN95-20', qty:10 }], pf:'pf49' },
+      { id:'GD-5083', num:5083, client:'LOS-ALAMOS', date:'2026-10-17', addr:'A2', zoneMan:null, lines:[{ sku:'BEB-AGUA-6', qty:30 }, { sku:'EPP-CASCO', qty:5 }], pf:null },
+      { id:'GD-5094', num:5094, client:'CLINICA-SE', date:'2026-10-22', addr:'B1', zoneMan:null, lines:[{ sku:'EPP-GUANTE-NIT', qty:60 }, { sku:'ASEO-CLORO-5L', qty:24 }, { sku:'ASEO-TOALLA-6', qty:20 }], pf:null },
+      { id:'GD-5097', num:5097, client:'CLINICA-SE', date:'2026-10-23', addr:'B2', zoneMan:null, lines:[{ sku:'ASEO-TOALLA-6', qty:30 }, { sku:'ASEO-CLORO-5L', qty:10 }], pf:null },
+      { id:'GD-5099', num:5099, client:'DON-PEDRO',  date:'2026-10-24', addr:'C1', zoneMan:null, lines:[{ sku:'OFIC-PAPEL-A4', qty:50 }, { sku:'ASEO-CLORO-5L', qty:12 }], pf:null },
+      { id:'GD-5102', num:5102, client:'DON-PEDRO',  date:'2026-10-26', addr:null, zoneMan:null, lines:[{ sku:'ASEO-TOALLA-6', qty:4 }], pf:null },
+      { id:'GD-5104', num:5104, client:'CLINICA-SE', date:'2026-10-27', addr:'B3', zoneMan:null, lines:[{ sku:'OFIC-TONER-85A', qty:6 }], pf:null },
+      { id:'GD-5106', num:5106, client:'LOS-ALAMOS', date:'2026-10-28', addr:'A3', zoneMan:null, lines:[{ sku:'EPP-CASCO', qty:10 }, { sku:'EPP-GUANTE-NIT', qty:10 }], pf:null }
     ],
     prefacturas: []
   };
@@ -584,15 +615,23 @@ const FR_ORDER = ['viaje','kilo','bulto','pallet','valor','gratis'];
 // Envío que se muestra al abrir el comparador de fletes.
 const SIM0 = { src:'GD-5094', zone:'URB', kg:120, m3:0.6, units:24, value:180000 };
 const clientFreight = (cid, d=D) => (d.clientFreight || {})[cid] || 'viaje';
-function mkMetrics(d, kg, m3, units, value){
+const skuM3 = p => num(p.length) * num(p.width) * num(p.height) / 1e6;
+const zoneOfComuna = (c, d=D) => { const k = Object.keys(d.freight.comunas).find(x => norm(x) === norm(c)); return k ? d.freight.comunas[k] : null; };
+const gdAddr = (g, d=D) => g.addr ? ((d.addresses[g.client] || []).find(a => a.id === g.addr) || null) : null;
+const gdDest = (g, d=D) => { const a = gdAddr(g, d); return a ? `${a.label}, ${a.comuna}` : 'Retira el cliente en bodega'; };
+// Zona del flete: la elegida a mano en la guía o, si no, la de la comuna de destino.
+const guideZone = (g, d=D) => { const a = gdAddr(g, d); return a ? (g.zoneMan || zoneOfComuna(a.comuna, d)) : null; };
+function mkMetrics(d, kg, m3, units, value, noDims=0){
   const volKg = m3 * num(d.freight.factor);
-  return { kg, m3, units, value, volKg, chargeKg:Math.max(kg, volKg), pallets:Math.max(1, Math.ceil(m3 / 1.44)) };
+  return { kg, m3, units, value, volKg, noDims, chargeKg:Math.max(kg, volKg), pallets:Math.max(1, Math.ceil(m3 / 1.44)) };
 }
+// Peso y volumen desde la ficha de cada SKU (peso en kg; largo, ancho y alto en cm).
 function shipMetrics(d, g){
-  let kg = 0, m3 = 0, units = 0, value = 0;
+  let kg = 0, m3 = 0, units = 0, value = 0, noDims = 0;
   g.lines.forEach(x => { const p = d.products.find(p => p.sku === x.sku) || {};
-    kg += x.qty*num(p.kg); m3 += x.qty*num(p.m3); units += x.qty; value += x.qty*(specialPrice(d, g.client, x.sku) ?? num(p.price)); });
-  return mkMetrics(d, kg, m3, units, value);
+    kg += x.qty*num(p.weight); m3 += x.qty*skuM3(p); units += x.qty; value += x.qty*(specialPrice(d, g.client, x.sku) ?? num(p.price));
+    if (!skuM3(p)) noDims++; });
+  return mkMetrics(d, kg, m3, units, value, noDims);
 }
 // Devuelve cantidad, unidad y precio de la línea de flete, el detalle del cálculo y el costo interno.
 function freightQuote(d, method, zone, m){
@@ -621,10 +660,13 @@ function freightQuote(d, method, zone, m){
   return q;
 }
 function gdFreightLine(g, d=D){
-  if (!g.tr) return null;
-  const meth = clientFreight(g.client, d), q = freightQuote(d, meth, g.tr.zone, shipMetrics(d, g));
-  return { id:uid(), type:'transporte', key:'FLETE', fr:true, desc:`Flete ${zoneLabel(g.tr.zone)} · guía ${g.num}`, uom:q.uom, qty:q.qty, price:q.price,
-           cost: q.qty ? q.cost/q.qty : q.cost, disc:0, afecto:true, origin:`${FR[meth].label}: ${q.detail}`, gd:g.id };
+  const a = gdAddr(g, d); if (!a) return null;
+  const zone = guideZone(g, d);
+  if (!zone) return { id:uid(), type:'transporte', key:'FLETE', fr:true, nozone:true, desc:`Flete a ${a.comuna} · guía ${g.num}`, uom:'GL', qty:1, price:0, cost:0,
+                      disc:0, afecto:true, origin:`La comuna ${a.comuna} no tiene zona de flete`, gd:g.id };
+  const meth = clientFreight(g.client, d), q = freightQuote(d, meth, zone, shipMetrics(d, g));
+  return { id:uid(), type:'transporte', key:'FLETE', fr:true, desc:`Flete a ${a.comuna} (${zoneLabel(zone)}) · guía ${g.num}`, uom:q.uom, qty:q.qty, price:q.price,
+           cost: q.qty ? q.cost/q.qty : q.cost, disc:0, afecto:true, origin:`${FR[meth].label}: ${q.detail}${g.zoneMan ? ' · zona elegida a mano' : ''}`, gd:g.id };
 }
 // Una línea por producto despachado, más el flete si la guía lo lleva.
 function gdLines(g, d=D){
@@ -683,12 +725,12 @@ const SUGGEST = {
 };
 
 // ─── Estado (se guarda solo en este navegador) ───────────────────────────
-const KEY = 'wms-sim-prefacturacion-v4';
+const KEY = 'wms-sim-prefacturacion-v5';
 function load(){ try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; } }
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(D)); } catch(e){} }
 let D = load() || seed();
 const UI = {
-  view:'prefacturacion', preciosTab:'productos', bulkMargin:35, bulkScope:'sin-precio',
+  view:'prefacturacion', preciosTab:'productos', prodView:'precios', bulkMargin:35, bulkScope:'sin-precio',
   pfId:'pf48', pfFilter:'TODAS', showCosts:true, suggestOpen:false, suggestSel:{}, confirmVoid:false,
   newClient:'', sideOpen:false, gdOpen:false, gdSel:{},
   clientId:null, clientTab:'despachos', clientGdSel:{},
@@ -734,7 +776,7 @@ function filteredGuides(cid){
   const F = UI.F;
   return D.dispatches.filter(g => g.client === cid).sort((a,b) => b.date.localeCompare(a.date)).filter(g =>
     (!F.gState || gdState(g).key === F.gState) && (!F.gFrom || g.date >= F.gFrom) && (!F.gTo || g.date <= F.gTo) &&
-    match(F.gq, g.num, g.dest, ...g.lines.map(x => x.sku), ...g.lines.map(x => (D.products.find(p => p.sku === x.sku) || {}).desc)));
+    match(F.gq, g.num, gdDest(g), ...g.lines.map(x => x.sku), ...g.lines.map(x => (D.products.find(p => p.sku === x.sku) || {}).desc)));
 }
 
 // ─── Cálculos ─────────────────────────────────────────────────────────────
@@ -763,6 +805,7 @@ function issues(pf){
   const out = [];
   pf.lines.forEach((l,i) => {
     const name = l.desc || `línea ${i+1}`;
+    if (l.nozone) { out.push({ lvl:'bad', msg:`${name}: la comuna no tiene zona de flete; elige la zona en la guía` }); return; }
     if (l.fr && num(l.price) <= 0) { out.push({ lvl:'warn', msg:`${name}: flete incluido, sin cobro (costo ${clp(lineCost(l))})` }); return; }
     if (num(l.price) <= 0) out.push({ lvl:'bad', msg:`${name}: sin precio` });
     else if (num(l.qty) <= 0) out.push({ lvl:'bad', msg:`${name}: cantidad en cero` });
@@ -846,13 +889,24 @@ function preciosHead(tab){
     <p>Lista de precios vigente desde el 01-10-2026, en pesos chilenos y sin IVA. Edita los valores para ver cómo cambia el margen.</p></div>
     <div class="tabs" role="tablist">${PRECIOS_TABS.map(([id,l]) => `<button class="tab ${tab===id?'on':''}" role="tab" aria-selected="${tab===id}" data-act="ptab" data-tab="${id}">${l}</button>`).join('')}</div></div>`;
 }
+const fmt4 = new Intl.NumberFormat('es-CL', { maximumFractionDigits:4 });
+const volHtml = r => { const v = skuM3(r); return v ? `${fmt4.format(v)} m³` : '<span class="chip warn">Faltan medidas</span>'; };
+const volKgHtml = r => { const v = skuM3(r) * num(D.freight.factor);
+  return v ? `<div class="mg"><span>${fmtN.format(Math.round(v*100)/100)} kg</span>${v > num(r.weight) ? '<span class="chip acc">Se cobra este</span>' : '<small>se cobra el peso real</small>'}</div>` : '<span class="sub">se usa el peso real</span>'; };
 function renderPrecios(){
   const tab = UI.preciosTab;
   if (tab === 'fletes') return renderFletes(preciosHead(tab));
   const rows = preciosRows();
   const moneyIn = (r, f) => `<input class="in num money" type="number" min="0" step="10" inputmode="numeric" id="p-${r._k}-${r._i}-${f}" data-pk="${r._k}" data-pi="${r._i}" data-pf="${f}" value="${num(r[f])}" aria-label="${f==='cost'?'Costo':'Precio'} ${esc(r.sku||r.code)}">`;
   let head, body;
-  if (tab === 'productos') {
+  const dimIn = (r, f, l) => `<input class="in num qty" type="number" min="0" step="0.1" id="p-${r._k}-${r._i}-${f}" data-pk="${r._k}" data-pi="${r._i}" data-pf="${f}" value="${num(r[f])}" aria-label="${l} ${esc(r.sku)}">`;
+  if (tab === 'productos' && UI.prodView === 'medidas') {
+    head = `<tr><th>SKU</th><th>Descripción</th><th>UM</th><th class="num">Peso (kg)</th><th class="num">Largo (cm)</th><th class="num">Ancho (cm)</th><th class="num">Alto (cm)</th><th class="num">Volumen</th><th class="num">Peso volumétrico</th></tr>`;
+    body = rows.map(r => `<tr>
+      <td class="code">${esc(r.sku)}</td><td>${esc(r.desc)}</td><td class="sub">${esc(r.uom)}</td>
+      <td class="num">${dimIn(r,'weight','Peso')}</td><td class="num">${dimIn(r,'length','Largo')}</td><td class="num">${dimIn(r,'width','Ancho')}</td><td class="num">${dimIn(r,'height','Alto')}</td>
+      <td class="num" data-vol="${r._k}-${r._i}">${volHtml(r)}</td><td class="num" data-volkg="${r._k}-${r._i}">${volKgHtml(r)}</td></tr>`).join('');
+  } else if (tab === 'productos') {
     head = `<tr><th>SKU</th><th>Descripción</th><th>Categoría</th><th>UM</th><th class="num">Costo unitario</th><th class="num">Precio venta (neto)</th><th class="num">Precio con IVA</th><th class="num">Margen</th></tr>`;
     body = rows.map(r => `<tr>
       <td class="code">${esc(r.sku)}</td><td>${esc(r.desc)}</td><td><span class="chip mute">${esc(r.cat)}</span></td><td class="sub">${esc(r.uom)}</td>
@@ -897,6 +951,7 @@ function renderPrecios(){
     <div class="card">
       <div class="card-h">
         <h3>${tabs.find(t => t[0]===tab)[1]}</h3>
+        ${tab === 'productos' ? `<div class="tabs">${[['precios','Precios'],['medidas','Peso y medidas']].map(([v,l]) => `<button class="tab ${UI.prodView===v?'on':''}" data-act="pview" data-v="${v}">${l}</button>`).join('')}</div>` : ''}
         <span class="sp" style="flex:1"></span>
         <div class="bar-row">
           <label class="sub" for="minMargin">Margen mínimo</label>
@@ -904,6 +959,7 @@ function renderPrecios(){
         </div>
       </div>
       ${preciosFilterBar(rows.length, { productos:D.products, insumos:D.insumos, servicios:D.services }[tab].length)}
+      ${tab === 'productos' && UI.prodView === 'medidas' ? '' : `
       <div class="card-b" style="padding-bottom:0">
         <div class="bar-row" style="background:var(--surface-2);border-radius:14px;padding:10px 12px">
           <span class="sub" style="font-weight:700">Calcular precio con margen</span>
@@ -916,15 +972,16 @@ function renderPrecios(){
           <button class="btn money sm" data-act="bulk">Aplicar</button>
         </div>
       </div>
+      `}
       <div class="scroll" style="margin-top:12px"><table class="t"><thead>${head}</thead><tbody>${body || emptyRow(8, 'pq,pClient,pCat,pMargin')}</tbody></table></div>
     </div>
-    <div class="note-box">${ic('info',18)}<span>${note}</span></div>`;
+    <div class="note-box">${ic('info',18)}<span>${tab === 'productos' && UI.prodView === 'medidas' ? 'Son los mismos campos de la ficha de SKU del WMS: peso en kg y largo, ancho y alto en cm. El flete por kilo cobra el mayor entre el peso real y el volumétrico (volumen × ' + fmtN.format(num(D.freight.factor)) + ' kg/m³), y el flete por pallet usa el volumen.' : note}</span></div>`;
 }
 
 // ─── Vista: Fletes de venta (pestaña de Costos y precios) ────────────────
 function simData(){
   const s = UI.sim;
-  if (s.src !== 'manual') { const g = D.dispatches.find(x => x.id === s.src && x.tr); if (g) return { m:shipMetrics(D, g), zone:g.tr.zone, g }; }
+  if (s.src !== 'manual') { const g = D.dispatches.find(x => x.id === s.src && guideZone(x)); if (g) return { m:shipMetrics(D, g), zone:guideZone(g), g }; }
   return { m:mkMetrics(D, num(s.kg), num(s.m3), num(s.units), num(s.value)), zone:s.zone, g:null };
 }
 function simResultHtml(){
@@ -959,8 +1016,30 @@ function simResultHtml(){
       <td class="num internal">${mgHtml}</td>
       <td style="min-width:140px"><div class="hbar" aria-hidden="true"><span style="width:${q.total/max*100}%"></span></div></td></tr>`;
   }).join('');
-  return `${metrics}
+  const warn = m.noDims ? `<div class="card-b" style="padding-bottom:0"><div class="note-box warn">${ic('alert',18)}<span>${m.noDims} producto${m.noDims===1?'':'s'} de esta guía no tiene${m.noDims===1?'':'n'} medidas en su ficha: no suma${m.noDims===1?'':'n'} volumen, así que el peso volumétrico y los pallets quedan por debajo de lo real. Complétalas en Productos para venta → Peso y medidas.</span></div></div>` : '';
+  return `${metrics}${warn}
     <div class="scroll"><table class="t"><thead><tr><th>Método</th><th>Cálculo</th><th class="num">Cobro al cliente</th><th class="num internal">Costo</th><th class="num internal">Margen</th><th>Comparación</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function comunasCard(){
+  const map = D.freight.comunas;
+  const used = Object.entries(D.addresses).flatMap(([cid, as]) => as.map(a => ({ ...a, cid })));
+  const missing = used.filter(a => !zoneOfComuna(a.comuna));
+  const rows = ZONES.map(z => {
+    const cs = Object.keys(map).filter(k => map[k] === z.id).sort((a,b) => a.localeCompare(b, 'es'));
+    return `<tr><td style="min-width:160px"><b>${esc(z.label)}</b><div class="sub">${cs.length} comuna${cs.length===1?'':'s'}</div></td>
+      <td><div class="add-row" style="gap:6px">${cs.map(c => `<span class="chip mute com">${esc(c)}<button class="x" data-act="com-del" data-c="${esc(c)}" aria-label="Quitar ${esc(c)}">${ic('x',12)}</button></span>`).join('') || '<span class="sub">Sin comunas</span>'}</div></td></tr>`;
+  }).join('');
+  return `<div class="card">
+    <div class="card-h"><h3>Comunas por zona</h3><span style="flex:1"></span><span class="sub">Cada guía toma la zona de la comuna de su dirección de despacho.</span></div>
+    ${missing.length ? `<div class="card-b" style="padding-bottom:0"><div class="note-box warn">${ic('alert',18)}<span>${missing.map(a => `<b>${esc(a.comuna)}</b> (${esc(clientById(a.cid).name)}, ${esc(a.label)})`).join(', ')} no tiene zona. Sus guías no se pueden cobrar hasta que la agregues aquí o elijas la zona a mano en la guía.</span></div></div>` : ''}
+    <div class="scroll"><table class="t"><tbody>${rows}</tbody></table></div>
+    <div class="card-b bar-row" style="border-top:1px solid var(--line)">
+      <label class="toggle" for="nc-name">Agregar comuna <input class="in" id="nc-name" list="dl-missing" value="${missing.length ? esc(missing[0].comuna) : ''}" placeholder="Ej: Pudahuel" style="width:170px"></label>
+      <datalist id="dl-missing">${[...new Set(missing.map(a => a.comuna))].map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+      <label class="toggle" for="nc-zone">a la zona <select class="in" id="nc-zone" style="width:auto">${ZONES.map(z => `<option value="${z.id}">${esc(z.label)}</option>`).join('')}</select></label>
+      <button class="btn sm money" data-act="com-add">${ic('plus',14)} Agregar</button>
+    </div>
+  </div>`;
 }
 function renderFletes(headHtml){
   const f = D.freight;
@@ -970,8 +1049,8 @@ function renderFletes(headHtml){
   const zrow = (title, sub, path, cls='') => `<tr class="${cls}"><td><b>${title}</b></td><td class="sub">${sub}</td>${ZONES.map(z => `<td class="num">${frIn(`${path}.${z.id}`, path.split('.').reduce((o,k) => o[k], f)[z.id], `${title}, ${z.label}`)}</td>`).join('')}</tr>`;
   const s = UI.sim;
   const guides = clientsOf('venta').map(c => {
-    const gs = D.dispatches.filter(g => g.client === c.id && g.tr);
-    return gs.length ? `<optgroup label="${esc(c.name)}">${gs.map(g => `<option value="${g.id}" ${s.src===g.id?'selected':''}>Guía N° ${g.num} · ${esc(zoneLabel(g.tr.zone))}</option>`).join('')}</optgroup>` : '';
+    const gs = D.dispatches.filter(g => g.client === c.id && guideZone(g));
+    return gs.length ? `<optgroup label="${esc(c.name)}">${gs.map(g => `<option value="${g.id}" ${s.src===g.id?'selected':''}>Guía N° ${g.num} · ${esc(gdAddr(g).comuna)} (${esc(zoneLabel(guideZone(g)))})</option>`).join('')}</optgroup>` : '';
   }).join('');
   const { g } = simData();
   const manual = !g;
@@ -994,6 +1073,7 @@ function renderFletes(headHtml){
           <select class="in" id="fr-gratisBase" data-frp="gratisBase" style="width:auto">${FR_ORDER.filter(k => k !== 'gratis').map(k => `<option value="${k}" ${f.gratisBase===k?'selected':''}>${FR[k].label.toLowerCase()}</option>`).join('')}</select></label>
       </div>
     </div>
+    ${comunasCard()}
     <div class="card">
       <div class="card-h"><h3>Comparar métodos para un envío</h3></div>
       <div class="card-b fields four">
@@ -1243,9 +1323,21 @@ function refreshFigures(){
 
 // ─── Guías de despacho ───────────────────────────────────────────────────
 const gdProducts = g => { const fl = gdFreightLine(g);
-  return `<span class="code">${g.lines.map(x => `${esc(x.sku)} × ${qtyf(x.qty)}`).join('<br>')}</span><br><span class="tr-note">${fl
-    ? `${ic('truck',12)} ${esc(zoneLabel(g.tr.zone))} · ${lineNet(fl) ? clp(lineNet(fl)) : 'incluido'} (${FR[clientFreight(g.client)].label.toLowerCase()})`
-    : 'Retira el cliente'}</span>`; };
+  const note = !fl ? 'Retira el cliente'
+    : fl.nozone ? `<span class="chip bad">${ic('alert',12)} Sin zona de flete</span>`
+    : `${ic('truck',12)} ${esc(zoneLabel(guideZone(g)))} · ${lineNet(fl) ? clp(lineNet(fl)) : 'incluido'} (${FR[clientFreight(g.client)].label.toLowerCase()})`;
+  return `<span class="code">${g.lines.map(x => `${esc(x.sku)} × ${qtyf(x.qty)}`).join('<br>')}</span><br><span class="tr-note">${note}</span>`; };
+// Destino de la guía y, si aún no se cobra, la zona de flete (por comuna o elegida a mano).
+function destCell(g){
+  const a = gdAddr(g);
+  if (!a) return '<span class="sub">Retira el cliente en bodega</span>';
+  const head = `<b>${esc(a.label)}</b><div class="sub">${esc(a.dir)}, ${esc(a.comuna)}</div>`;
+  if (!gdPending(g)) return `${head}<div class="tr-note">Zona: ${esc(zoneLabel(guideZone(g)) || '—')}${g.zoneMan ? ' (a mano)' : ''}</div>`;
+  const auto = zoneOfComuna(a.comuna);
+  return `${head}<select class="in zsel ${guideZone(g) ? '' : 'bad'}" data-gz="${g.id}" id="gz-${g.id}" aria-label="Zona de flete de la guía ${g.num}">
+    <option value="" ${g.zoneMan ? '' : 'selected'}>${auto ? `Zona por comuna: ${esc(zoneLabel(auto))}` : 'Sin zona: elige una'}</option>
+    ${ZONES.map(z => `<option value="${z.id}" ${g.zoneMan===z.id?'selected':''}>A mano: ${esc(z.label)}</option>`).join('')}</select>`;
+}
 function gdPanelHtml(pf){
   const pend = D.dispatches.filter(g => g.client === pf.client && gdPending(g)).sort((a,b) => a.date.localeCompare(b.date));
   const done = D.dispatches.filter(g => g.client === pf.client && !gdPending(g)).length;
@@ -1253,7 +1345,7 @@ function gdPanelHtml(pf){
   const n = pend.filter(sel).length;
   const rows = pend.map(g => `<tr>
       <td class="ctr"><input type="checkbox" data-gd="${g.id}" id="gd-${g.id}" ${sel(g)?'checked':''} style="width:16px;height:16px;accent-color:var(--money)" aria-label="Incluir guía ${g.num}"></td>
-      <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td>${esc(g.dest)}</td>
+      <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td style="min-width:220px">${destCell(g)}</td>
       <td>${gdProducts(g)}</td><td class="num"><b>${clp(gdAmount(g))}</b></td></tr>`).join('');
   return `<div class="suggest">
     <div class="card-h"><h3>Guías de despacho pendientes de cobro · ${esc(clientById(pf.client).name)}</h3><span style="flex:1"></span>
@@ -1353,6 +1445,25 @@ function renderClientes(){
 const k_hint = cid => { const k = clientFreight(cid); return k === 'gratis' ? `Sin cobro en compras desde ${clp(D.freight.threshold)} neto` : FR[k].hint; };
 function spMarginHtml(key, cid, type){ const it = findItem(D, type, key, cid); return it ? marginCell(it.cost, it.price) : ''; }
 
+function clientAddrTab(c){
+  const as = D.addresses[c.id] || [];
+  const known = Object.keys(D.freight.comunas).sort((a,b) => a.localeCompare(b, 'es'));
+  const rows = as.map(a => { const z = zoneOfComuna(a.comuna), n = D.dispatches.filter(g => g.client === c.id && g.addr === a.id).length;
+    return `<tr><td><b>${esc(a.label)}</b></td><td>${esc(a.dir)}</td><td>${esc(a.comuna)}</td>
+      <td>${z ? `<span class="chip acc">${ic('truck',12)} ${esc(zoneLabel(z))}</span>` : `<span class="chip bad">${ic('alert',12)} Sin zona</span>`}</td>
+      <td class="num">${n}</td>
+      <td class="num">${n ? '' : `<button class="icon-btn" data-act="addr-del" data-id="${a.id}" aria-label="Quitar ${esc(a.label)}">${ic('trash',16)}</button>`}</td></tr>`; }).join('');
+  return `<div class="scroll"><table class="t"><thead><tr><th>Nombre</th><th>Dirección</th><th>Comuna</th><th>Zona de flete</th><th class="num">Guías</th><th></th></tr></thead>
+    <tbody>${rows || `<tr><td colspan="6"><div class="empty"><b>Sin direcciones de despacho</b>Agrega la primera abajo. Si el cliente siempre retira en bodega, no necesita una.</div></td></tr>`}</tbody></table></div>
+    <div class="card-b bar-row" style="border-top:1px solid var(--line)">
+      <input class="in" id="na-label" placeholder="Nombre (ej: Obra Ñuñoa)" style="width:200px" aria-label="Nombre de la dirección">
+      <input class="in" id="na-dir" placeholder="Calle y número" style="width:220px" aria-label="Calle y número">
+      <input class="in" id="na-comuna" list="dl-comunas" placeholder="Comuna" style="width:160px" aria-label="Comuna">
+      <datalist id="dl-comunas">${known.map(k => `<option value="${esc(k)}">`).join('')}</datalist>
+      <button class="btn sm money" data-act="addr-add">${ic('plus',14)} Agregar dirección</button>
+    </div>
+    <div class="card-b" style="padding-top:0"><div class="note-box">${ic('info',18)}<span>Al despachar, la guía toma la zona de flete según la comuna. Si la comuna no tiene zona, se elige a mano en la guía o se agrega en Costos y precios → Fletes de venta.</span></div></div>`;
+}
 function clientGuidesTab(c){
   const guides = D.dispatches.filter(g => g.client === c.id);
   const gShown = filteredGuides(c.id);
@@ -1361,7 +1472,7 @@ function clientGuidesTab(c){
   const pend = guides.filter(gdPending);
   const rows = gShown.map(g => { const st = gdState(g); return `<tr>
     <td class="ctr">${st.key==='PEND' ? `<input type="checkbox" data-cgd="${g.id}" id="cgd-${g.id}" ${sel(g)?'checked':''} style="width:16px;height:16px;accent-color:var(--money)" aria-label="Seleccionar guía ${g.num}">` : ''}</td>
-    <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td>${esc(g.dest)}</td>
+    <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td style="min-width:220px">${destCell(g)}</td>
     <td>${gdProducts(g)}</td><td class="num"><b>${clp(gdAmount(g))}</b></td>
     <td>${st.pf ? `<button class="chip ${st.cls}" style="cursor:pointer" data-act="open" data-id="${st.pf.id}">${esc(st.label)}</button>` : `<span class="chip ${st.cls}">${esc(st.label)}</span>`}</td></tr>`; }).join('');
   return `<div class="card-b" style="padding-bottom:12px"><div class="bar-row">
@@ -1425,13 +1536,14 @@ function renderClientDetail(){
   const c = clientById(UI.clientId);
   const pfs = D.prefacturas.filter(p => p.client === c.id).sort((a,b) => b.num.localeCompare(a.num));
   const tabs = c.kind === 'venta'
-    ? [['despachos',`Guías de despacho (${D.dispatches.filter(g => g.client === c.id).length})`], ['precios','Precios del cliente'], ['prefacturas',`Prefacturas (${pfs.length})`]]
+    ? [['despachos',`Guías de despacho (${D.dispatches.filter(g => g.client === c.id).length})`], ['direcciones',`Direcciones de despacho (${(D.addresses[c.id] || []).length})`], ['precios','Precios del cliente'], ['prefacturas',`Prefacturas (${pfs.length})`]]
     : [['servicios',`Cobros de ${periodLabel(CUR_PERIOD).toLowerCase()}`], ['precios','Tarifas del cliente'], ['prefacturas',`Prefacturas (${pfs.length})`]];
   if (!tabs.some(t => t[0] === UI.clientTab)) UI.clientTab = tabs[0][0];
   const tab = UI.clientTab;
   let body;
   if (tab === 'despachos') body = clientGuidesTab(c);
   else if (tab === 'servicios') body = clientServicesTab(c);
+  else if (tab === 'direcciones') body = clientAddrTab(c);
   else if (tab === 'precios') body = clientPricesTab(c);
   else body = `<div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Período</th><th>Estado</th><th class="num">Neto</th><th class="num">Total</th><th></th></tr></thead><tbody>
       ${pfs.map(p => { const k = calc(p); const s = STATUS[p.status]; return `<tr><td class="pf-num">${esc(p.num)}</td><td>${periodLabel(p.period)}</td><td><span class="chip ${s.cls}">${s.label}</span></td><td class="num">${clp(k.neto)}</td><td class="num"><b>${clp(k.total)}</b></td><td class="num"><button class="btn sm" data-act="open" data-id="${p.id}">Abrir</button></td></tr>`; }).join('') || `<tr><td colspan="6"><div class="empty"><b>Sin prefacturas</b>${c.kind === 'venta' ? 'Selecciona guías pendientes y prefactúralas.' : 'Prefactura los cobros del mes desde la primera pestaña.'}</div></td></tr>`}
@@ -1555,6 +1667,22 @@ document.addEventListener('click', e => {
     case 'cl-list': UI.clientId = null; render(); window.scrollTo(0,0); break;
     case 'ctab': UI.clientTab = b.dataset.tab; render(); break;
     case 'ckind': UI.F.cKind = b.dataset.k; render(); break;
+    case 'pview': UI.prodView = b.dataset.v; render(); break;
+    case 'com-add': {
+      const name = ($('#nc-name').value || '').trim(), z = $('#nc-zone').value;
+      if (!name) { toast('Escribe el nombre de la comuna.', 'info'); $('#nc-name').focus(); break; }
+      const prev = Object.keys(D.freight.comunas).find(k => norm(k) === norm(name)); if (prev) delete D.freight.comunas[prev];
+      D.freight.comunas[prev || name] = z; save(); render(); toast(`${prev || name} quedó en ${zoneLabel(z)}`); break;
+    }
+    case 'com-del': delete D.freight.comunas[b.dataset.c]; save(); render(); toast(`${b.dataset.c} quedó sin zona de flete`, 'info'); break;
+    case 'addr-add': {
+      const label = $('#na-label').value.trim(), dir = $('#na-dir').value.trim(), comuna = $('#na-comuna').value.trim();
+      if (!label || !dir || !comuna) { toast('Completa nombre, dirección y comuna.', 'info'); break; }
+      const known = Object.keys(D.freight.comunas).find(k => norm(k) === norm(comuna));
+      (D.addresses[UI.clientId] = D.addresses[UI.clientId] || []).push({ id:'A'+uid(), label, dir, comuna: known || comuna });
+      save(); render(); toast(known ? `Dirección agregada · zona ${zoneLabel(D.freight.comunas[known])}` : `Dirección agregada. ${comuna} todavía no tiene zona de flete.`, known ? 'check' : 'alert'); break;
+    }
+    case 'addr-del': D.addresses[UI.clientId] = (D.addresses[UI.clientId] || []).filter(a => a.id !== b.dataset.id); save(); render(); toast('Dirección quitada', 'trash'); break;
     case 'cl-period': {
       const cid = UI.clientId, rows = suggestRows(cid);
       if (!rows.length || periodPf(cid, CUR_PERIOD)) break;
@@ -1621,6 +1749,8 @@ document.addEventListener('input', e => {
     const k = `${t.dataset.pk}-${t.dataset.pi}`;
     const mc = document.querySelector(`[data-m="${k}"]`); if (mc) mc.innerHTML = marginCell(r.cost, r.price);
     const iv = document.querySelector(`[data-iva="${k}"]`); if (iv) iv.textContent = num(r.price) ? clp(num(r.price)*1.19) : '—';
+    const dv = document.querySelector(`[data-vol="${k}"]`); if (dv) dv.innerHTML = volHtml(r);
+    const dk = document.querySelector(`[data-volkg="${k}"]`); if (dk) dk.innerHTML = volKgHtml(r);
     $('#kpis').innerHTML = kpisPrecios(); save(); return;
   }
   if (t.id === 'minMargin') { D.minMargin = num(t.value); $('#kpis').innerHTML = kpisPrecios(); preciosRows().forEach(r => { const mc = document.querySelector(`[data-m="${r._k}-${r._i}"]`); if (mc) mc.innerHTML = marginCell(r.cost, r.price); }); save(); return; }
@@ -1662,6 +1792,7 @@ document.addEventListener('change', e => {
   const t = e.target; const pf = currentPf();
   if (t.dataset.filter) { if (t.type === 'search') return; UI.F[t.dataset.filter] = t.type === 'checkbox' ? t.checked : t.value; render(); return; }
   if (t.id === 'bulkScope') { UI.bulkScope = t.value; return; }
+  if (t.dataset.gz) { const g = D.dispatches.find(x => x.id === t.dataset.gz); if (g) { g.zoneMan = t.value || null; save(); render(); toast(g.zoneMan ? `Guía ${g.num}: zona ${zoneLabel(g.zoneMan)} elegida a mano` : `Guía ${g.num}: zona según la comuna`, 'truck'); } return; }
   if (t.id === 'fr-gratisBase') { D.freight.gratisBase = t.value; save(); render(); return; }
   if (t.id === 'sim-src') { UI.sim.src = t.value; render(); return; }
   if (t.id === 'sim-zone') { UI.sim.zone = t.value; render(); return; }
