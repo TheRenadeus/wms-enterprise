@@ -13,3 +13,6 @@ Simulación de la sección **Comercial**. Ábrela con doble clic en cualquier na
   operación y transporte), con un margen mínimo y un cálculo de precio por margen objetivo.
 - **Prefacturación:** borrador con líneas de productos, insumos, transporte, servicios y otros cargos;
   descuentos, líneas exentas, IVA, margen interno y el flujo borrador → revisión → aprobada → facturada.
+
+Cada listado tiene filtros: búsqueda por texto, cliente, período, estado, categoría, margen y rango de
+fechas, según corresponda.

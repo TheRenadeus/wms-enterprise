@@ -220,6 +220,14 @@ select.in{padding-right:28px}
 .fchip.on{border-color:var(--ink-2);color:var(--ink);background:var(--surface-2)}
 .link{background:none;border:0;color:var(--accent-ink);font-weight:800;cursor:pointer;padding:0;font-size:13px}
 .pf-num{font-family:var(--mono);font-weight:800;font-size:12px}
+.fbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 20px;border-bottom:1px solid var(--line)}
+.fbar > svg{color:var(--muted);flex:none}
+.fbar .in{width:auto;max-width:100%;padding-block:6px}
+.fbar .toggle .in{padding-block:5px}
+.search{position:relative;display:inline-flex;align-items:center;flex:1 1 220px;max-width:340px;min-width:0}
+.search svg{position:absolute;left:10px;color:var(--muted);pointer-events:none}
+.fbar .search .in{width:100%;padding-left:34px}
+.fcount{font-size:12px;color:var(--muted);font-weight:700;white-space:nowrap}
 
 /* ── Vista previa (documento) ── */
 .modal{position:fixed;inset:0;background:var(--overlay);z-index:60;display:flex;justify-content:center;align-items:flex-start;overflow-y:auto;padding-top:max(24px,env(safe-area-inset-top,0px));padding-bottom:max(24px,env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
@@ -319,7 +327,9 @@ const P = {
   info:'<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
   link:'<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>',
   copy:'<rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
-  send:'<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>'
+  send:'<path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/>',
+  search:'<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  filter:'<path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/>'
 };
 const ic = (n, s=18) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]||''}</svg>`;
 
@@ -337,6 +347,8 @@ const periodLabel = p => { if(!p) return '—'; const [y,m] = p.split('-'); cons
 const dateLabel = d => { if(!d) return '—'; const [y,m,dd] = d.split('-'); return `${dd}-${m}-${y}`; };
 const uid = () => Math.random().toString(36).slice(2,9);
 const roundUp10 = v => Math.ceil(v/10)*10;
+const norm = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const match = (q, ...fields) => { const n = norm(String(q||'').trim()); return !n || fields.some(f => norm(f).includes(n)); };
 
 // ─── Datos de ejemplo (clientes y SKUs del modo demo del WMS) ────────────
 const CLIENTS = [
@@ -543,11 +555,22 @@ function load(){ try { const s = localStorage.getItem(KEY); return s ? JSON.pars
 function save(){ try { localStorage.setItem(KEY, JSON.stringify(D)); } catch(e){} }
 let D = load() || seed();
 const UI = {
-  view:'prefacturacion', preciosTab:'productos', clientFilter:'', bulkMargin:35, bulkScope:'sin-precio',
+  view:'prefacturacion', preciosTab:'productos', bulkMargin:35, bulkScope:'sin-precio',
   pfId:'pf48', pfFilter:'TODAS', showCosts:true, suggestOpen:false, suggestSel:{}, confirmVoid:false,
   newClient:'', sideOpen:false, gdOpen:false, gdSel:{},
-  clientId:null, clientTab:'despachos', clientGdSel:{}
+  clientId:null, clientTab:'despachos', clientGdSel:{},
+  F:null
 };
+// Filtros de cada listado.
+const F0 = {
+  pq:'', pClient:'', pCat:'', pMargin:'',            // Costos y precios
+  fq:'', fClient:'', fPeriod:'', fIssues:false,      // Prefacturas (el estado va en UI.pfFilter)
+  cq:'', cOnlyPend:false,                            // Clientes
+  gq:'', gState:'', gFrom:'', gTo:'',                // Guías de un cliente
+  spq:'', spOnly:false,                              // Precios de un cliente
+  lType:''                                           // Líneas de la prefactura
+};
+UI.F = { ...F0 };
 const VIEWS = ['clientes','precios','prefacturacion'];
 function readHash(){ const h = (location.hash||'').replace('#',''); if (VIEWS.includes(h)) UI.view = h; }
 
@@ -555,6 +578,28 @@ function toast(msg, icon='check'){
   const t = $('#toast');
   t.innerHTML = `<div class="toast" role="status">${ic(icon,16)}${esc(msg)}</div>`;
   clearTimeout(toast._t); toast._t = setTimeout(() => { t.innerHTML = ''; }, 2600);
+}
+
+// ─── Filtros ──────────────────────────────────────────────────────────────
+const getF = k => k === 'pfFilter' ? (UI.pfFilter === 'TODAS' ? '' : UI.pfFilter) : UI.F[k];
+const isOn = v => v !== '' && v !== false && v != null;
+function clearF(keys){ keys.forEach(k => { if (k === 'pfFilter') UI.pfFilter = 'TODAS'; else UI.F[k] = F0[k]; }); }
+function searchBox(key, ph){ return `<label class="search">${ic('search',16)}<input class="in" type="search" id="flt-${key}" data-filter="${key}" value="${esc(UI.F[key])}" placeholder="${esc(ph)}" aria-label="${esc(ph)}"></label>`; }
+function selF(key, opts, label){ return `<select class="in" id="flt-${key}" data-filter="${key}" aria-label="${esc(label)}">${opts.map(([v,l]) => `<option value="${esc(v)}" ${String(UI.F[key])===String(v)?'selected':''}>${esc(l)}</option>`).join('')}</select>`; }
+function chkF(key, label){ return `<label class="toggle"><input type="checkbox" id="flt-${key}" data-filter="${key}" ${UI.F[key]?'checked':''}> ${esc(label)}</label>`; }
+function dateF(key, label){ return `<label class="toggle">${esc(label)} <input class="in" type="date" id="flt-${key}" data-filter="${key}" value="${esc(UI.F[key])}"></label>`; }
+function fbar(parts, keys, shown, total){
+  const active = keys.some(k => isOn(getF(k)));
+  return `<div class="fbar">${ic('filter',16)}${parts.join('')}<span style="flex:1"></span>
+    <span class="fcount">${active ? `${shown} de ${total}` : `${total} en total`}</span>
+    ${active ? `<button class="btn sm ghost" data-act="clr" data-keys="${keys.join(',')}">${ic('x',14)} Limpiar filtros</button>` : ''}</div>`;
+}
+const emptyRow = (cols, keys) => `<tr><td colspan="${cols}"><div class="empty"><b>Ningún resultado con estos filtros</b><button class="btn sm" data-act="clr" data-keys="${keys}" style="margin-top:8px">Limpiar filtros</button></div></td></tr>`;
+function filteredGuides(cid){
+  const F = UI.F;
+  return D.dispatches.filter(g => g.client === cid).sort((a,b) => b.date.localeCompare(a.date)).filter(g =>
+    (!F.gState || gdState(g).key === F.gState) && (!F.gFrom || g.date >= F.gFrom) && (!F.gTo || g.date <= F.gTo) &&
+    match(F.gq, g.num, g.dest, ...g.lines.map(x => x.sku), ...g.lines.map(x => (D.products.find(p => p.sku === x.sku) || {}).desc)));
 }
 
 // ─── Cálculos ─────────────────────────────────────────────────────────────
@@ -620,9 +665,26 @@ function renderSide(){
 
 // ─── Vista: Costos y precios ─────────────────────────────────────────────
 function preciosRows(){
-  if (UI.preciosTab === 'productos') return D.products.map((p,i) => ({...p, _i:i, _k:'products'})).filter(p => !UI.clientFilter || p.client === UI.clientFilter);
-  if (UI.preciosTab === 'insumos')   return D.insumos.map((p,i) => ({...p, _i:i, _k:'insumos'}));
-  return D.services.map((p,i) => ({...p, _i:i, _k:'services'}));
+  const F = UI.F; let rows;
+  if (UI.preciosTab === 'productos') rows = D.products.map((p,i) => ({...p, _i:i, _k:'products'})).filter(p => (!F.pClient || p.client === F.pClient) && match(F.pq, p.sku, p.desc));
+  else if (UI.preciosTab === 'insumos') rows = D.insumos.map((p,i) => ({...p, _i:i, _k:'insumos'})).filter(p => (!F.pCat || p.cat === F.pCat) && match(F.pq, p.code, p.desc));
+  else rows = D.services.map((p,i) => ({...p, _i:i, _k:'services'})).filter(p => (!F.pCat || p.group === F.pCat) && match(F.pq, p.code, p.desc, p.uom));
+  if (F.pMargin) rows = rows.filter(r => marginState(r.cost, r.price) === F.pMargin);
+  return rows;
+}
+function marginState(cost, price){ const m = marginOf(cost, price); return m === null ? 'none' : marginClass(m); }
+function preciosFilterBar(shown, total){
+  const tab = UI.preciosTab;
+  const second = tab === 'productos'
+    ? selF('pClient', [['','Todos los clientes'], ...CLIENTS.map(c => [c.id, c.name])], 'Cliente')
+    : tab === 'insumos'
+      ? selF('pCat', [['','Todas las categorías'], ...[...new Set(D.insumos.map(i => i.cat))].map(c => [c, c.charAt(0).toUpperCase()+c.slice(1)])], 'Categoría')
+      : selF('pCat', [['','Todos los grupos'], ['Almacenaje','Almacenaje'], ['Operación','Operación'], ['Transporte','Transporte']], 'Grupo');
+  return fbar([
+    searchBox('pq', tab === 'productos' ? 'Buscar SKU o descripción' : 'Buscar código o descripción'),
+    second,
+    selF('pMargin', [['','Todos los márgenes'], ['none','Sin precio'], ['bad','Bajo el mínimo'], ['warn','Margen ajustado'], ['good','Margen sano']], 'Margen')
+  ], ['pq','pClient','pCat','pMargin'], shown, total);
 }
 function kpisPrecios(){
   const rows = preciosRows();
@@ -632,7 +694,7 @@ function kpisPrecios(){
   const none = rows.length - priced.length;
   const label = { productos:'productos', insumos:'insumos', servicios:'servicios' }[UI.preciosTab];
   return `
-    <div class="kpi hl"><small>Con precio de venta</small><b>${priced.length} / ${rows.length}</b><span>${label} en la lista</span></div>
+    <div class="kpi hl"><small>Con precio de venta</small><b>${priced.length} / ${rows.length}</b><span>${label} en la vista</span></div>
     <div class="kpi"><small>Margen promedio</small><b>${pct(avg)}</b><span>sobre el precio de venta</span></div>
     <div class="kpi ${low?'bad':''}"><small>Bajo el margen mínimo</small><b>${low}</b><span>mínimo configurado: ${D.minMargin}%</span></div>
     <div class="kpi ${none?'warn':''}"><small>Sin precio definido</small><b>${none}</b><span>no se pueden prefacturar</span></div>`;
@@ -691,14 +753,14 @@ function renderPrecios(){
     <div class="kpis" id="kpis">${kpisPrecios()}</div>
     <div class="card">
       <div class="card-h">
-        <h3>${tabs.find(t => t[0]===tab)[1]} (${rows.length})</h3>
-        ${tab==='productos' ? `<select class="in" id="clientFilter" style="width:auto" aria-label="Filtrar por cliente"><option value="">Todos los clientes</option>${CLIENTS.map(c => `<option value="${c.id}" ${UI.clientFilter===c.id?'selected':''}>${esc(c.name)}</option>`).join('')}</select>` : ''}
+        <h3>${tabs.find(t => t[0]===tab)[1]}</h3>
         <span class="sp" style="flex:1"></span>
         <div class="bar-row">
           <label class="sub" for="minMargin">Margen mínimo</label>
           <input class="in num pct" type="number" min="0" max="90" id="minMargin" value="${D.minMargin}"><span class="sub">%</span>
         </div>
       </div>
+      ${preciosFilterBar(rows.length, { productos:D.products, insumos:D.insumos, servicios:D.services }[tab].length)}
       <div class="card-b" style="padding-bottom:0">
         <div class="bar-row" style="background:var(--surface-2);border-radius:14px;padding:10px 12px">
           <span class="sub" style="font-weight:700">Calcular precio con margen</span>
@@ -706,12 +768,12 @@ function renderPrecios(){
           <select class="in" id="bulkScope" style="width:auto" aria-label="A qué filas aplicar">
             <option value="sin-precio" ${UI.bulkScope==='sin-precio'?'selected':''}>solo a los que no tienen precio</option>
             <option value="bajo" ${UI.bulkScope==='bajo'?'selected':''}>a los que están bajo el mínimo</option>
-            <option value="todos" ${UI.bulkScope==='todos'?'selected':''}>a todos los de esta lista</option>
+            <option value="todos" ${UI.bulkScope==='todos'?'selected':''}>a todos los de la vista filtrada</option>
           </select>
           <button class="btn money sm" data-act="bulk">Aplicar</button>
         </div>
       </div>
-      <div class="scroll" style="margin-top:12px"><table class="t"><thead>${head}</thead><tbody>${body}</tbody></table></div>
+      <div class="scroll" style="margin-top:12px"><table class="t"><thead>${head}</thead><tbody>${body || emptyRow(8, 'pq,pClient,pCat,pMargin')}</tbody></table></div>
     </div>
     <div class="note-box">${ic('info',18)}<span>${note}</span></div>`;
 }
@@ -719,7 +781,11 @@ function renderPrecios(){
 // ─── Vista: Prefacturación (listado) ─────────────────────────────────────
 function renderPfList(){
   const all = D.prefacturas.slice().sort((a,b) => b.num.localeCompare(a.num));
-  const list = UI.pfFilter === 'TODAS' ? all : all.filter(p => p.status === UI.pfFilter);
+  const F = UI.F;
+  const list = all.filter(p => (UI.pfFilter === 'TODAS' || p.status === UI.pfFilter) && (!F.fClient || p.client === F.fClient) &&
+    (!F.fPeriod || p.period === F.fPeriod) && (!F.fIssues || issues(p).length > 0) &&
+    match(F.fq, p.num, clientById(p.client).name, clientById(p.client).rut, p.ref, p.invoice ? p.invoice.num : ''));
+  const periods = [...new Set(all.map(p => p.period))].sort().reverse();
   const sum = st => all.filter(p => p.status === st).reduce((a,p) => a + calc(p).total, 0);
   const cnt = st => all.filter(p => p.status === st).length;
   const billedOct = all.filter(p => p.status === 'FACTURADA' && p.period === '2026-10').reduce((a,p) => a + calc(p).total, 0);
@@ -754,10 +820,16 @@ function renderPfList(){
     </div>
     <div class="card">
       <div class="card-h"><h3>Prefacturas</h3><span style="flex:1"></span>
-        <div class="filters">${filters.map(f => `<button class="fchip ${UI.pfFilter===f?'on':''}" data-act="pff" data-f="${f}">${f==='TODAS'?'Todas':STATUS[f].label}</button>`).join('')}</div>
+        <div class="filters">${filters.map(f => `<button class="fchip ${UI.pfFilter===f?'on':''}" data-act="pff" data-f="${f}">${f==='TODAS'?`Todas (${all.length})`:`${STATUS[f].label} (${cnt(f)})`}</button>`).join('')}</div>
       </div>
+      ${fbar([
+        searchBox('fq', 'Buscar N°, cliente, RUT, OC o factura'),
+        selF('fClient', [['','Todos los clientes'], ...CLIENTS.map(c => [c.id, c.name])], 'Cliente'),
+        selF('fPeriod', [['','Todos los períodos'], ...periods.map(x => [x, periodLabel(x)])], 'Período'),
+        chkF('fIssues', 'Solo con observaciones')
+      ], ['fq','fClient','fPeriod','fIssues','pfFilter'], list.length, all.length)}
       <div class="scroll"><table class="t"><thead><tr><th>N°</th><th>Cliente</th><th>Período</th><th>Fecha</th><th>Estado</th><th class="num">Líneas</th><th class="num">Neto</th><th class="num">IVA</th><th class="num">Total</th><th></th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="10"><div class="empty"><b>No hay prefacturas en este estado</b>Cambia el filtro o crea una nueva.</div></td></tr>`}</tbody></table></div>
+      <tbody>${rows || emptyRow(10, 'fq,fClient,fPeriod,fIssues,pfFilter')}</tbody></table></div>
     </div>`;
 }
 
@@ -853,6 +925,11 @@ function renderEditor(){
   const dis = ed ? '' : 'disabled';
   const s = STATUS[pf.status];
   const pendCount = D.dispatches.filter(g => g.client === pf.client && gdPending(g)).length;
+  if (UI.F.lType && !pf.lines.some(l => l.type === UI.F.lType)) UI.F.lType = '';
+  const typeChips = [['','Todas'], ...Object.entries(TYPES).map(([k,T]) => [k, T.label])].map(([k,l]) => {
+    const n = k ? pf.lines.filter(x => x.type === k).length : pf.lines.length;
+    return (k && !n) ? '' : `<button class="fchip ${UI.F.lType===k?'on':''}" data-act="ltype" data-t="${k}">${l} (${n})</button>`;
+  }).join('');
   const addBtns = Object.entries(TYPES).map(([k,T]) => `<button class="btn sm add-btn ty-${k}" data-act="add" data-type="${k}" ${dis}>${ic('plus',14)} ${T.label}</button>`).join('');
   return `
     <div class="head">
@@ -892,9 +969,10 @@ function renderEditor(){
           </div>
           ${UI.gdOpen && ed ? gdPanelHtml(pf) : ''}
           ${UI.suggestOpen && ed ? suggestHtml(pf) : ''}
+          ${pf.lines.length ? `<div class="fbar" style="border-top:1px solid var(--line)">${ic('filter',16)}<div class="filters">${typeChips}</div>${UI.F.lType ? `<span style="flex:1"></span><span class="fcount">Los totales suman todas las líneas</span>` : ''}</div>` : ''}
           <div class="scroll"><table class="t lines">
             <thead><tr><th>Tipo</th><th>Concepto</th><th class="num">Cant.</th><th>UM</th><th class="num">Precio unit.</th><th class="num">Desc. %</th><th class="ctr">IVA</th><th class="num">Subtotal</th>${UI.showCosts ? '<th class="num internal">Margen</th>' : ''}<th></th></tr></thead>
-            <tbody>${pf.lines.map(l => lineRow(l, ed)).join('') || `<tr><td colspan="10"><div class="empty"><b>Esta prefactura no tiene líneas</b>Agrega productos, insumos, transporte o servicios, o trae los movimientos del período desde el WMS.</div></td></tr>`}</tbody>
+            <tbody>${pf.lines.filter(l => !UI.F.lType || l.type === UI.F.lType).map(l => lineRow(l, ed)).join('') || `<tr><td colspan="10"><div class="empty"><b>Esta prefactura no tiene líneas</b>Agrega productos, insumos, transporte o servicios, o trae los movimientos del período desde el WMS.</div></td></tr>`}</tbody>
           </table></div>
         </div>
       </div>
@@ -965,7 +1043,8 @@ function newPfFromGuides(client, guides){
 function renderClientes(){
   if (UI.clientId) return renderClientDetail();
   const pend = D.dispatches.filter(gdPending);
-  const rows = CLIENTS.map(c => {
+  const shownC = CLIENTS.filter(c => match(UI.F.cq, c.name, c.rut, c.giro, c.contact) && (!UI.F.cOnlyPend || pend.some(g => g.client === c.id)));
+  const rows = shownC.map(c => {
     const gp = pend.filter(g => g.client === c.id);
     const sp = Object.keys(D.clientPrices[c.id] || {}).length;
     const open = D.prefacturas.filter(p => p.client === c.id && ['BORRADOR','EN_REVISION','APROBADA'].includes(p.status)).length;
@@ -990,8 +1069,9 @@ function renderClientes(){
       <div class="kpi"><small>Precios especiales</small><b>${Object.values(D.clientPrices).reduce((a,o) => a + Object.keys(o).length, 0)}</b><span>reemplazan el precio de lista</span></div>
     </div>
     <div class="card">
-      <div class="card-h"><h3>Clientes (${CLIENTS.length})</h3></div>
-      <div class="scroll"><table class="t"><thead><tr><th>Cliente</th><th>RUT</th><th>Pago</th><th class="num">Guías sin cobrar</th><th class="num">Monto pendiente</th><th class="num">Precios especiales</th><th class="num">Prefacturas abiertas</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div class="card-h"><h3>Clientes</h3></div>
+      ${fbar([searchBox('cq', 'Buscar nombre, RUT, giro o contacto'), chkF('cOnlyPend', 'Solo con guías sin cobrar')], ['cq','cOnlyPend'], shownC.length, CLIENTS.length)}
+      <div class="scroll"><table class="t"><thead><tr><th>Cliente</th><th>RUT</th><th>Pago</th><th class="num">Guías sin cobrar</th><th class="num">Monto pendiente</th><th class="num">Precios especiales</th><th class="num">Prefacturas abiertas</th><th></th></tr></thead><tbody>${rows || emptyRow(8, 'cq,cOnlyPend')}</tbody></table></div>
     </div>`;
 }
 function spMarginHtml(p, cid){
@@ -1004,12 +1084,13 @@ function renderClientDetail(){
   const guides = D.dispatches.filter(g => g.client === c.id).sort((a,b) => b.date.localeCompare(a.date));
   const pend = guides.filter(gdPending);
   const sel = g => UI.clientGdSel[g.id] ?? false;
-  const nSel = pend.filter(sel).length;
+  const gShown = filteredGuides(c.id);
+  const nSel = gShown.filter(g => gdPending(g) && sel(g)).length;
   const pfs = D.prefacturas.filter(p => p.client === c.id).sort((a,b) => b.num.localeCompare(a.num));
   const tabs = [['despachos',`Guías de despacho (${guides.length})`],['precios','Precios del cliente'],['prefacturas',`Prefacturas (${pfs.length})`]];
   let body = '';
   if (tab === 'despachos') {
-    const rows = guides.map(g => { const st = gdState(g); return `<tr>
+    const rows = gShown.map(g => { const st = gdState(g); return `<tr>
       <td class="ctr">${st.key==='PEND' ? `<input type="checkbox" data-cgd="${g.id}" id="cgd-${g.id}" ${sel(g)?'checked':''} style="width:16px;height:16px;accent-color:var(--money)" aria-label="Seleccionar guía ${g.num}">` : ''}</td>
       <td class="pf-num">N° ${g.num}</td><td class="sub">${dateLabel(g.date)}</td><td>${esc(g.dest)}</td>
       <td class="code">${gdProducts(g)}</td><td class="num"><b>${clp(gdAmount(g))}</b></td>
@@ -1017,18 +1098,24 @@ function renderClientDetail(){
     body = `<div class="card-b" style="padding-bottom:12px"><div class="bar-row">
         <span class="sub">${pend.length ? `${pend.length} guía${pend.length===1?'':'s'} sin cobrar por ${clp(pend.reduce((a,g) => a + gdAmount(g), 0))} neto.` : 'Todas las guías de este cliente ya están cobradas o en una prefactura.'}</span>
         <span style="flex:1"></span>
-        ${pend.length ? `<button class="btn sm" data-act="cgd-all">Seleccionar pendientes</button>` : ''}
+        ${gShown.some(gdPending) ? `<button class="btn sm" data-act="cgd-all">Seleccionar pendientes${gShown.length < guides.length ? ' de la vista' : ''}</button>` : ''}
         <button class="btn money" data-act="cl-prefact" ${nSel?'':'disabled'}>${ic('file',16)} Prefacturar ${nSel ? nSel+' ' : ''}guía${nSel===1?'':'s'}</button>
       </div></div>
-      <div class="scroll"><table class="t"><thead><tr><th></th><th>Guía</th><th>Fecha</th><th>Destino</th><th>Productos despachados</th><th class="num">Neto a precio cliente</th><th>Estado de cobro</th></tr></thead><tbody>${rows || `<tr><td colspan="7"><div class="empty"><b>Sin guías de despacho</b>Cuando se cierre un despacho de este cliente aparecerá aquí.</div></td></tr>`}</tbody></table></div>`;
+      ${fbar([
+        searchBox('gq', 'Buscar N° de guía, destino o producto'),
+        selF('gState', [['','Todos los estados'], ['PEND','Pendientes de cobro'], ['PF','En prefactura'], ['FACT','Facturadas']], 'Estado de cobro'),
+        dateF('gFrom', 'Desde'), dateF('gTo', 'Hasta')
+      ], ['gq','gState','gFrom','gTo'], gShown.length, guides.length)}
+      <div class="scroll"><table class="t"><thead><tr><th></th><th>Guía</th><th>Fecha</th><th>Destino</th><th>Productos despachados</th><th class="num">Neto a precio cliente</th><th>Estado de cobro</th></tr></thead><tbody>${rows || (guides.length ? emptyRow(7, 'gq,gState,gFrom,gTo') : `<tr><td colspan="7"><div class="empty"><b>Sin guías de despacho</b>Cuando se cierre un despacho de este cliente aparecerá aquí.</div></td></tr>`)}</tbody></table></div>`;
   } else if (tab === 'precios') {
-    const prods = D.products.filter(p => p.client === c.id);
-    body = `<div class="scroll"><table class="t"><thead><tr><th>SKU</th><th>Descripción</th><th>UM</th><th class="num">Costo</th><th class="num">Precio de lista</th><th class="num">Precio para ${esc(c.name)}</th><th class="num">Margen</th></tr></thead><tbody>
+    const allProds = D.products.filter(p => p.client === c.id);
+    const prods = allProds.filter(p => match(UI.F.spq, p.sku, p.desc) && (!UI.F.spOnly || specialPrice(D, c.id, p.sku)));
+    body = `${fbar([searchBox('spq', 'Buscar SKU o descripción'), chkF('spOnly', 'Solo con precio especial')], ['spq','spOnly'], prods.length, allProds.length)}<div class="scroll"><table class="t"><thead><tr><th>SKU</th><th>Descripción</th><th>UM</th><th class="num">Costo</th><th class="num">Precio de lista</th><th class="num">Precio para ${esc(c.name)}</th><th class="num">Margen</th></tr></thead><tbody>
       ${prods.map(p => { const sp = specialPrice(D, c.id, p.sku); return `<tr>
         <td class="code">${esc(p.sku)}</td><td>${esc(p.desc)}</td><td class="sub">${esc(p.uom)}</td>
         <td class="num">${clp(p.cost)}</td><td class="num">${num(p.price) ? clp(p.price) : '<span class="chip warn">Sin precio</span>'}</td>
         <td class="num"><input class="in num money" type="number" min="0" step="10" data-sp="${esc(p.sku)}" id="sp-${esc(p.sku)}" value="${sp ?? ''}" placeholder="usa lista" aria-label="Precio especial ${esc(p.sku)}"></td>
-        <td class="num" data-spm="${esc(p.sku)}">${spMarginHtml(p, c.id)}</td></tr>`; }).join('')}
+        <td class="num" data-spm="${esc(p.sku)}">${spMarginHtml(p, c.id)}</td></tr>`; }).join('') || emptyRow(7, 'spq,spOnly')}
       </tbody></table></div>
       <div class="card-b"><div class="note-box">${ic('info',18)}<span>Deja el campo vacío para usar el precio de lista. El precio del cliente se aplica a las líneas nuevas; las prefacturas ya armadas mantienen su precio.</span></div></div>`;
   } else {
@@ -1086,6 +1173,9 @@ function renderPreview(){
 
 // ─── Render principal ────────────────────────────────────────────────────
 function render(){
+  // Conserva el foco (y el cursor en las búsquedas) al volver a dibujar.
+  const ae = document.activeElement, fid = ae && ae.id; let s0 = null, s1 = null;
+  try { if (ae && ae.type === 'search') { s0 = ae.selectionStart; s1 = ae.selectionEnd; } } catch(e){}
   renderSide();
   $('#menuBtn').innerHTML = ic('menu',18);
   $('#resetBtn').innerHTML = `${ic('refresh',14)} Restablecer simulación`;
@@ -1093,6 +1183,7 @@ function render(){
   if (UI.view === 'precios') v.innerHTML = renderPrecios();
   else if (UI.view === 'clientes') v.innerHTML = renderClientes();
   else v.innerHTML = UI.pfId ? renderEditor() : renderPfList();
+  if (fid) { const el = document.getElementById(fid); if (el && el !== document.activeElement) { el.focus({ preventScroll:true }); try { if (s0 !== null) el.setSelectionRange(s0, s1); } catch(e){} } }
 }
 
 // ─── Acciones ────────────────────────────────────────────────────────────
@@ -1113,7 +1204,7 @@ document.addEventListener('click', e => {
   switch(a){
     case 'go': go(b.dataset.view); break;
     case 'ctx': toast('Esta simulación solo incluye la sección Comercial.', 'info'); break;
-    case 'ptab': UI.preciosTab = b.dataset.tab; render(); break;
+    case 'ptab': UI.preciosTab = b.dataset.tab; UI.F.pCat = ''; render(); break;
     case 'bulk': {
       const m = Math.min(Math.max(num(UI.bulkMargin),1),90)/100; let n = 0;
       preciosRows().forEach(r => {
@@ -1124,7 +1215,9 @@ document.addEventListener('click', e => {
       save(); render(); toast(n ? `Precio recalculado en ${n} fila${n===1?'':'s'}` : 'No había filas que cumplieran la condición', n ? 'check' : 'info'); break;
     }
     case 'pff': UI.pfFilter = b.dataset.f; render(); break;
-    case 'open': if (UI.view !== 'prefacturacion') { UI.view = 'prefacturacion'; history.replaceState(null, '', '#prefacturacion'); } UI.pfId = b.dataset.id; UI.gdOpen = false; UI.gdSel = {}; UI.suggestOpen = false; UI.confirmVoid = false; UI.suggestSel = {}; render(); window.scrollTo(0,0); break;
+    case 'clr': clearF(b.dataset.keys.split(',')); render(); break;
+    case 'ltype': UI.F.lType = b.dataset.t; render(); break;
+    case 'open': if (UI.view !== 'prefacturacion') { UI.view = 'prefacturacion'; history.replaceState(null, '', '#prefacturacion'); } UI.pfId = b.dataset.id; UI.F.lType = ''; UI.gdOpen = false; UI.gdSel = {}; UI.suggestOpen = false; UI.confirmVoid = false; UI.suggestSel = {}; render(); window.scrollTo(0,0); break;
     case 'list': UI.pfId = null; UI.confirmVoid = false; render(); window.scrollTo(0,0); break;
     case 'new': {
       if (!UI.newClient) { toast('Elige primero el cliente de la prefactura.', 'info'); $('#newClient')?.focus(); break; }
@@ -1132,7 +1225,7 @@ document.addEventListener('click', e => {
       D.prefacturas.push({ id, num:`PF-2026-${String(n).padStart(4,'0')}`, client:UI.newClient, period:'2026-10', date:'2026-10-28', status:'BORRADOR', ref:'', terms:clientById(UI.newClient).terms, notes:'', discount:0, ivaRate:19, lines:[], invoice:null });
       UI.pfId = id; UI.newClient = ''; UI.suggestOpen = true; UI.suggestSel = {}; save(); render(); toast('Prefactura creada en borrador'); break;
     }
-    case 'add': pf.lines.push(newLine(b.dataset.type)); save(); render(); { const last = pf.lines[pf.lines.length-1]; const el = document.getElementById('lq-'+last.id); if (el) { el.focus(); el.select(); } } break;
+    case 'add': UI.F.lType = ''; pf.lines.push(newLine(b.dataset.type)); save(); render(); { const last = pf.lines[pf.lines.length-1]; const el = document.getElementById('lq-'+last.id); if (el) { el.focus(); el.select(); } } break;
     case 'del-line': { const id = b.closest('[data-line]').dataset.line; pf.lines = pf.lines.filter(l => l.id !== id); syncGd(pf); save(); render(); toast('Línea quitada', 'trash'); break; }
     case 'sg-open': UI.suggestOpen = true; UI.gdOpen = false; UI.suggestSel = {}; render(); break;
     case 'gd-open': UI.gdOpen = true; UI.suggestOpen = false; UI.gdSel = {}; render(); break;
@@ -1140,14 +1233,14 @@ document.addEventListener('click', e => {
     case 'gd-add': {
       const gs = D.dispatches.filter(g => g.client === pf.client && gdPending(g) && (UI.gdSel[g.id] ?? true));
       let n = 0; gs.forEach(g => { const ls = gdLines(g); pf.lines.push(...ls); n += ls.length; g.pf = pf.id; });
-      UI.gdOpen = false; UI.gdSel = {}; save(); render(); toast(`${gs.length} guía${gs.length===1?'':'s'} agregada${gs.length===1?'':'s'} (${n} producto${n===1?'':'s'})`); break;
+      UI.gdOpen = false; UI.gdSel = {}; UI.F.lType = ''; save(); render(); toast(`${gs.length} guía${gs.length===1?'':'s'} agregada${gs.length===1?'':'s'} (${n} producto${n===1?'':'s'})`); break;
     }
-    case 'cl-open': UI.clientId = b.dataset.id; UI.clientTab = 'despachos'; UI.clientGdSel = {}; render(); window.scrollTo(0,0); break;
+    case 'cl-open': UI.clientId = b.dataset.id; UI.clientTab = 'despachos'; UI.clientGdSel = {}; clearF(['gq','gState','gFrom','gTo','spq','spOnly']); render(); window.scrollTo(0,0); break;
     case 'cl-list': UI.clientId = null; render(); window.scrollTo(0,0); break;
     case 'ctab': UI.clientTab = b.dataset.tab; render(); break;
-    case 'cgd-all': D.dispatches.filter(g => g.client === UI.clientId && gdPending(g)).forEach(g => { UI.clientGdSel[g.id] = true; }); render(); break;
+    case 'cgd-all': filteredGuides(UI.clientId).filter(gdPending).forEach(g => { UI.clientGdSel[g.id] = true; }); render(); break;
     case 'cl-prefact': {
-      const gs = D.dispatches.filter(g => g.client === UI.clientId && gdPending(g) && UI.clientGdSel[g.id]);
+      const gs = filteredGuides(UI.clientId).filter(g => gdPending(g) && UI.clientGdSel[g.id]);
       if (!gs.length) break;
       const np = newPfFromGuides(UI.clientId, gs);
       UI.clientGdSel = {}; UI.view = 'prefacturacion'; history.replaceState(null, '', '#prefacturacion');
@@ -1162,7 +1255,7 @@ document.addEventListener('click', e => {
         const on = UI.suggestSel[i] ?? !already(s); const it = findItem(D, s.type, s.key, pf.client);
         if (on && it) { pf.lines.push({ id:uid(), type:s.type, key:s.key, desc:it.desc, uom:it.uom, qty:s.qty, price:it.price, cost:it.cost, disc:0, afecto:true, origin:s.origin }); n++; }
       });
-      UI.suggestOpen = false; UI.suggestSel = {}; save(); render(); toast(`${n} línea${n===1?'':'s'} agregada${n===1?'':'s'} desde el WMS`); break;
+      UI.suggestOpen = false; UI.suggestSel = {}; UI.F.lType = ''; save(); render(); toast(`${n} línea${n===1?'':'s'} agregada${n===1?'':'s'} desde el WMS`); break;
     }
     case 'save': save(); toast('Borrador guardado'); break;
     case 'to-review': {
@@ -1195,6 +1288,7 @@ document.addEventListener('click', e => {
 
 document.addEventListener('input', e => {
   const t = e.target;
+  if (t.dataset.filter && t.type === 'search') { UI.F[t.dataset.filter] = t.value; render(); return; }
   // Costos y precios
   if (t.dataset.pk) {
     const r = D[t.dataset.pk][+t.dataset.pi]; r[t.dataset.pf] = num(t.value);
@@ -1235,7 +1329,7 @@ document.addEventListener('input', e => {
 
 document.addEventListener('change', e => {
   const t = e.target; const pf = currentPf();
-  if (t.id === 'clientFilter') { UI.clientFilter = t.value; render(); return; }
+  if (t.dataset.filter) { if (t.type === 'search') return; UI.F[t.dataset.filter] = t.type === 'checkbox' ? t.checked : t.value; render(); return; }
   if (t.id === 'bulkScope') { UI.bulkScope = t.value; return; }
   if (t.id === 'newClient') { UI.newClient = t.value; return; }
   if (t.id === 'showCosts') { UI.showCosts = t.checked; render(); return; }
@@ -1257,7 +1351,7 @@ document.addEventListener('change', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { if ($('#modal').innerHTML) $('#modal').innerHTML = ''; else if (UI.sideOpen) { UI.sideOpen = false; renderSide(); } } });
 $('#menuBtn').addEventListener('click', () => { UI.sideOpen = !UI.sideOpen; renderSide(); });
 $('#scrim').addEventListener('click', () => { UI.sideOpen = false; renderSide(); });
-$('#resetBtn').addEventListener('click', () => { D = seed(); save(); UI.pfId = 'pf48'; UI.pfFilter = 'TODAS'; UI.suggestOpen = false; UI.gdOpen = false; UI.gdSel = {}; UI.clientGdSel = {}; UI.confirmVoid = false; render(); toast('Simulación restablecida con los datos de ejemplo', 'refresh'); });
+$('#resetBtn').addEventListener('click', () => { D = seed(); save(); UI.pfId = 'pf48'; UI.pfFilter = 'TODAS'; UI.suggestOpen = false; UI.gdOpen = false; UI.gdSel = {}; UI.clientGdSel = {}; UI.confirmVoid = false; UI.F = { ...F0 }; render(); toast('Simulación restablecida con los datos de ejemplo', 'refresh'); });
 window.addEventListener('hashchange', () => { readHash(); render(); });
 
 readHash();
