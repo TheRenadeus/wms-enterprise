@@ -51,3 +51,8 @@ ingresado a mano.
 
 Cada listado tiene filtros: búsqueda por texto, tipo de cliente, cliente, período, estado, categoría,
 margen y rango de fechas, según corresponda.
+
+## prompt-integracion-comercial.md
+
+Prompt para que una sesión nueva de Claude Code integre el módulo Comercial al WMS completo, por fases:
+lo que se reutiliza del WMS, reglas de negocio, modelo de datos, API, permisos, pruebas y decisiones abiertas.
